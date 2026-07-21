@@ -1,0 +1,259 @@
+# 04 - User Journey
+
+**Project Name** : PJOK Teacher Assistant *(Working Title)*  
+**Document Version** : 1.0  
+**Status** : Draft (Approved for Phase 1)  
+**Document Owner** : Product Team  
+**Last Updated** : July 2026
+
+**Related Documents**
+- 00_Project_Principles.md
+- 01_Product_Vision.md
+- 02_Problem_Statement.md
+- 03_User_Persona.md
+
+**Next Document**
+- 05_User_Flow.md
+
+---
+
+# Purpose
+
+Dokumen ini menggambarkan perjalanan guru PJOK selama satu sesi pembelajaran.
+
+Tujuannya adalah memastikan seluruh fitur aplikasi mengikuti alur kerja guru, bukan sebaliknya.
+
+Setiap layar (screen) yang dibuat nantinya harus mendukung salah satu tahapan pada perjalanan ini.
+
+---
+
+# Journey Overview
+
+```
+Membuka Aplikasi
+
+↓
+
+Melihat Jadwal Hari Ini
+
+↓
+
+Memilih Kelas
+
+↓
+
+Masuk Kelas
+
+↓
+
+Absensi
+
+↓
+
+Penyampaian Materi
+
+↓
+
+Praktik
+
+↓
+
+Penilaian
+
+↓
+
+Ringkasan
+
+↓
+
+Selesai
+```
+
+---
+
+# Journey Detail
+
+| Tahap | Aktivitas Guru | Pikiran Guru | Kendala Saat Ini | Solusi Aplikasi |
+|--------|----------------|--------------|------------------|-----------------|
+| 1 | Membuka aplikasi | "Hari ini saya mengajar kelas apa?" | Harus mengingat jadwal | Dashboard menampilkan jadwal hari ini |
+| 2 | Memilih kelas | "Saya mulai dari kelas 5A." | Mencari daftar kelas | Daftar kelas yang jelas dan cepat |
+| 3 | Masuk kelas | "Pastikan semua siap." | Tidak ada ringkasan kelas | Tampilkan jumlah siswa, materi, dan catatan penting |
+| 4 | Absensi | "Semoga cepat selesai." | Absensi manual memakan waktu | Checklist atau swipe untuk hadir, izin, sakit, alfa |
+| 5 | Penyampaian materi | "Hari ini sprint 40 meter." | Harus membuka catatan materi | Materi singkat tampil di layar |
+| 6 | Praktik | "Sekarang giliran Ahmad." | Stopwatch dan catatan terpisah | Stopwatch dan penilaian dalam satu layar |
+| 7 | Penilaian | "Jangan sampai ada yang terlewat." | Menulis di kertas lalu rekap | Nilai langsung tersimpan otomatis |
+| 8 | Penutupan | "Apakah semua nilai sudah masuk?" | Harus memeriksa ulang | Ringkasan otomatis sebelum sesi ditutup |
+| 9 | Selesai | "Besok tinggal lanjut." | Rekap dilakukan setelah pulang | Semua data sudah tersimpan dan siap digunakan |
+
+---
+
+# Teaching Session Flow
+
+```
+Pilih Kelas
+
+↓
+
+Mulai Sesi
+
+↓
+
+Absensi
+
+↓
+
+Materi
+
+↓
+
+Praktik
+
+↓
+
+Penilaian
+
+↓
+
+Ringkasan
+
+↓
+
+Akhiri Sesi
+```
+
+Guru tidak perlu kembali ke Dashboard selama sesi berlangsung.
+
+---
+
+# Micro Journey
+
+## Absensi
+
+```
+Daftar Siswa
+
+↓
+
+Tap / Swipe
+
+↓
+
+Status Kehadiran Tersimpan
+
+↓
+
+Lanjut ke Siswa Berikutnya
+```
+
+---
+
+## Penilaian Praktik
+
+```
+Pilih Siswa
+
+↓
+
+Pilih Jenis Penilaian
+
+↓
+
+Mulai Stopwatch / Timer
+
+↓
+
+Hasil Otomatis Tersimpan
+
+↓
+
+Lanjut ke Siswa Berikutnya
+```
+
+---
+
+## Pengukuran Tinggi & Berat Badan
+
+```
+Pilih Siswa
+
+↓
+
+Masukkan Tinggi
+
+↓
+
+Masukkan Berat
+
+↓
+
+Simpan
+
+↓
+
+BMI & Status Pertumbuhan Dihitung Otomatis
+```
+
+---
+
+# User Emotions
+
+| Tahap | Emosi | Tujuan Desain |
+|--------|--------|---------------|
+| Membuka aplikasi | Fokus | Tampilkan informasi penting tanpa gangguan |
+| Absensi | Ingin cepat | Minimalkan jumlah sentuhan |
+| Praktik | Sibuk | Hindari popup dan dialog yang tidak perlu |
+| Penilaian | Konsentrasi tinggi | Satu layar untuk semua alat yang dibutuhkan |
+| Penutupan | Ingin yakin | Ringkasan jelas dan mudah dipahami |
+
+---
+
+# UX Opportunities
+
+Berdasarkan perjalanan pengguna, aplikasi sebaiknya menyediakan:
+
+- Resume Session saat aplikasi dibuka kembali.
+- Auto Save setelah setiap aksi.
+- Tombol besar untuk penggunaan satu tangan.
+- Navigasi sederhana tanpa berpindah banyak halaman.
+- Informasi penting selalu terlihat selama sesi berlangsung.
+
+---
+
+# Success Criteria
+
+User Journey dianggap berhasil apabila:
+
+- Guru dapat menyelesaikan absensi dalam waktu singkat.
+- Guru dapat melakukan penilaian tanpa berpindah aplikasi.
+- Guru tidak perlu mencatat ulang setelah pembelajaran selesai.
+- Seluruh data tersimpan otomatis.
+- Guru dapat mengakhiri sesi dengan keyakinan bahwa semua administrasi telah selesai.
+
+---
+
+# Design Implications
+
+Dokumen ini menghasilkan beberapa keputusan desain utama:
+
+1. Dashboard berfungsi sebagai titik awal sebelum mengajar.
+2. Kelas dipilih sebelum sesi dimulai.
+3. Teaching Session menjadi pusat seluruh aktivitas.
+4. Stopwatch, timer, dan penilaian berada dalam satu alur.
+5. Ringkasan sesi muncul sebelum sesi ditutup.
+6. Guru dapat melanjutkan sesi jika aplikasi ditutup atau berpindah sementara.
+
+---
+
+# Decision Log
+
+| ID | Keputusan |
+|----|-----------|
+| DJ-001 | Aplikasi mengikuti alur mengajar, bukan struktur menu. |
+| DJ-002 | Teaching Session menjadi inti aplikasi. |
+| DJ-003 | Absensi selalu menjadi langkah pertama dalam sesi. |
+| DJ-004 | Penilaian dilakukan langsung saat praktik. |
+| DJ-005 | Ringkasan otomatis ditampilkan sebelum sesi diakhiri. |
+
+---
+
+# End of Document

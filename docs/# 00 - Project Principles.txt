@@ -1,0 +1,286 @@
+# 00 - Project Principles
+
+**Project Name** : PJOK Teacher Assistant *(Working Title)*  
+**Document Version** : 1.0  
+**Status** : Active  
+**Document Owner** : Product Team  
+**Last Updated** : July 2026
+
+---
+
+# Purpose
+
+Dokumen ini berisi prinsip-prinsip utama yang menjadi pedoman dalam seluruh proses perancangan, pengembangan, dan pengambilan keputusan pada proyek PJOK Teacher Assistant.
+
+Seluruh fitur, desain antarmuka, struktur database, dan implementasi kode harus mematuhi prinsip-prinsip yang terdapat dalam dokumen ini.
+
+Apabila terdapat keputusan yang bertentangan dengan dokumen ini, maka keputusan tersebut harus dievaluasi kembali.
+
+---
+
+# Project Philosophy
+
+Kami percaya bahwa guru PJOK seharusnya menghabiskan lebih banyak waktu untuk mendampingi siswa daripada mengurus administrasi.
+
+Aplikasi ini tidak dibuat untuk menambah pekerjaan guru.
+
+Aplikasi ini dibuat untuk menghilangkan pekerjaan yang tidak perlu.
+
+Seluruh pengembangan produk harus selalu mengacu pada filosofi tersebut.
+
+---
+
+# Core Principles
+
+## GP-001 — Teacher First
+
+Guru adalah pengguna utama aplikasi.
+
+Seluruh keputusan produk harus mengutamakan kenyamanan guru ketika mengajar.
+
+Apabila terjadi konflik antara kebutuhan sistem dan kebutuhan guru, maka kebutuhan guru menjadi prioritas.
+
+---
+
+## GP-002 — Reduce Teacher Work
+
+Setiap fitur harus mengurangi pekerjaan guru.
+
+Sebelum sebuah fitur dikembangkan, tim harus mampu menjawab pertanyaan berikut:
+
+> **Pekerjaan guru apa yang berhasil dihilangkan oleh fitur ini?**
+
+Jika tidak ada jawaban yang jelas, maka fitur tersebut bukan prioritas.
+
+---
+
+## GP-003 — One Hand Operation
+
+Aplikasi harus nyaman digunakan menggunakan satu tangan.
+
+Konsekuensinya:
+
+- Tombol besar.
+- Area sentuh luas.
+- Navigasi sederhana.
+- Tidak memerlukan gerakan yang rumit.
+
+---
+
+## GP-004 — Minimum Typing
+
+Guru tidak boleh dipaksa mengetik panjang ketika mengajar.
+
+Seluruh proses harus mengutamakan:
+
+- tombol,
+- pilihan,
+- gesture,
+- otomatisasi.
+
+---
+
+## GP-005 — Auto Save Everything
+
+Seluruh data harus disimpan secara otomatis.
+
+Guru tidak boleh kehilangan data hanya karena lupa menekan tombol **Simpan**.
+
+---
+
+## GP-006 — Resume Session
+
+Guru harus selalu dapat melanjutkan sesi pembelajaran yang sedang berlangsung.
+
+Ketika aplikasi dibuka kembali, sistem harus mengembalikan kondisi terakhir secara otomatis.
+
+---
+
+## GP-007 — Offline First
+
+Seluruh fungsi utama aplikasi wajib berjalan tanpa koneksi internet.
+
+Koneksi internet tidak boleh menjadi syarat utama penggunaan aplikasi.
+
+---
+
+## GP-008 — Record Once
+
+Setiap data cukup dicatat satu kali.
+
+Seluruh proses berikutnya seperti:
+
+- perhitungan,
+- rekapitulasi,
+- grafik,
+- statistik,
+- laporan,
+
+harus dilakukan secara otomatis oleh sistem.
+
+---
+
+## GP-009 — Session Driven
+
+Aplikasi mengikuti alur pembelajaran guru, bukan berdasarkan kumpulan menu.
+
+Urutan kerja aplikasi harus mengikuti aktivitas guru:
+
+1. Memilih kelas.
+2. Memulai sesi pembelajaran.
+3. Absensi.
+4. Praktik.
+5. Penilaian.
+6. Ringkasan.
+7. Selesai.
+
+---
+
+## GP-010 — Fast Interaction
+
+Setiap aktivitas utama harus dapat dilakukan dalam sesedikit mungkin langkah.
+
+Target desain:
+
+- Stopwatch: 1 sentuhan.
+- Absensi: maksimal 2 sentuhan.
+- Memulai penilaian: maksimal 3 sentuhan.
+
+---
+
+## GP-011 — Keep Important Information Visible
+
+Informasi penting harus selalu mudah ditemukan.
+
+Guru tidak boleh membuka banyak menu hanya untuk melihat informasi yang sering digunakan.
+
+---
+
+## GP-012 — Progressive Simplicity
+
+Aplikasi harus terlihat sederhana saat pertama kali digunakan.
+
+Fitur lanjutan hanya muncul ketika memang dibutuhkan.
+
+Pengguna baru tidak boleh merasa kewalahan dengan banyaknya menu.
+
+---
+
+# Product Rules
+
+Seluruh fitur baru harus memenuhi tiga pertanyaan berikut.
+
+### Rule 1
+
+Apakah fitur ini sesuai dengan Product Vision?
+
+---
+
+### Rule 2
+
+Apakah fitur ini menyelesaikan salah satu Problem Statement?
+
+---
+
+### Rule 3
+
+Apakah fitur ini membantu User Persona?
+
+---
+
+Jika salah satu jawaban adalah **Tidak**, maka fitur tersebut harus dievaluasi kembali.
+
+---
+
+# Technical Rules
+
+Versi pertama aplikasi memiliki batasan teknis sebagai berikut.
+
+- Progressive Web Application (PWA)
+- Mobile First
+- Responsive
+- HTML
+- CSS
+- JavaScript (Vanilla)
+- Local Storage
+- Offline First
+- Tanpa Backend
+- Tanpa Database Server
+- Tanpa Login
+- Dapat di-host di GitHub Pages
+
+---
+
+# UI Rules
+
+Antarmuka harus mengikuti aturan berikut.
+
+- Tombol utama mudah dijangkau ibu jari.
+- Kontras tinggi untuk penggunaan di luar ruangan.
+- Ukuran teks mudah dibaca di bawah sinar matahari.
+- Sedikit popup.
+- Sedikit dialog konfirmasi.
+- Tidak ada proses yang membutuhkan banyak langkah.
+
+---
+
+# Data Rules
+
+Data merupakan aset utama aplikasi.
+
+Karena itu:
+
+- Tidak boleh hilang.
+- Tidak boleh terduplikasi.
+- Harus mudah dicadangkan.
+- Harus mudah dipulihkan.
+- Harus dapat diekspor.
+- Harus dapat diimpor.
+
+---
+
+# Coding Rules
+
+Seluruh implementasi kode harus memenuhi prinsip berikut.
+
+- Modular.
+- Mudah dibaca.
+- Mudah dipelihara.
+- Mudah diuji.
+- Tidak menggunakan library yang tidak diperlukan.
+- Mengutamakan performa.
+- Mengutamakan keterbacaan dibanding kompleksitas.
+
+---
+
+# Decision Rules
+
+Ketika terdapat dua pilihan solusi, pilih solusi yang:
+
+1. Lebih sederhana.
+2. Lebih cepat digunakan guru.
+3. Lebih sedikit langkah.
+4. Lebih sedikit mengetik.
+5. Lebih mudah dipelihara.
+
+---
+
+# Project North Star
+
+PJOK Teacher Assistant bukan sekadar aplikasi administrasi.
+
+Aplikasi ini adalah **pendamping digital guru PJOK** yang membantu seluruh proses pembelajaran sejak guru memasuki kelas hingga seluruh administrasi pembelajaran selesai.
+
+Setiap keputusan pengembangan harus membawa aplikasi semakin dekat kepada tujuan tersebut.
+
+---
+
+Architecture Rule
+
+UI tidak boleh langsung membaca LocalStorage.
+
+Semua akses data harus melalui Repository.
+
+Repository yang berkomunikasi dengan Storage.
+
+# End of Document

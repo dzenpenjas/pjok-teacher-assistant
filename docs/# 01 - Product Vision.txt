@@ -1,0 +1,353 @@
+# 01 - Product Vision
+
+**Project Name** : PJOK Teacher Assistant *(Working Title)*  
+**Document Version** : 1.0  
+**Status** : Draft (Approved for Phase 1)  
+**Document Owner** : Product Team  
+**Last Updated** : July 2026
+
+---
+
+# Product Manifesto
+
+Kami percaya bahwa guru PJOK seharusnya menghabiskan lebih banyak waktu untuk membimbing siswa daripada mengurus administrasi.
+
+Setiap menit yang dihabiskan untuk menulis nilai, menghitung hasil, membuka stopwatch, atau mencari data siswa adalah waktu yang seharusnya dapat digunakan untuk memperhatikan perkembangan peserta didik.
+
+PJOK Teacher Assistant dibangun sebagai pendamping digital guru PJOK yang bekerja langsung di lapangan.
+
+Aplikasi ini bukan sekadar tempat menyimpan data, melainkan membantu guru mengajar dengan lebih cepat, lebih praktis, dan lebih terorganisir.
+
+Prinsip utama aplikasi ini adalah:
+
+> **Fokus Mengajar, Bukan Mencatat.**
+
+---
+
+# 1. Product Vision
+
+Menjadi asisten digital terbaik bagi guru Pendidikan Jasmani, Olahraga, dan Kesehatan (PJOK) yang membantu seluruh aktivitas pembelajaran di lapangan sehingga guru dapat lebih fokus mendampingi siswa daripada mengurus administrasi.
+
+---
+
+# 2. Product Mission
+
+Aplikasi ini dikembangkan untuk membantu guru PJOK:
+
+- Mengurangi penggunaan buku nilai dan buku absensi.
+- Mengurangi pekerjaan administrasi setelah pembelajaran selesai.
+- Mempermudah mengenali siswa melalui foto dan profil.
+- Mempermudah pelaksanaan absensi.
+- Mempermudah penilaian praktik maupun teori.
+- Mengotomatisasi perhitungan nilai.
+- Menyimpan perkembangan kemampuan siswa.
+- Mendokumentasikan pertumbuhan siswa.
+- Membantu menemukan potensi olahraga siswa berdasarkan data yang dikumpulkan.
+
+---
+
+# 3. Background
+
+Guru PJOK memiliki karakteristik pekerjaan yang berbeda dengan guru mata pelajaran lainnya.
+
+Sebagian besar proses pembelajaran dilakukan di luar kelas sehingga guru harus mengelola banyak aktivitas secara bersamaan, seperti:
+
+- Mengawasi siswa.
+- Melakukan absensi.
+- Menggunakan stopwatch.
+- Memberikan penilaian praktik.
+- Mencatat hasil penilaian.
+- Mengingat identitas ratusan siswa.
+- Mengelola perkembangan siswa.
+
+Saat mengajar guru sering membawa berbagai perlengkapan seperti:
+
+- Buku nilai
+- Buku absensi
+- Pulpen
+- Stopwatch
+- Telepon genggam
+
+Setelah pembelajaran selesai guru masih harus menghitung nilai dan merekap seluruh hasil pembelajaran secara manual.
+
+Kondisi tersebut menyebabkan pekerjaan administrasi menjadi panjang dan mengurangi waktu guru untuk fokus pada proses pembelajaran.
+
+---
+
+# 4. Problem Statement
+
+Permasalahan utama yang dihadapi guru PJOK adalah:
+
+1. Terlalu banyak perlengkapan yang harus dibawa saat mengajar.
+
+2. Sulit mengingat nama dan wajah seluruh siswa karena jumlah siswa yang sangat banyak.
+
+3. Penilaian praktik masih dilakukan secara manual.
+
+4. Guru harus berpindah-pindah antara stopwatch, buku catatan, kalkulator, dan aplikasi lainnya.
+
+5. Nilai masih dihitung secara manual.
+
+6. Data perkembangan siswa tersebar pada berbagai media pencatatan.
+
+7. Sulit melihat perkembangan kemampuan fisik siswa dari waktu ke waktu.
+
+8. Sulit mengidentifikasi siswa berbakat berdasarkan riwayat penilaian.
+
+9. Data tinggi badan dan berat badan belum terdokumentasi secara sistematis.
+
+10. Tidak ada sistem yang mengintegrasikan identitas siswa, asesmen, pertumbuhan, dan perkembangan dalam satu aplikasi.
+
+---
+
+# 5. Vision Story
+
+## Sebelum menggunakan aplikasi
+
+Seorang guru PJOK datang ke lapangan dengan membawa buku nilai, buku absensi, pulpen, stopwatch, dan telepon genggam.
+
+Saat praktik berlangsung guru harus:
+
+- membuka stopwatch,
+- mencatat hasil di kertas,
+- menghitung nilai,
+- kemudian menyalin kembali hasil tersebut ke administrasi sekolah setelah jam pelajaran selesai.
+
+Selain itu guru sering lupa nama siswa karena mengajar banyak kelas dengan jumlah siswa yang besar.
+
+---
+
+## Setelah menggunakan aplikasi
+
+Guru membuka PJOK Teacher Assistant.
+
+Guru memilih kelas yang akan diajar.
+
+Aplikasi langsung menampilkan:
+
+- daftar siswa beserta foto,
+- informasi siswa yang memerlukan perhatian khusus,
+- absensi,
+- materi pembelajaran,
+- asesmen,
+- stopwatch,
+- timer,
+- serta seluruh kebutuhan pembelajaran dalam satu halaman.
+
+Saat praktik berlangsung guru hanya menekan tombol **Start** dan **Stop**.
+
+Hasil pengukuran tersimpan otomatis.
+
+Nilai dihitung otomatis.
+
+Perkembangan siswa diperbarui otomatis.
+
+Setelah pembelajaran selesai guru tidak perlu melakukan pencatatan ulang karena seluruh administrasi telah tersimpan.
+
+---
+
+# 6. Product Goals
+
+Aplikasi ini bertujuan menjadi pusat aktivitas guru PJOK selama proses pembelajaran.
+
+Semua aktivitas utama dilakukan dalam satu aplikasi tanpa harus berpindah ke aplikasi lain.
+
+Target akhirnya adalah:
+
+> **Ketika pembelajaran selesai, seluruh administrasi pembelajaran juga telah selesai.**
+
+---
+
+# 7. Product Identity
+
+| Item | Value |
+|------|-------|
+| Product Name | PJOK Teacher Assistant *(Working Title)* |
+| Product Type | Progressive Web Application (PWA) |
+| Platform | Mobile Web |
+| Target Device | Android Smartphone |
+| Primary User | Guru PJOK Sekolah Dasar |
+| Future User | Guru PJOK SMP, SMA, Pelatih |
+| Architecture | Offline First |
+| Storage | Local Storage |
+| Deployment | GitHub Pages |
+| Technology | HTML, CSS, JavaScript |
+
+---
+
+# 8. Design Principles
+
+Seluruh pengembangan aplikasi harus mengikuti prinsip berikut.
+
+## 1. Lapangan First
+
+Semua fitur harus berguna ketika guru berada di lapangan.
+
+---
+
+## 2. One Hand Operation
+
+Seluruh fitur harus nyaman digunakan dengan satu tangan.
+
+---
+
+## 3. Minimum Typing
+
+Guru tidak boleh banyak mengetik saat mengajar.
+
+Semua proses harus menggunakan tombol, pilihan, atau otomatisasi.
+
+---
+
+## 4. Record Once
+
+Setiap data hanya dicatat satu kali.
+
+Seluruh proses perhitungan, rekapitulasi, dan laporan dilakukan otomatis oleh sistem.
+
+---
+
+## 5. Teacher Companion
+
+Aplikasi harus menjadi pendamping guru ketika mengajar, bukan sekadar tempat menyimpan data.
+
+---
+
+## 6. Offline First
+
+Seluruh fitur utama harus dapat digunakan tanpa koneksi internet.
+
+Sinkronisasi cloud dapat ditambahkan pada versi berikutnya tanpa mengubah struktur data utama.
+
+---
+
+## 7. Fast Interaction
+
+Seluruh aktivitas utama guru harus dapat dilakukan dalam sesedikit mungkin langkah.
+
+Target:
+
+- Absensi maksimal 2 sentuhan.
+- Stopwatch berjalan dalam 1 sentuhan.
+- Memulai asesmen maksimal 3 sentuhan.
+- Penyimpanan data berlangsung otomatis.
+
+---
+
+# 9. Core Values
+
+## Cepat
+
+Mengurangi waktu administrasi guru.
+
+## Praktis
+
+Menggantikan beberapa alat menjadi satu aplikasi.
+
+## Sederhana
+
+Mudah dipelajari tanpa pelatihan khusus.
+
+## Terintegrasi
+
+Seluruh data siswa berada dalam satu sistem.
+
+## Berorientasi Perkembangan
+
+Aplikasi tidak hanya menyimpan nilai tetapi juga perkembangan kemampuan dan pertumbuhan siswa.
+
+---
+
+# 10. Success Metrics
+
+Produk dianggap berhasil apabila mampu:
+
+- Mengurangi penggunaan buku nilai selama pembelajaran.
+- Mengurangi perpindahan antar aplikasi saat mengajar.
+- Mengurangi waktu rekapitulasi nilai setelah pembelajaran.
+- Mempermudah guru mengenali siswa.
+- Mempermudah pencatatan hasil praktik.
+- Menampilkan perkembangan siswa dari waktu ke waktu.
+- Membantu guru menemukan siswa berpotensi olahraga.
+
+---
+
+# 11. Non Functional Goals
+
+Aplikasi harus memenuhi karakteristik berikut:
+
+- Berjalan tanpa internet.
+- Dapat diinstal sebagai PWA.
+- Responsif pada smartphone Android.
+- Waktu buka aplikasi kurang dari 3 detik.
+- Tidak memerlukan login pada versi pertama.
+- Tidak memerlukan server.
+- Tidak bergantung pada layanan berbayar.
+- Dapat dijalankan melalui GitHub Pages.
+- Menggunakan Local Storage sebagai penyimpanan utama.
+- Ringan dan hemat memori perangkat.
+
+---
+
+# 12. Scope Version 1
+
+Versi pertama berfokus pada kebutuhan utama guru PJOK.
+
+Modul yang termasuk:
+
+- Dashboard
+- Manajemen kelas
+- Data siswa
+- Foto siswa
+- Tag siswa
+- Profil siswa
+- Absensi
+- Sesi pembelajaran
+- Smart Assessment
+- Stopwatch terintegrasi
+- Countdown Timer
+- Penilaian teori
+- Penilaian praktik
+- Catatan siswa
+- Riwayat perkembangan
+- Tinggi badan
+- Berat badan
+- Status pertumbuhan berdasarkan referensi WHO
+- Dashboard perkembangan siswa
+
+---
+
+# 13. Out of Scope
+
+Versi pertama belum mencakup:
+
+- Integrasi Dapodik
+- e-Rapor
+- e-Kinerja
+- LMS
+- Chat
+- Video Conference
+- Multi Sekolah
+- Multi Guru
+- Sinkronisasi Cloud
+- AI Recommendation Engine
+- Aplikasi Orang Tua
+- Aplikasi Siswa
+
+Fitur-fitur tersebut akan dipertimbangkan pada versi berikutnya berdasarkan kebutuhan pengguna.
+
+---
+
+# 14. Development Principle
+
+Setiap fitur yang akan dikembangkan wajib menjawab pertanyaan berikut:
+
+> **"Pekerjaan guru apa yang berhasil dihilangkan oleh fitur ini?"**
+
+Jika sebuah fitur tidak mampu mengurangi pekerjaan guru atau meningkatkan efektivitas pembelajaran, maka fitur tersebut bukan prioritas untuk dikembangkan.
+
+Prinsip ini menjadi dasar seluruh proses desain, pengembangan, dan evaluasi aplikasi.
+
+---
+
+# End of Document

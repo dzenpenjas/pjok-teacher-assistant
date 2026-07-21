@@ -1,0 +1,409 @@
+# 02 - Problem Statement
+
+**Project Name** : PJOK Teacher Assistant *(Working Title)*  
+**Document Version** : 1.0  
+**Status** : Draft (Approved for Phase 1)  
+**Document Owner** : Product Team  
+**Last Updated** : July 2026  
+
+**Related Documents**
+- 01_Product_Vision.md
+
+**Next Document**
+- 03_User_Persona.md
+
+---
+
+# Executive Summary
+
+Guru Pendidikan Jasmani, Olahraga, dan Kesehatan (PJOK) memiliki pola kerja yang berbeda dibandingkan guru mata pelajaran lainnya.
+
+Sebagian besar kegiatan pembelajaran dilakukan di lapangan sehingga guru harus mengajar sambil melakukan observasi, penilaian, pengawasan, pencatatan, dan pengelolaan administrasi secara bersamaan.
+
+Saat ini sebagian besar aktivitas tersebut masih dilakukan menggunakan kombinasi buku tulis, stopwatch, pulpen, kalkulator, dan beberapa aplikasi yang terpisah.
+
+Akibatnya guru kehilangan banyak waktu untuk pekerjaan administratif yang sebenarnya dapat diotomatisasi.
+
+PJOK Teacher Assistant hadir untuk mengurangi beban administrasi tersebut sehingga guru dapat lebih fokus mendampingi perkembangan siswa.
+
+---
+
+# Current Situation
+
+Dalam satu minggu seorang guru PJOK umumnya mengajar:
+
+- ±6 kelas
+- 28–35 siswa setiap kelas
+- Total sekitar 180–220 siswa
+
+Setiap pertemuan biasanya terdiri dari:
+
+1. Pembukaan
+2. Absensi
+3. Penyampaian materi
+4. Praktik di lapangan
+5. Penilaian
+6. Penutupan
+
+Pada awal semester guru juga melakukan:
+
+- Pengukuran tinggi badan
+- Pengukuran berat badan
+
+Selain itu guru harus menyimpan berbagai informasi penting mengenai siswa seperti:
+
+- Penyakit
+- Kondisi khusus
+- Catatan sikap
+- Pelanggaran
+- Potensi olahraga
+
+---
+
+# Existing Workflow
+
+Proses kerja guru saat ini dapat digambarkan sebagai berikut:
+
+```
+Masuk kelas
+
+↓
+
+Absensi
+
+↓
+
+Penyampaian materi
+
+↓
+
+Menuju lapangan
+
+↓
+
+Praktik
+
+↓
+
+Menggunakan stopwatch
+
+↓
+
+Menulis hasil
+
+↓
+
+Menghitung nilai
+
+↓
+
+Merekap nilai
+
+↓
+
+Selesai
+```
+
+Sebagian besar proses tersebut masih dilakukan secara manual.
+
+---
+
+# Identified Problems
+
+## PS-001
+### Guru membawa terlalu banyak perlengkapan
+
+**Deskripsi**
+
+Guru harus membawa buku nilai, buku absensi, pulpen, stopwatch, dan telepon genggam ketika mengajar.
+
+**Dampak**
+
+- Tidak praktis
+- Mengganggu mobilitas guru
+- Berpotensi kehilangan data
+
+**Prioritas**
+
+★★★★★ (Critical)
+
+---
+
+## PS-002
+### Guru sulit mengingat identitas siswa
+
+**Deskripsi**
+
+Guru mengajar banyak kelas dengan jumlah siswa yang besar sehingga sulit mengingat nama maupun wajah seluruh siswa.
+
+**Dampak**
+
+- Kesalahan identifikasi siswa
+- Interaksi kurang personal
+- Sulit memberikan perhatian khusus
+
+**Prioritas**
+
+★★★★★
+
+---
+
+## PS-003
+### Penilaian praktik masih dilakukan secara manual
+
+**Deskripsi**
+
+Guru harus mencatat hasil praktik menggunakan kertas sebelum dipindahkan ke sistem lain.
+
+**Dampak**
+
+- Memperlambat pembelajaran
+- Berpotensi terjadi kesalahan pencatatan
+
+**Prioritas**
+
+★★★★★
+
+---
+
+## PS-004
+### Guru harus berpindah antar aplikasi
+
+**Deskripsi**
+
+Saat praktik guru harus membuka stopwatch, kalkulator, catatan, maupun aplikasi lain secara bergantian.
+
+**Dampak**
+
+- Mengurangi fokus mengajar
+- Memperlambat proses asesmen
+
+**Prioritas**
+
+★★★★★
+
+---
+
+## PS-005
+### Perhitungan nilai dilakukan secara manual
+
+**Deskripsi**
+
+Guru masih menghitung nilai akhir menggunakan rumus sendiri.
+
+**Dampak**
+
+- Memerlukan waktu tambahan
+- Berpotensi terjadi kesalahan perhitungan
+
+**Prioritas**
+
+★★★★★
+
+---
+
+## PS-006
+### Data perkembangan siswa tersebar
+
+**Deskripsi**
+
+Data hasil praktik, teori, tugas, maupun catatan siswa tersimpan pada media yang berbeda.
+
+**Dampak**
+
+- Sulit melihat perkembangan siswa
+- Sulit membuat evaluasi
+
+**Prioritas**
+
+★★★★☆
+
+---
+
+## PS-007
+### Data pertumbuhan belum terdokumentasi
+
+**Deskripsi**
+
+Data tinggi badan dan berat badan hanya diukur pada awal semester dan belum memiliki sistem pencatatan yang terstruktur.
+
+**Dampak**
+
+- Riwayat pertumbuhan sulit dipantau
+- Sulit mengetahui perubahan dari semester ke semester
+
+**Prioritas**
+
+★★★★☆
+
+---
+
+## PS-008
+### Sulit menemukan siswa berbakat
+
+**Deskripsi**
+
+Guru biasanya menentukan calon peserta O2SN berdasarkan hasil lomba atau pengamatan manual.
+
+**Dampak**
+
+- Data potensi siswa tidak terdokumentasi
+- Sulit melihat konsistensi performa
+
+**Prioritas**
+
+★★★★☆
+
+---
+
+## PS-009
+### Catatan penting siswa belum terintegrasi
+
+**Deskripsi**
+
+Guru memiliki berbagai catatan seperti penyakit, ABK, sikap, maupun pelanggaran, tetapi belum tersimpan dalam satu profil siswa.
+
+**Dampak**
+
+- Informasi mudah terlupakan
+- Guru harus mengingat secara manual
+
+**Prioritas**
+
+★★★★☆
+
+---
+
+## PS-010
+### Tidak ada sistem yang menghubungkan seluruh data siswa
+
+**Deskripsi**
+
+Identitas siswa, hasil asesmen, pertumbuhan, dan perkembangan tersimpan secara terpisah.
+
+**Dampak**
+
+- Sulit memperoleh gambaran menyeluruh tentang siswa
+
+**Prioritas**
+
+★★★★★
+
+---
+
+# Root Cause Analysis
+
+| Problem | Root Cause |
+|----------|------------|
+| Banyak perlengkapan | Tidak ada aplikasi yang mengintegrasikan seluruh kebutuhan guru PJOK |
+| Lupa siswa | Jumlah siswa terlalu banyak |
+| Penilaian manual | Belum tersedia sistem asesmen lapangan |
+| Banyak aplikasi | Stopwatch dan pencatatan terpisah |
+| Rekap lama | Perhitungan masih dilakukan guru |
+| Sulit melihat perkembangan | Data tidak tersimpan sebagai riwayat |
+| Sulit melihat pertumbuhan | Tidak ada Growth Tracker |
+| Sulit memilih bibit atlet | Tidak ada analisis performa siswa |
+
+---
+
+# Impact Analysis
+
+Masalah-masalah di atas menyebabkan:
+
+- Waktu pembelajaran berkurang.
+- Guru lebih fokus pada administrasi dibandingkan observasi siswa.
+- Risiko kesalahan pencatatan meningkat.
+- Data perkembangan siswa tidak termanfaatkan secara optimal.
+- Potensi olahraga siswa sulit diidentifikasi sejak dini.
+- Riwayat pertumbuhan siswa tidak terdokumentasi dengan baik.
+
+---
+
+# Opportunity
+
+Permasalahan tersebut membuka peluang untuk membangun aplikasi yang mampu menjadi pusat aktivitas guru PJOK.
+
+Aplikasi tidak hanya berfungsi sebagai penyimpan data, tetapi menjadi pendamping guru selama proses pembelajaran berlangsung.
+
+Seluruh aktivitas mulai dari absensi, asesmen, stopwatch, pencatatan perkembangan, hingga pemantauan pertumbuhan siswa dapat dilakukan dalam satu aplikasi.
+
+---
+
+# Product Direction
+
+Berdasarkan hasil observasi, arah pengembangan produk difokuskan pada empat area utama.
+
+## 1. Teaching
+
+Mendukung aktivitas guru selama pembelajaran berlangsung.
+
+## 2. Assessment
+
+Mempermudah seluruh proses asesmen praktik maupun teori.
+
+## 3. Student Profile
+
+Menyimpan identitas, foto, tag, dan catatan penting siswa.
+
+## 4. Growth & Performance
+
+Mendokumentasikan pertumbuhan fisik serta perkembangan kemampuan siswa dari waktu ke waktu.
+
+---
+
+# Problem Priority Matrix
+
+| Priority | Problem ID |
+|----------|------------|
+| Critical | PS-001 |
+| Critical | PS-002 |
+| Critical | PS-003 |
+| Critical | PS-004 |
+| Critical | PS-005 |
+| High | PS-006 |
+| High | PS-007 |
+| High | PS-008 |
+| High | PS-009 |
+| Critical | PS-010 |
+
+---
+
+# Problem Mapping
+
+| Problem | Future Solution |
+|----------|----------------|
+| Membawa banyak alat | Teaching Workspace |
+| Lupa nama siswa | Student Profile dengan Foto |
+| Penilaian manual | Smart Assessment |
+| Berpindah aplikasi | Stopwatch Terintegrasi |
+| Menghitung nilai | Auto Score Engine |
+| Sulit melihat perkembangan | Student Timeline |
+| Data pertumbuhan | Growth Tracker |
+| Sulit mencari bibit atlet | Talent Tracking |
+| Catatan siswa | Student Notes & Tags |
+
+---
+
+# Conclusion
+
+Hasil analisis menunjukkan bahwa permasalahan utama guru PJOK bukan hanya proses penilaian, tetapi keseluruhan alur kerja selama pembelajaran.
+
+Solusi yang dibutuhkan bukan sekadar aplikasi nilai atau absensi, melainkan sebuah **Digital Teaching Assistant** yang mendukung guru sejak pembelajaran dimulai hingga seluruh administrasi selesai.
+
+Dengan mengintegrasikan identitas siswa, asesmen, pertumbuhan, perkembangan, dan catatan guru dalam satu aplikasi, diharapkan guru dapat mengurangi beban administrasi dan lebih fokus pada proses pembelajaran serta perkembangan setiap siswa.
+
+---
+
+# Decision Log
+
+| ID | Decision |
+|----|----------|
+| D-001 | Aplikasi berfokus pada kebutuhan guru PJOK, bukan sistem administrasi sekolah. |
+| D-002 | Seluruh fitur harus mengurangi pekerjaan administratif guru. |
+| D-003 | Penilaian menjadi bagian dari Teaching Session, bukan modul yang berdiri sendiri. |
+| D-004 | Data pertumbuhan siswa menjadi bagian dari profil siswa. |
+| D-005 | Riwayat perkembangan siswa menjadi aset utama aplikasi. |
+
+---
+
+# End of Document

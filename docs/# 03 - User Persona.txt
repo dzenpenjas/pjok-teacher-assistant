@@ -1,0 +1,41 @@
+# UX Commandments
+
+Seluruh desain antarmuka dan pengembangan fitur wajib mematuhi aturan berikut.
+
+## UX-001 — Auto Save Everything
+
+Setiap data yang dimasukkan guru harus langsung tersimpan secara otomatis.
+
+Guru tidak boleh kehilangan data hanya karena lupa menekan tombol **Simpan** atau aplikasi tertutup secara tidak sengaja.
+
+---
+
+## UX-002 — Resume Session
+
+Guru harus selalu dapat melanjutkan sesi pembelajaran yang sedang berlangsung.
+
+Ketika aplikasi dibuka kembali, sistem harus mengembalikan guru ke halaman terakhir beserta kondisi terakhir tanpa perlu mengulang proses.
+
+---
+
+## UX-003 — Offline is Mandatory
+
+Seluruh fungsi utama aplikasi wajib dapat digunakan tanpa koneksi internet.
+
+Sinkronisasi cloud hanya bersifat tambahan dan tidak boleh menjadi syarat utama penggunaan aplikasi.
+
+---
+
+## UX-004 — Reduce Teacher Work
+
+Setiap fitur yang dibuat harus mengurangi pekerjaan guru.
+
+Jika suatu fitur menambah langkah, menambah waktu, atau menambah pekerjaan administrasi, maka fitur tersebut harus dievaluasi kembali.
+
+---
+
+## UX-005 — Keep Important Information Visible
+
+Informasi penting tidak boleh tersembunyi di dalam banyak menu.
+
+Guru harus dapat melihat informasi yang dibutuhkan dengan cepat ketika mengajar di lapangan.
