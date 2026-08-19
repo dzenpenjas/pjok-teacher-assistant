@@ -1,5 +1,6 @@
 import { SCREENS } from "../data/schema.js";
 import { renderMasterDataScreen } from "./master-data-screen.js";
+import { renderSessionScreen } from "../session/session-screen.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -43,26 +44,6 @@ function renderDashboard(state, actions) {
   primaryAction.addEventListener("click", () => actions.navigate(SCREENS.masterData));
   screen.append(primaryAction);
 
-  return screen;
-}
-
-function renderSession(state) {
-  const screen = createElement("main", "screen");
-  screen.append(createElement("p", "eyebrow", "Teaching Session"));
-  screen.append(
-    createElement(
-      "h1",
-      "screen-title",
-      state.activeSessionId ? "Lanjutkan sesi aktif." : "Belum ada sesi berjalan."
-    )
-  );
-  screen.append(
-    createElement(
-      "p",
-      "screen-copy",
-      "Alur sesi akan menjadi pusat absensi, materi, praktik, penilaian, dan ringkasan."
-    )
-  );
   return screen;
 }
 
@@ -115,7 +96,25 @@ export function renderScreen(screenId, state, actions) {
   }
 
   if (screenId === SCREENS.session) {
-    return renderSession(state, actions);
+    return renderSessionScreen(state.session || null, {
+      actions,
+      className: state.session
+        ? (state.classes || []).find((item) => item.id === state.session.classId)?.name || ""
+        : "",
+      students: state.session
+        ? (state.students || []).filter((student) => student.classId === state.session.classId)
+        : [],
+      attendanceRecords: state.session
+        ? (state.attendanceRecords || []).filter(
+            (record) => record.sessionId === state.session.id
+          )
+        : [],
+      onSetAttendanceStatus: actions.setAttendanceStatus,
+      classOptions: state.classes || [],
+      teacherOptions: state.teachers || [],
+      academicYearOptions: state.academicYears || [],
+      semesterOptions: state.semesters || []
+    });
   }
 
   if (screenId === SCREENS.settings) {

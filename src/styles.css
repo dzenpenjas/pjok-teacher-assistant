@@ -327,6 +327,116 @@ noscript {
   margin-top: 24px;
 }
 
+.resume-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 18px 0;
+  padding: 12px 14px;
+  border: 1px solid #cfe3d7;
+  border-radius: var(--radius);
+  background: #edf8f2;
+}
+
+.resume-banner strong,
+.resume-banner span {
+  display: block;
+}
+
+.resume-banner span {
+  margin-top: 4px;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.session-card,
+.session-empty {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.session-field {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.session-field-label {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.session-field-value {
+  font-size: 1rem;
+}
+
+.session-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.attendance-panel {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.attendance-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.attendance-row {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: #fbfcf9;
+}
+
+.attendance-info strong,
+.attendance-info span {
+  display: block;
+}
+
+.attendance-info span {
+  margin-top: 4px;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.attendance-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pill-button {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-weight: 800;
+}
+
+.pill-button.is-active {
+  border-color: #b7d8c8;
+  background: #e7f3ed;
+  color: var(--color-primary-dark);
+}
+
 .import-action {
   display: grid;
   place-items: center;
@@ -374,6 +484,19 @@ noscript {
 
   .data-actions {
     grid-template-columns: repeat(2, minmax(0, 220px));
+  }
+
+  .session-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .attendance-row {
+    grid-template-columns: minmax(0, 220px) 1fr;
+    align-items: center;
+  }
+
+  .attendance-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .bottom-nav {

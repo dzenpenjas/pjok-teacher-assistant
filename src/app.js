@@ -2,12 +2,14 @@ import { SCREENS } from "./data/schema.js";
 import { importStateFromJson, exportStateAsJson } from "./storage/backup.js";
 import { loadState, saveState } from "./storage/storage.js";
 import { createRepositoryContext } from "./repositories/repository-context.js";
+import { SessionManager } from "./services/session-manager.js";
 import { createNavigation } from "./ui/navigation.js";
 import { renderScreen } from "./ui/screens.js";
 
 const appRoot = document.querySelector("#app");
 let appState = loadState();
 const repositories = createRepositoryContext();
+const sessionManager = new SessionManager(repositories.sessions);
 
 function isKnownScreen(screenId) {
   return Object.values(SCREENS).includes(screenId);
@@ -23,7 +25,34 @@ function setScreen(screenId) {
 
 function refreshState() {
   appState = loadState();
+  syncSessionPointer();
   renderApp();
+}
+
+function syncSessionPointer() {
+  const session = sessionManager.getResumeCandidate();
+  const activeSessionId = session ? session.id : null;
+
+  if (appState.activeSessionId !== activeSessionId) {
+    appState = saveState({
+      ...appState,
+      activeSessionId
+    });
+  }
+}
+
+function getSessionContext() {
+  const session = sessionManager.getResumeCandidate() || repositories.sessions.findAll().at(-1) || null;
+  const classRoom = session
+    ? appState.classes.find((item) => item.id === session.classId) || null
+    : null;
+
+  return {
+    session,
+    className: classRoom ? classRoom.name : "",
+    statusLabel: session ? session.status : "",
+    resumeAvailable: Boolean(session && (session.status === "active" || session.status === "paused"))
+  };
 }
 
 function createCrudActions() {
@@ -140,6 +169,54 @@ function createCrudActions() {
         repositories.students.delete(id);
         refreshState();
       }
+    },
+    setAttendanceStatus: (studentId, status) => {
+      const session = sessionManager.getResumeCandidate() || repositories.sessions.findAll().at(-1) || null;
+      if (!session) {
+        return;
+      }
+
+      const existing = repositories.attendanceRecords.findBySessionAndStudent(session.id, studentId);
+      const payload = {
+        sessionId: session.id,
+        studentId,
+        status,
+        recordedAt: new Date().toISOString()
+      };
+
+      if (existing) {
+        repositories.attendanceRecords.update(existing.id, payload);
+      } else {
+        repositories.attendanceRecords.create(payload);
+      }
+
+      refreshState();
+    },
+    createSession: (input) => {
+      sessionManager.createSession(input);
+      refreshState();
+    },
+    startSession: (id) => {
+      sessionManager.startSession(id);
+      refreshState();
+    },
+    pauseSession: (id) => {
+      sessionManager.pauseSession(id);
+      refreshState();
+    },
+    resumeSession: (id) => {
+      sessionManager.resumeSession(id);
+      refreshState();
+    },
+    finishSession: (id) => {
+      sessionManager.finishSession(id);
+      refreshState();
+    },
+    cancelSession: (id) => {
+      if (window.confirm("Batalkan sesi ini?")) {
+        sessionManager.cancelSession(id);
+        refreshState();
+      }
     }
   };
 }
@@ -172,6 +249,7 @@ function importData(file) {
 
 function renderApp() {
   appRoot.replaceChildren();
+  const sessionContext = getSessionContext();
 
   const header = document.createElement("header");
   header.className = "app-header";
@@ -190,14 +268,48 @@ function renderApp() {
     navigate: setScreen,
     exportData,
     importData,
+    ...sessionContext,
     ...createCrudActions()
   };
 
+  const sessionNotice = sessionContext.resumeAvailable
+    ? createResumeBanner(sessionContext.session)
+    : null;
+
   appRoot.append(
     header,
-    renderScreen(appState.currentScreen, appState, actions),
+    sessionNotice,
+    renderScreen(
+      {
+        ...appState,
+        session: sessionContext.session,
+        sessionContext
+      },
+      actions
+    ),
     createNavigation(appState.currentScreen, setScreen)
   );
+}
+
+function createResumeBanner(session) {
+  const banner = document.createElement("section");
+  banner.className = "resume-banner";
+
+  const text = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = "Lanjutkan sesi sebelumnya?";
+  const subtitle = document.createElement("span");
+  subtitle.textContent = session ? `Sesi ${session.sessionNumber || ""} masih ${session.status}.` : "";
+  text.append(title, subtitle);
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text-button";
+  button.textContent = "Buka";
+  button.addEventListener("click", () => setScreen(SCREENS.session));
+
+  banner.append(text, button);
+  return banner;
 }
 
 function registerServiceWorker() {

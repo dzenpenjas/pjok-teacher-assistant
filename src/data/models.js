@@ -94,3 +94,43 @@ export function createStudentTag(input = {}) {
     color: input.color || "#116149"
   };
 }
+
+export function createSession(input = {}) {
+  const timestamp = nowIso();
+  return {
+    ...withMeta(input, "session"),
+    sessionNumber: input.sessionNumber || "",
+    classId: input.classId || "",
+    teacherId: input.teacherId || "",
+    academicYearId: input.academicYearId || "",
+    semesterId: input.semesterId || "",
+    date: input.date || "",
+    startTime: input.startTime || "",
+    endTime: input.endTime || "",
+    topic: input.topic || "",
+    material: input.material || "",
+    location: input.location || "",
+    weather: input.weather || "",
+    notes: input.notes || "",
+    status: input.status || "planned",
+    state: input.state || "NOT_STARTED",
+    timeline: Array.isArray(input.timeline)
+      ? input.timeline
+      : [
+          {
+            type: "created",
+            at: timestamp
+          }
+        ]
+  };
+}
+
+export function createAttendanceRecord(input = {}) {
+  return {
+    ...withMeta(input, "attendance"),
+    sessionId: input.sessionId || "",
+    studentId: input.studentId || "",
+    status: input.status || "present",
+    recordedAt: input.recordedAt || nowIso()
+  };
+}
