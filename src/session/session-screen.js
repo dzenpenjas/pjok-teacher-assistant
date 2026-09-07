@@ -2,6 +2,7 @@ import { renderAttendancePanel } from "./attendance-panel.js";
 import { renderActivityPanel } from "./activity-panel.js";
 import { renderAssessmentPanel } from "./assessment-panel.js";
 import { renderSummaryPanel } from "./summary-panel.js";
+import { ICONS } from "../ui/icons.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -19,7 +20,9 @@ export function renderSessionScreen(session, context) {
 
   // If no session exists or user wants to create a new session
   if (!session) {
-    screen.append(createElement("p", "eyebrow", "Teaching Session"));
+    const eyebrow = createElement("p", "eyebrow");
+    eyebrow.append(ICONS.whistle(15), document.createTextNode(" Teaching Session"));
+    screen.append(eyebrow);
     screen.append(createElement("h1", "screen-title", "Mulai Sesi Mengajar"));
     screen.append(
       createElement(
@@ -164,12 +167,15 @@ export function renderSessionScreen(session, context) {
   const topMetaRow = createElement("div", "session-top-meta");
   const sessionTitleCol = createElement("div", "session-title-col");
   
-  const classBadge = createElement("span", "session-class-pill", context.className || "Kelas PJOK");
+  const classBadge = createElement("span", "session-class-pill", context.className ? `Kelas ${context.className}` : "Kelas PJOK");
   const sessionH1 = createElement("h1", "workspace-session-title", `Sesi ${session.sessionNumber || "1"}: ${session.topic || "Pembelajaran Lapangan"}`);
-  const metaDetail = createElement(
-    "p",
-    "workspace-meta-line",
-    `📅 ${session.date || "-"} • ⏰ ${session.startTime || "-"} • 📍 ${session.location || "Lapangan"} (${session.weather || "Cerah"})`
+  
+  const metaDetail = createElement("p", "workspace-meta-line");
+  metaDetail.append(
+    ICONS.calendar(14),
+    document.createTextNode(` ${session.date || "-"}  ·  `),
+    ICONS.timer(14),
+    document.createTextNode(` ${session.startTime || "-"}  ·  📍 ${session.location || "Lapangan"} (${session.weather || "Cerah"})`)
   );
 
   sessionTitleCol.append(classBadge, sessionH1, metaDetail);
@@ -178,7 +184,7 @@ export function renderSessionScreen(session, context) {
   const statusBadge = createElement(
     "span",
     `session-status-badge status-${session.status || "planned"}`,
-    getStatusDisplay(session.status)
+    `● ${getStatusDisplay(session.status)}`
   );
 
   topMetaRow.append(sessionTitleCol, statusBadge);
@@ -188,18 +194,21 @@ export function renderSessionScreen(session, context) {
   const controlToolbar = createElement("div", "session-control-toolbar");
 
   if (session.status === "planned") {
-    const startBtn = createElement("button", "btn-tool btn-tool-primary", "▶ Mulai Mengajar");
+    const startBtn = createElement("button", "btn-tool btn-tool-primary");
     startBtn.type = "button";
+    startBtn.append(ICONS.play(16), document.createTextNode(" Mulai Mengajar"));
     startBtn.addEventListener("click", () => context.actions.startSession(session.id));
     controlToolbar.append(startBtn);
   } else if (session.status === "active") {
-    const pauseBtn = createElement("button", "btn-tool btn-tool-warning", "⏸ Jeda Sesi");
+    const pauseBtn = createElement("button", "btn-tool btn-tool-warning");
     pauseBtn.type = "button";
+    pauseBtn.append(ICONS.pause(16), document.createTextNode(" Jeda Sesi"));
     pauseBtn.addEventListener("click", () => context.actions.pauseSession(session.id));
     controlToolbar.append(pauseBtn);
   } else if (session.status === "paused") {
-    const resumeBtn = createElement("button", "btn-tool btn-tool-primary", "▶ Lanjutkan Sesi");
+    const resumeBtn = createElement("button", "btn-tool btn-tool-primary");
     resumeBtn.type = "button";
+    resumeBtn.append(ICONS.play(16), document.createTextNode(" Lanjutkan Sesi"));
     resumeBtn.addEventListener("click", () => context.actions.resumeSession(session.id));
     controlToolbar.append(resumeBtn);
   }
@@ -215,7 +224,7 @@ export function renderSessionScreen(session, context) {
       const cl = (context.classOptions || []).find((c) => c.id === s.classId);
       const opt = document.createElement("option");
       opt.value = s.id;
-      opt.textContent = `${cl?.name || "Kelas"} - Sesi ${s.sessionNumber || "1"} (${s.status})`;
+      opt.textContent = `${cl?.name ? `Kls ${cl.name}` : "Kelas"} - Sesi ${s.sessionNumber || "1"} (${s.status})`;
       if (s.id === session.id) opt.selected = true;
       switchSelect.append(opt);
     });
@@ -229,8 +238,9 @@ export function renderSessionScreen(session, context) {
   }
 
   // New Session Button
-  const newSessBtn = createElement("button", "text-button", "+ Sesi Baru");
+  const newSessBtn = createElement("button", "text-button");
   newSessBtn.type = "button";
+  newSessBtn.append(ICONS.plus(16), document.createTextNode(" Sesi Baru"));
   newSessBtn.addEventListener("click", () => {
     if (context.actions.selectSession) {
       context.actions.selectSession(null);
@@ -249,10 +259,10 @@ export function renderSessionScreen(session, context) {
   let lastCapturedStopwatchTime = null;
 
   const tabs = [
-    { id: "attendance", label: "👥 1. Absensi", desc: "Kehadiran Siswa" },
-    { id: "activity", label: "⏱️ 2. Aktivitas & Timer", desc: "Alur & Stopwatch" },
-    { id: "assessment", label: "🎯 3. Penilaian", desc: "Rubrik & Tes" },
-    { id: "summary", label: "🏁 4. Ringkasan & Selesai", desc: "Evaluasi Sesi" }
+    { id: "attendance", label: "Absensi", icon: () => ICONS.users(18) },
+    { id: "activity", label: "Aktivitas", icon: () => ICONS.timer(18) },
+    { id: "assessment", label: "Penilaian", icon: () => ICONS.target(18) },
+    { id: "summary", label: "Ringkasan", icon: () => ICONS.clipboardCheck(18) }
   ];
 
   tabs.forEach((tab) => {
@@ -262,7 +272,7 @@ export function renderSessionScreen(session, context) {
     );
     btn.type = "button";
     btn.dataset.tab = tab.id;
-    btn.append(createElement("strong", "tab-title", tab.label));
+    btn.append(tab.icon(), createElement("strong", "tab-title", tab.label));
     btn.addEventListener("click", () => {
       activeTab = tab.id;
       renderTab();

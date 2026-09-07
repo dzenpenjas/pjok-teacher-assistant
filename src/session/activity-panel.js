@@ -1,3 +1,5 @@
+import { ICONS } from "../ui/icons.js";
+
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
   if (className) {
@@ -48,7 +50,9 @@ export function renderActivityPanel(context) {
 
   // STOPWATCH WIDGET
   const stopwatchCard = createElement("div", "tool-box stopwatch-box");
-  stopwatchCard.append(createElement("div", "tool-title", "⏱️ Stopwatch Lapangan"));
+  const swTitle = createElement("div", "tool-title");
+  swTitle.append(ICONS.timer(16), document.createTextNode(" Stopwatch Lapangan"));
+  stopwatchCard.append(swTitle);
   const swDisplay = createElement("div", "tool-display", "00:00.00");
   const swControls = createElement("div", "tool-controls");
 
@@ -121,7 +125,9 @@ export function renderActivityPanel(context) {
 
   // COUNTDOWN TIMER WIDGET
   const timerCard = createElement("div", "tool-box timer-box");
-  timerCard.append(createElement("div", "tool-title", "⏳ Countdown Timer"));
+  const tmTitle = createElement("div", "tool-title");
+  tmTitle.append(ICONS.clock(16), document.createTextNode(" Countdown Timer"));
+  timerCard.append(tmTitle);
   const tmDisplay = createElement("div", "tool-display", "05:00");
 
   let tmSecondsRemaining = 300;
@@ -216,8 +222,9 @@ export function renderActivityPanel(context) {
   const actHeader = createElement("div", "panel-header-row");
   actHeader.append(createElement("h2", "section-title", "Alur Aktivitas Pembelajaran"));
 
-  const loadDefaultsBtn = createElement("button", "att-quick-btn", "+ Muat Alur Standar PJOK");
+  const loadDefaultsBtn = createElement("button", "att-quick-btn");
   loadDefaultsBtn.type = "button";
+  loadDefaultsBtn.append(ICONS.plus(16), document.createTextNode(" Muat Alur Standar PJOK"));
   loadDefaultsBtn.addEventListener("click", () => {
     if (context.onLoadDefaultActivities) {
       context.onLoadDefaultActivities(sessionId);
@@ -238,17 +245,27 @@ export function renderActivityPanel(context) {
       const numLabel = createElement("span", "activity-badge-num", `Tahap ${idx + 1}`);
       const typeLabel = createElement("span", "activity-type-badge", capitalize(act.type || "latihan"));
       const title = createElement("strong", "activity-title", act.name || "Aktivitas");
-      const duration = createElement("span", "activity-meta", `⏱️ ${act.durationMinutes || 10} menit ${act.notes ? `• ${act.notes}` : ""}`);
+      const duration = createElement("span", "activity-meta");
+      duration.append(
+        ICONS.timer(13),
+        document.createTextNode(` ${act.durationMinutes || 10} menit ${act.notes ? `• ${act.notes}` : ""}`)
+      );
       
       actLeft.append(numLabel, typeLabel, title, duration);
 
       const actRight = createElement("div", "activity-actions");
       const statusBtn = createElement(
         "button",
-        `btn-act-status ${act.status === "completed" ? "is-completed" : act.status === "active" ? "is-active" : "is-pending"}`,
-        act.status === "completed" ? "✓ Selesai" : act.status === "active" ? "Sedang Berjalan" : "Mulai Tahap"
+        `btn-act-status ${act.status === "completed" ? "is-completed" : act.status === "active" ? "is-active" : "is-pending"}`
       );
       statusBtn.type = "button";
+      if (act.status === "completed") {
+        statusBtn.append(ICONS.check(14), document.createTextNode(" Selesai"));
+      } else if (act.status === "active") {
+        statusBtn.textContent = "Sedang Berjalan";
+      } else {
+        statusBtn.textContent = "Mulai Tahap";
+      }
       statusBtn.addEventListener("click", () => {
         let nextStatus = "active";
         if (act.status === "active") nextStatus = "completed";

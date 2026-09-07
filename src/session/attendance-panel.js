@@ -1,3 +1,5 @@
+import { ICONS } from "../ui/icons.js";
+
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
   if (className) {
@@ -86,8 +88,9 @@ export function renderAttendancePanel(context) {
   searchInput.placeholder = "Cari nama atau NIS siswa...";
 
   // Quick action: Mark all present
-  const markAllBtn = createElement("button", "att-quick-btn", "✓ Tandai Semua Hadir");
+  const markAllBtn = createElement("button", "att-quick-btn");
   markAllBtn.type = "button";
+  markAllBtn.append(ICONS.check(16), document.createTextNode(" Tandai Semua Hadir"));
   markAllBtn.addEventListener("click", () => {
     if (total === 0) return;
     if (context.onMarkAllPresent) {

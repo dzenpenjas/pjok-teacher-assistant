@@ -1,4 +1,5 @@
 import { SCREENS } from "../data/schema.js";
+import { ICONS } from "./icons.js";
 import { renderMasterDataScreen } from "./master-data-screen.js";
 import { renderSessionScreen } from "../session/session-screen.js";
 
@@ -13,17 +14,28 @@ function createElement(tagName, className, textContent) {
   return element;
 }
 
-function createStat(label, value) {
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 11) return "Selamat Pagi";
+  if (hour < 15) return "Selamat Siang";
+  if (hour < 18) return "Selamat Sore";
+  return "Selamat Malam";
+}
+
+function createStat(label, value, iconFn) {
   const item = createElement("div", "stat-item");
+  if (iconFn) {
+    item.append(iconFn());
+  }
   item.append(createElement("strong", "", value));
   item.append(createElement("span", "", label));
   return item;
 }
 
-function renderDashboard(state, actions) {
+function renderDashboard(state, actions = (typeof window !== "undefined" && window.actions) || {}) {
   const screen = createElement("main", "screen wide-screen");
   
-  // Date banner
+  // 1. Contextual Header with Date & Greeting
   const todayFormatted = new Intl.DateTimeFormat("id-ID", {
     weekday: "long",
     day: "numeric",
@@ -32,18 +44,25 @@ function renderDashboard(state, actions) {
   }).format(new Date());
 
   const banner = createElement("header", "dash-welcome-banner");
-  banner.append(createElement("p", "eyebrow", `📅 ${todayFormatted}`));
-  banner.append(createElement("h1", "screen-title", "PJOK Teacher Assistant"));
+  const eyebrow = createElement("p", "eyebrow");
+  eyebrow.append(ICONS.calendar(15), document.createTextNode(` ${todayFormatted}`));
+  banner.append(eyebrow);
+
+  const school = (state.schools || [])[0];
+  const teacher = (state.teachers || [])[0];
+  const greetingText = `${getGreeting()}${teacher?.name ? `, ${teacher.name}` : ", Guru PJOK"}`;
+
+  banner.append(createElement("h1", "screen-title", greetingText));
   banner.append(
     createElement(
       "p",
       "screen-copy",
-      "Kelola pembelajaran lapangan, absensi cepat, timer stopwatch, dan penilaian langsung dari genggaman."
+      school?.name ? `${school.name} • Workspace Pembelajaran PJOK Lapangan` : "Kelola pembelajaran lapangan, absensi cepat, timer stopwatch, dan penilaian langsung dari genggaman."
     )
   );
   screen.append(banner);
 
-  // 1. ACTIVE OR CANDIDATE TEACHING SESSION CARD
+  // 2. ACTIVE OR CANDIDATE TEACHING SESSION CARD
   const activeSession = state.session || null;
   const activeClass = activeSession
     ? (state.classes || []).find((c) => c.id === activeSession.classId)
@@ -55,10 +74,14 @@ function renderDashboard(state, actions) {
     const cardTop = createElement("div", "dash-card-header");
     const titleGroup = createElement("div");
     
+    let statusText = "Rencana Sesi";
+    if (activeSession.status === "active") statusText = "Sedang Mengajar";
+    if (activeSession.status === "paused") statusText = "Sesi Dijeda";
+
     const statusPill = createElement(
       "span",
       `session-status-badge status-${activeSession.status}`,
-      activeSession.status === "active" ? "🟢 Sedang Mengajar" : activeSession.status === "paused" ? "⏸ Dijeda" : "📅 Rencana Sesi"
+      `● ${statusText}`
     );
     const sessionHeading = createElement(
       "h2",
@@ -68,14 +91,14 @@ function renderDashboard(state, actions) {
     const sessionSub = createElement(
       "p",
       "dash-session-meta",
-      `Lokasi: ${activeSession.location || "Lapangan"} • Cuaca: ${activeSession.weather || "Cerah"} • Jam: ${activeSession.startTime || "07:30"}`
+      `📍 ${activeSession.location || "Lapangan"} • ☀️ ${activeSession.weather || "Cerah"} • ⏰ ${activeSession.startTime || "07:30"}`
     );
 
     titleGroup.append(statusPill, sessionHeading, sessionSub);
     cardTop.append(titleGroup);
     sessionCard.append(cardTop);
 
-    // Quick stats for this session
+    // Live progress stats for this session
     const sessionRecords = (state.attendanceRecords || []).filter((r) => r.sessionId === activeSession.id);
     const presentCount = sessionRecords.filter((r) => r.status === "present").length;
     const sessionStudents = (state.students || []).filter((s) => s.classId === activeSession.classId);
@@ -83,36 +106,44 @@ function renderDashboard(state, actions) {
     const sessStatsRow = createElement("div", "dash-session-stats");
     sessStatsRow.append(
       createMiniStat("Absensi Siswa", `${presentCount}/${sessionStudents.length} Hadir`),
-      createMiniStat("Aktivitas", `${(state.sessionActivities || []).filter((a) => a.sessionId === activeSession.id && a.status === "completed").length} Tahap Selesai`),
-      createMiniStat("Penilaian", `${(state.assessmentResults || []).filter((r) => r.sessionId === activeSession.id).length} Catatan Nilai`)
+      createMiniStat("Aktivitas", `${(state.sessionActivities || []).filter((a) => a.sessionId === activeSession.id && a.status === "completed").length} Selesai`),
+      createMiniStat("Penilaian", `${(state.assessmentResults || []).filter((r) => r.sessionId === activeSession.id).length} Catatan`)
     );
     sessionCard.append(sessStatsRow);
 
-    // Action button to enter session workspace
-    const openBtn = createElement("button", "primary-action", "▶ Masuk ke Workspace Mengajar");
+    // Primary CTA to enter session workspace
+    const openBtn = createElement("button", "primary-action");
     openBtn.type = "button";
-    openBtn.addEventListener("click", () => actions.navigate(SCREENS.session));
+    openBtn.append(ICONS.whistle(18), document.createTextNode(" Masuk ke Sesi Mengajar"));
+    openBtn.addEventListener("click", () => {
+      if (actions?.navigate) {
+        actions.navigate(SCREENS.session);
+      }
+    });
     sessionCard.append(openBtn);
 
   } else {
     // No active session: Quick launcher to start a new teaching session
-    sessionCard.append(createElement("h2", "dash-session-title", "🏃 Mulai Sesi Mengajar Hari Ini"));
+    const emptyTitle = createElement("h2", "dash-session-title");
+    emptyTitle.append(ICONS.whistle(20), document.createTextNode(" Mulai Sesi Mengajar Hari Ini"));
+    sessionCard.append(emptyTitle);
     sessionCard.append(
       createElement(
         "p",
         "screen-copy",
-        "Pilih kelas untuk langsung membuka lembar absensi, stopwatch, dan penilaian materi."
+        "Pilih kelas untuk langsung membuka lembar absensi, stopwatch, dan penilaian materi lapangan:"
       )
     );
 
     const classButtons = createElement("div", "dash-quick-class-grid");
     (state.classes || []).forEach((c) => {
-      const cBtn = createElement("button", "btn-quick-class", `+ Kelas ${c.name}`);
+      const cBtn = createElement("button", "btn-quick-class");
       cBtn.type = "button";
+      cBtn.append(ICONS.plus(16), document.createTextNode(` Kelas ${c.name}`));
       cBtn.addEventListener("click", () => {
-        if (actions.quickStartClassSession) {
+        if (actions?.quickStartClassSession) {
           actions.quickStartClassSession(c.id);
-        } else {
+        } else if (actions?.navigate) {
           actions.navigate(SCREENS.session);
         }
       });
@@ -130,14 +161,16 @@ function renderDashboard(state, actions) {
 
   screen.append(sessionCard);
 
-  // 2. STUDENT ATTENTION / HEALTH RADAR
+  // 3. STUDENT ATTENTION / HEALTH RADAR
   const attentionSection = createElement("section", "dash-section-card");
-  attentionSection.append(createElement("h3", "dash-section-title", "⚠️ Radar Perhatian & Kesehatan Siswa"));
+  const radarTitle = createElement("h3", "dash-section-title");
+  radarTitle.append(ICONS.alert(18), document.createTextNode(" Radar Perhatian & Kesehatan Siswa"));
+  attentionSection.append(radarTitle);
   attentionSection.append(
     createElement(
       "p",
       "dash-section-desc",
-      "Siswa dengan catatan khusus atau riwayat kesehatan (asma, cedera, alergi) yang perlu diperhatikan di lapangan."
+      "Siswa dengan catatan khusus atau riwayat kesehatan (asma, cedera, alergi) yang perlu dipantau saat praktik lapangan."
     )
   );
 
@@ -159,16 +192,16 @@ function renderDashboard(state, actions) {
   const radarList = createElement("div", "dash-radar-list");
 
   if (flaggedStudents.length === 0) {
-    radarList.append(createElement("p", "empty-copy", "Semua siswa dalam status siap beraktivitas normal."));
+    radarList.append(createElement("p", "empty-copy", "Semua siswa dalam status siap beraktivitas normal di lapangan."));
   } else {
     flaggedStudents.slice(0, 6).forEach((st) => {
       const cl = (state.classes || []).find((c) => c.id === st.classId);
-      const row = createElement("div", "radar-item clickable-card");
-      row.title = "Klik untuk lihat profil & perkembangan siswa";
+      const row = createElement("div", "radar-item");
+      row.title = "Buka profil & riwayat siswa";
 
       const left = createElement("div", "radar-item-left");
       left.append(createElement("strong", "radar-student-name", st.name));
-      left.append(createElement("span", "radar-student-sub", cl?.name || "Kelas"));
+      left.append(createElement("span", "radar-student-sub", cl?.name ? `Kelas ${cl.name}` : "Siswa PJOK"));
 
       const tagPills = createElement("div", "student-tags-inline");
       if (Array.isArray(st.tagIds)) {
@@ -183,7 +216,7 @@ function renderDashboard(state, actions) {
 
       row.append(left, tagPills);
       row.addEventListener("click", () => {
-        if (actions.openStudentDetail) {
+        if (actions?.openStudentDetail) {
           actions.openStudentDetail(st.id);
         }
       });
@@ -194,7 +227,7 @@ function renderDashboard(state, actions) {
   attentionSection.append(radarList);
   screen.append(attentionSection);
 
-  // 3. OVERALL TEACHING STATS
+  // 4. OVERALL DATA STATS
   const stats = createElement("section", "stats-grid");
   stats.setAttribute("aria-label", "Ringkasan data");
   stats.append(createStat("Kelas", String((state.classes || []).length)));
@@ -203,15 +236,25 @@ function renderDashboard(state, actions) {
   stats.append(createStat("Definisi Tes", String((state.assessmentDefinitions || []).length)));
   screen.append(stats);
 
-  // 4. QUICK LINKS
+  // 5. QUICK ACTIONS
   const quickLinks = createElement("div", "dash-quick-links");
-  const masterBtn = createElement("button", "text-button", "⚙️ Master Data & Penilaian");
+  const masterBtn = createElement("button", "text-button");
   masterBtn.type = "button";
-  masterBtn.addEventListener("click", () => actions.navigate(SCREENS.masterData));
+  masterBtn.append(ICONS.users(18), document.createTextNode(" Master Data"));
+  masterBtn.addEventListener("click", () => {
+    if (actions?.navigate) {
+      actions.navigate(SCREENS.masterData);
+    }
+  });
 
-  const backupBtn = createElement("button", "text-button", "💾 Cadangan & Pengaturan");
+  const backupBtn = createElement("button", "text-button");
   backupBtn.type = "button";
-  backupBtn.addEventListener("click", () => actions.navigate(SCREENS.settings));
+  backupBtn.append(ICONS.settings(18), document.createTextNode(" Cadangan & Pengaturan"));
+  backupBtn.addEventListener("click", () => {
+    if (actions?.navigate) {
+      actions.navigate(SCREENS.settings);
+    }
+  });
 
   quickLinks.append(masterBtn, backupBtn);
   screen.append(quickLinks);
@@ -226,10 +269,12 @@ function createMiniStat(label, value) {
   return box;
 }
 
-function renderSettings(state, actions) {
+function renderSettings(state, actions = (typeof window !== "undefined" && window.actions) || {}) {
   const screen = createElement("main", "screen");
-  screen.append(createElement("p", "eyebrow", "Data Lokal"));
-  screen.append(createElement("h1", "screen-title", "Data tersimpan otomatis."));
+  const eyebrow = createElement("p", "eyebrow");
+  eyebrow.append(ICONS.database(15), document.createTextNode(" Data Lokal & Cadangan"));
+  screen.append(eyebrow);
+  screen.append(createElement("h1", "screen-title", "Pengaturan & Data"));
 
   const updatedAt = state.updatedAt
     ? new Intl.DateTimeFormat("id-ID", {
@@ -238,27 +283,33 @@ function renderSettings(state, actions) {
       }).format(new Date(state.updatedAt))
     : "Belum ada";
 
-  screen.append(createElement("p", "screen-copy", `Pembaruan terakhir: ${updatedAt}.`));
+  screen.append(createElement("p", "screen-copy", `Pembaruan terakhir: ${updatedAt}. Data tersimpan secara offline di perangkat.`));
   screen.append(
     createElement(
       "p",
       "screen-copy",
-      "Gunakan export untuk mencadangkan data dan import untuk memulihkan data dari file JSON."
+      "Gunakan Export untuk mengunduh cadangan JSON ke penyimpanan HP, dan Import untuk memulihkan data kapan saja tanpa perlu internet."
     )
   );
 
   const actionsRow = createElement("div", "data-actions");
-  const exportButton = createElement("button", "primary-action compact-action", "Export Data");
+  const exportButton = createElement("button", "primary-action compact-action");
   exportButton.type = "button";
-  exportButton.addEventListener("click", actions.exportData);
+  exportButton.append(ICONS.copy(18), document.createTextNode(" Export Cadangan Data"));
+  exportButton.addEventListener("click", () => {
+    if (actions?.exportData) {
+      actions.exportData();
+    }
+  });
 
-  const importLabel = createElement("label", "import-action", "Import Data");
+  const importLabel = createElement("label", "import-action");
+  importLabel.append(ICONS.database(18), document.createTextNode(" Import Cadangan Data"));
   const importInput = document.createElement("input");
   importInput.type = "file";
   importInput.accept = "application/json,.json";
   importInput.addEventListener("change", (event) => {
     const [file] = event.target.files;
-    if (file) {
+    if (file && actions?.importData) {
       actions.importData(file);
     }
     event.target.value = "";
@@ -274,13 +325,15 @@ export function renderScreen(screenIdOrState, stateOrActions, maybeActions) {
   let state;
   let actions;
 
+  const fallbackActions = (typeof window !== "undefined" && window.actions) || (typeof globalThis !== "undefined" && globalThis.actions) || {};
+
   if (typeof screenIdOrState === "string") {
     screenId = screenIdOrState;
-    state = stateOrActions;
-    actions = maybeActions;
+    state = stateOrActions || {};
+    actions = maybeActions || state?.actions || fallbackActions;
   } else {
-    state = screenIdOrState;
-    actions = stateOrActions;
+    state = screenIdOrState || {};
+    actions = stateOrActions || state?.actions || fallbackActions;
     screenId = state?.currentScreen || SCREENS.dashboard;
   }
 
@@ -328,3 +381,4 @@ export function renderScreen(screenIdOrState, stateOrActions, maybeActions) {
 
   return renderDashboard(state, actions);
 }
+

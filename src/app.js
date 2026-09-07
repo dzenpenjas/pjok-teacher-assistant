@@ -15,6 +15,15 @@ const sessionManager = new SessionManager(repositories.sessions);
 let activeModalStudentId = null;
 let explicitSessionId = null;
 
+// Export and expose actions globally early so external/test environments have access
+export let actions = {};
+if (typeof window !== "undefined") {
+  window.actions = actions;
+}
+if (typeof globalThis !== "undefined") {
+  globalThis.actions = actions;
+}
+
 function isKnownScreen(screenId) {
   return Object.values(SCREENS).includes(screenId);
 }
@@ -500,7 +509,7 @@ function renderApp() {
 
   header.append(title, status);
 
-  const actions = {
+  const appActions = {
     navigate: setScreen,
     exportData,
     importData,
@@ -508,20 +517,30 @@ function renderApp() {
     ...createCrudActions()
   };
 
+  actions = appActions;
+  if (typeof window !== "undefined") {
+    window.actions = appActions;
+  }
+  if (typeof globalThis !== "undefined") {
+    globalThis.actions = appActions;
+  }
+
   const sessionNotice = sessionContext.resumeAvailable && appState.currentScreen !== SCREENS.session
     ? createResumeBanner(sessionContext.session)
     : null;
 
+  appRoot.append(header);
+  if (sessionNotice) {
+    appRoot.append(sessionNotice);
+  }
   appRoot.append(
-    header,
-    sessionNotice,
     renderScreen(
       {
         ...appState,
         session: sessionContext.session,
         sessionContext
       },
-      actions
+      appActions
     ),
     createNavigation(appState.currentScreen, setScreen)
   );
@@ -542,7 +561,7 @@ function renderApp() {
           classes: appState.classes,
           students: appState.students,
           tags: appState.studentTags,
-          actions
+          actions: appActions
         },
         () => {
           activeModalStudentId = null;

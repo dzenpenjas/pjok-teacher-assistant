@@ -1,3 +1,5 @@
+import { ICONS } from "../ui/icons.js";
+
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
   if (className) {
@@ -226,12 +228,9 @@ export function renderAssessmentPanel(context) {
 
         // If context has last captured stopwatch time, offer quick button
         if (context.lastCapturedStopwatch && activeDefinition.method === "stopwatch") {
-          const pasteSwBtn = createElement(
-            "button",
-            "btn-tool btn-tool-send",
-            `⏱️ Tempel ${context.lastCapturedStopwatch}s`
-          );
+          const pasteSwBtn = createElement("button", "btn-tool btn-tool-send");
           pasteSwBtn.type = "button";
+          pasteSwBtn.append(ICONS.timer(14), document.createTextNode(` Tempel ${context.lastCapturedStopwatch}s`));
           pasteSwBtn.addEventListener("click", () => {
             valInput.value = context.lastCapturedStopwatch;
             saveBtn.click();

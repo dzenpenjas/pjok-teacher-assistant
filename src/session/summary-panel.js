@@ -1,3 +1,5 @@
+import { ICONS } from "../ui/icons.js";
+
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
   if (className) {
@@ -29,7 +31,9 @@ export function renderSummaryPanel(context) {
 
   // 1. Session Information Overview Card
   const infoCard = createElement("div", "summary-card");
-  infoCard.append(createElement("h3", "summary-card-title", "📋 Identitas Pembelajaran"));
+  const infoTitle = createElement("h3", "summary-card-title");
+  infoTitle.append(ICONS.clipboardCheck(18), document.createTextNode(" Identitas Pembelajaran"));
+  infoCard.append(infoTitle);
 
   const grid = createElement("div", "summary-info-grid");
   grid.append(createSummaryItem("Kelas", context.className || "-"));
@@ -44,7 +48,9 @@ export function renderSummaryPanel(context) {
 
   // 2. Checklist & Verification Card
   const checkCard = createElement("div", "summary-card");
-  checkCard.append(createElement("h3", "summary-card-title", "✅ Checklist Kelengkapan"));
+  const checkTitle = createElement("h3", "summary-card-title");
+  checkTitle.append(ICONS.check(18), document.createTextNode(" Checklist Kelengkapan"));
+  checkCard.append(checkTitle);
 
   const attMap = new Map(records.map((r) => [r.studentId, r]));
   const presentCount = students.filter((s) => attMap.get(s.id)?.status === "present").length;
@@ -65,7 +71,7 @@ export function renderSummaryPanel(context) {
   // Attendance check
   const attCheck = createElement("div", `check-item ${unmarkedCount === 0 ? "is-ok" : "is-warn"}`);
   attCheck.append(
-    createElement("span", "check-icon", unmarkedCount === 0 ? "✓" : "⚠️"),
+    unmarkedCount === 0 ? ICONS.check(16) : ICONS.alert(16),
     createElement(
       "div",
       "check-text",
@@ -77,7 +83,7 @@ export function renderSummaryPanel(context) {
   // Activity check
   const actCheck = createElement("div", `check-item ${actCompleted >= actTotal && actTotal > 0 ? "is-ok" : "is-warn"}`);
   actCheck.append(
-    createElement("span", "check-icon", actCompleted >= actTotal && actTotal > 0 ? "✓" : "ℹ️"),
+    actCompleted >= actTotal && actTotal > 0 ? ICONS.check(16) : ICONS.timer(16),
     createElement(
       "div",
       "check-text",
@@ -89,7 +95,7 @@ export function renderSummaryPanel(context) {
   // Assessment check
   const assessCheck = createElement("div", `check-item ${assessedCount > 0 ? "is-ok" : "is-warn"}`);
   assessCheck.append(
-    createElement("span", "check-icon", assessedCount > 0 ? "✓" : "ℹ️"),
+    assessedCount > 0 ? ICONS.check(16) : ICONS.target(16),
     createElement(
       "div",
       "check-text",
@@ -103,7 +109,9 @@ export function renderSummaryPanel(context) {
 
   // 3. Teacher Reflection & Notes
   const notesCard = createElement("div", "summary-card");
-  notesCard.append(createElement("h3", "summary-card-title", "📝 Catatan & Refleksi Guru"));
+  const notesTitle = createElement("h3", "summary-card-title");
+  notesTitle.append(ICONS.file(18), document.createTextNode(" Catatan & Refleksi Guru"));
+  notesCard.append(notesTitle);
 
   const notesForm = createElement("form", "master-form");
   const notesText = document.createElement("textarea");
@@ -125,7 +133,9 @@ export function renderSummaryPanel(context) {
 
   // 4. Session Finalization Controls
   const finalCard = createElement("div", "summary-card final-action-card");
-  finalCard.append(createElement("h3", "summary-card-title", "🏁 Selesaikan Sesi"));
+  const finalTitle = createElement("h3", "summary-card-title");
+  finalTitle.append(ICONS.check(18), document.createTextNode(" Selesaikan Sesi"));
+  finalCard.append(finalTitle);
 
   if (session.status === "completed") {
     finalCard.append(
@@ -142,8 +152,9 @@ export function renderSummaryPanel(context) {
 
     const actionRow = createElement("div", "session-actions");
 
-    const finishBtn = createElement("button", "primary-action", "✓ Selesaikan & Simpan Pembelajaran");
+    const finishBtn = createElement("button", "primary-action");
     finishBtn.type = "button";
+    finishBtn.append(ICONS.check(18), document.createTextNode(" Selesaikan & Simpan Pembelajaran"));
     finishBtn.addEventListener("click", () => {
       if (unmarkedCount > 0) {
         if (!window.confirm(`Masih ada ${unmarkedCount} siswa yang belum diabsen. Tetap selesaikan sesi ini?`)) {
@@ -160,8 +171,9 @@ export function renderSummaryPanel(context) {
       }
     });
 
-    const pauseBtn = createElement("button", "text-button", "Jeda Sesi (Pause)");
+    const pauseBtn = createElement("button", "text-button");
     pauseBtn.type = "button";
+    pauseBtn.append(ICONS.pause(16), document.createTextNode(" Jeda Sesi (Pause)"));
     pauseBtn.addEventListener("click", () => {
       if (context.onPauseSession) {
         context.onPauseSession(session.id);

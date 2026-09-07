@@ -1,4 +1,5 @@
 import { createField, createSelectField, createTextAreaField, formToObject } from "./form-controls.js";
+import { ICONS } from "./icons.js";
 
 const SECTIONS = [
   { id: "schools", label: "Sekolah" },
@@ -32,7 +33,9 @@ function createOptions(items, placeholder) {
 function submitForm(form, action) {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    action(formToObject(form));
+    if (typeof action === "function") {
+      action(formToObject(form));
+    }
     form.reset();
   });
 }
@@ -373,10 +376,12 @@ function assessmentSection(data, actions) {
   );
 }
 
-export function renderMasterDataScreen(data, actions) {
+export function renderMasterDataScreen(data, actions = (typeof window !== "undefined" && window.actions) || {}) {
   const screen = createElement("main", "screen wide-screen");
-  screen.append(createElement("p", "eyebrow", "Master Data"));
-  screen.append(createElement("h1", "screen-title", "Kelola data dasar."));
+  const eyebrow = createElement("p", "eyebrow");
+  eyebrow.append(ICONS.database(15), document.createTextNode(" Master Data PJOK"));
+  screen.append(eyebrow);
+  screen.append(createElement("h1", "screen-title", "Kelola Data Dasar"));
   screen.append(
     createElement(
       "p",
@@ -395,15 +400,16 @@ export function renderMasterDataScreen(data, actions) {
       button.classList.toggle("is-active", button.dataset.section === activeSection);
     });
 
+    const safeActions = actions || (typeof window !== "undefined" && window.actions) || {};
     const sectionMap = {
-      schools: () => schoolSection(data, actions),
-      teachers: () => teacherSection(data, actions),
-      academicYears: () => academicYearSection(data, actions),
-      semesters: () => semesterSection(data, actions),
-      classes: () => classSection(data, actions),
-      students: () => studentSection(data, actions),
-      studentTags: () => tagSection(data, actions),
-      assessments: () => assessmentSection(data, actions)
+      schools: () => schoolSection(data, safeActions),
+      teachers: () => teacherSection(data, safeActions),
+      academicYears: () => academicYearSection(data, safeActions),
+      semesters: () => semesterSection(data, safeActions),
+      classes: () => classSection(data, safeActions),
+      students: () => studentSection(data, safeActions),
+      studentTags: () => tagSection(data, safeActions),
+      assessments: () => assessmentSection(data, safeActions)
     };
 
     content.append(sectionMap[activeSection]());

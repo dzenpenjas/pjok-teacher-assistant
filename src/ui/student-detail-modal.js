@@ -1,4 +1,5 @@
 import { calculateBmi } from "../data/models.js";
+import { ICONS } from "./icons.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -66,8 +67,10 @@ export function renderStudentDetailModal(studentId, context, onClose) {
   textGroup.append(tagsWrap);
   studentHeader.append(avatar, textGroup);
 
-  const closeBtn = createElement("button", "modal-close-btn", "✕");
+  const closeBtn = createElement("button", "modal-close-btn");
   closeBtn.type = "button";
+  closeBtn.setAttribute("aria-label", "Tutup modal");
+  closeBtn.append(ICONS.close(20));
   closeBtn.addEventListener("click", onClose);
 
   headerRow.append(studentHeader, closeBtn);
@@ -80,20 +83,20 @@ export function renderStudentDetailModal(studentId, context, onClose) {
   let activeTab = "growth"; // growth, attendance, assessment, observations
 
   const modalTabs = [
-    { id: "growth", label: "📏 Pertumbuhan & IMT" },
-    { id: "attendance", label: "📅 Absensi" },
-    { id: "assessment", label: "🎯 Nilai & Tes" },
-    { id: "observations", label: "📝 Observasi" }
+    { id: "growth", label: "Pertumbuhan & IMT", icon: () => ICONS.chart(16) },
+    { id: "attendance", label: "Absensi", icon: () => ICONS.calendar(16) },
+    { id: "assessment", label: "Nilai & Tes", icon: () => ICONS.target(16) },
+    { id: "observations", label: "Observasi", icon: () => ICONS.clipboardCheck(16) }
   ];
 
   modalTabs.forEach((t) => {
     const btn = createElement(
       "button",
-      `modal-tab-btn ${t.id === activeTab ? "is-active" : ""}`,
-      t.label
+      `modal-tab-btn ${t.id === activeTab ? "is-active" : ""}`
     );
     btn.type = "button";
     btn.dataset.tab = t.id;
+    btn.append(t.icon(), document.createTextNode(` ${t.label}`));
     btn.addEventListener("click", () => {
       activeTab = t.id;
       renderActiveTab();
