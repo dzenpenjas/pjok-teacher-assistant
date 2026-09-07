@@ -7,7 +7,8 @@ const SECTIONS = [
   { id: "semesters", label: "Semester" },
   { id: "classes", label: "Kelas" },
   { id: "students", label: "Siswa" },
-  { id: "studentTags", label: "Tag" }
+  { id: "studentTags", label: "Tag" },
+  { id: "assessments", label: "Definisi Penilaian" }
 ];
 
 function createElement(tagName, className, textContent) {
@@ -49,7 +50,7 @@ function promptValue(label, value) {
   return window.prompt(label, value || "");
 }
 
-function renderList(items, describe, onDelete, onEdit) {
+function renderList(items, describe, onDelete, onEdit, extraActions) {
   const list = createElement("div", "record-list");
 
   items.forEach((item) => {
@@ -58,6 +59,12 @@ function renderList(items, describe, onDelete, onEdit) {
     content.append(createElement("strong", "", item.name || item.text || "Tanpa nama"));
     content.append(createElement("span", "", describe(item)));
     const rowActions = createElement("div", "record-actions");
+    if (typeof extraActions === "function") {
+      const extras = extraActions(item);
+      if (Array.isArray(extras)) {
+        rowActions.append(...extras);
+      }
+    }
     rowActions.append(
       createRowButton("Edit", () => onEdit(item), ""),
       createRowButton("Hapus", () => onDelete(item.id), "danger-button")
@@ -297,12 +304,69 @@ function studentSection(data, actions) {
           .join(", ");
         return `${className}${tags ? ` - ${tags}` : ""}`;
       },
-      actions.deleteStudent
-      ,
+      actions.deleteStudent,
       (item) => {
         const name = promptValue("Nama siswa", item.name);
         if (name !== null) {
           actions.updateStudent(item.id, { ...item, name });
+        }
+      },
+      (item) => [
+        createRowButton("Profil & IMT", () => {
+          if (actions.openStudentDetail) {
+            actions.openStudentDetail(item.id);
+          }
+        }, "text-button")
+      ]
+    )
+  );
+}
+
+function assessmentSection(data, actions) {
+  const form = createElement("form", "master-form");
+  form.append(
+    createField({ label: "Nama Aspek / Tes Penilaian", name: "name", required: true }),
+    createSelectField({
+      label: "Kategori",
+      name: "category",
+      options: [
+        { value: "Keterampilan", label: "Keterampilan Gerak" },
+        { value: "Kebugaran Jasmani", label: "Kebugaran Jasmani" },
+        { value: "Sikap/Perilaku", label: "Sikap / Perilaku" },
+        { value: "Pengetahuan", label: "Pengetahuan" }
+      ]
+    }),
+    createSelectField({
+      label: "Metode Penilaian",
+      name: "method",
+      options: [
+        { value: "numeric", label: "Angka / Nilai Terukur" },
+        { value: "stopwatch", label: "Stopwatch (Waktu / Detik)" },
+        { value: "rubric", label: "Rubrik Skala 1 - 4" }
+      ]
+    }),
+    createField({ label: "Satuan (misal: detik, cm, kali)", name: "unit" }),
+    createTextAreaField({ label: "Deskripsi / Petunjuk Pengujian", name: "description" }),
+    createElement("button", "primary-action compact-action", "Tambah Definisi Penilaian")
+  );
+
+  submitForm(form, (values) => {
+    if (actions.createAssessmentDefinition) {
+      actions.createAssessmentDefinition(values);
+    }
+  });
+
+  return renderCard(
+    "Definisi Penilaian",
+    form,
+    renderList(
+      data.assessmentDefinitions || [],
+      (item) => `[${item.category}] Metode: ${item.method} • Satuan: ${item.unit || "-"}`,
+      actions.deleteAssessmentDefinition || (() => {}),
+      (item) => {
+        const name = promptValue("Nama penilaian", item.name);
+        if (name !== null && actions.updateAssessmentDefinition) {
+          actions.updateAssessmentDefinition(item.id, { ...item, name });
         }
       }
     )
@@ -338,7 +402,8 @@ export function renderMasterDataScreen(data, actions) {
       semesters: () => semesterSection(data, actions),
       classes: () => classSection(data, actions),
       students: () => studentSection(data, actions),
-      studentTags: () => tagSection(data, actions)
+      studentTags: () => tagSection(data, actions),
+      assessments: () => assessmentSection(data, actions)
     };
 
     content.append(sectionMap[activeSection]());

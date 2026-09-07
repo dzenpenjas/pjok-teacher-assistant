@@ -5,11 +5,15 @@ import { createRepositoryContext } from "./repositories/repository-context.js";
 import { SessionManager } from "./services/session-manager.js";
 import { createNavigation } from "./ui/navigation.js";
 import { renderScreen } from "./ui/screens.js";
+import { renderStudentDetailModal } from "./ui/student-detail-modal.js";
 
 const appRoot = document.querySelector("#app");
 let appState = loadState();
 const repositories = createRepositoryContext();
 const sessionManager = new SessionManager(repositories.sessions);
+
+let activeModalStudentId = null;
+let explicitSessionId = null;
 
 function isKnownScreen(screenId) {
   return Object.values(SCREENS).includes(screenId);
@@ -42,7 +46,13 @@ function syncSessionPointer() {
 }
 
 function getSessionContext() {
-  const session = sessionManager.getResumeCandidate() || repositories.sessions.findAll().at(-1) || null;
+  let session = null;
+  if (explicitSessionId) {
+    session = repositories.sessions.findById(explicitSessionId);
+  }
+  if (!session) {
+    session = sessionManager.getResumeCandidate() || repositories.sessions.findAll().at(-1) || null;
+  }
   const classRoom = session
     ? appState.classes.find((item) => item.id === session.classId) || null
     : null;
@@ -57,6 +67,58 @@ function getSessionContext() {
 
 function createCrudActions() {
   return {
+    // MODAL DIALOG
+    openStudentDetail: (studentId) => {
+      activeModalStudentId = studentId;
+      renderApp();
+    },
+    closeStudentDetail: () => {
+      activeModalStudentId = null;
+      renderApp();
+    },
+
+    // SESSION SELECTION & LAUNCHER
+    selectSession: (sessionId) => {
+      explicitSessionId = sessionId;
+      setScreen(SCREENS.session);
+    },
+
+    quickStartClassSession: (classId) => {
+      const existingSessionsForClass = repositories.sessions.findByClass(classId);
+      const nextNum = existingSessionsForClass.length + 1;
+      const today = new Date().toISOString().slice(0, 10);
+      const school = appState.schools[0];
+      const teacher = appState.teachers[0];
+      const academicYear = appState.academicYears[0];
+      const semester = appState.semesters[0];
+
+      const created = repositories.sessions.create({
+        schoolId: school?.id || "",
+        teacherId: teacher?.id || "",
+        academicYearId: academicYear?.id || "",
+        semesterId: semester?.id || "",
+        classId,
+        sessionNumber: nextNum,
+        date: today,
+        startTime: "07:30",
+        topic: `Pertemuan PJOK Ke-${nextNum}`,
+        material: "Praktik Kebugaran & Gerak Dasar",
+        location: "Lapangan Utama",
+        weather: "Cerah",
+        status: "active",
+        state: "ACTIVE"
+      });
+
+      const newSession = created.at(-1);
+      if (newSession) {
+        explicitSessionId = newSession.id;
+        // Auto-load standard PJOK activity stages
+        loadDefaultActivitiesForSession(newSession.id);
+      }
+      setScreen(SCREENS.session);
+    },
+
+    // MASTER DATA ACTIONS
     createSchool: (input) => {
       repositories.schools.create(input);
       refreshState();
@@ -170,11 +232,12 @@ function createCrudActions() {
         refreshState();
       }
     },
+
+    // ATTENDANCE ACTIONS
     setAttendanceStatus: (studentId, status) => {
-      const session = sessionManager.getResumeCandidate() || repositories.sessions.findAll().at(-1) || null;
-      if (!session) {
-        return;
-      }
+      const sessionContext = getSessionContext();
+      const session = sessionContext.session;
+      if (!session) return;
 
       const existing = repositories.attendanceRecords.findBySessionAndStudent(session.id, studentId);
       const payload = {
@@ -192,8 +255,127 @@ function createCrudActions() {
 
       refreshState();
     },
+
+    markAllPresent: (sessionId) => {
+      const session = repositories.sessions.findById(sessionId) || getSessionContext().session;
+      if (!session) return;
+
+      const classStudents = repositories.students.findByClass(session.classId);
+      const now = new Date().toISOString();
+
+      classStudents.forEach((student) => {
+        const existing = repositories.attendanceRecords.findBySessionAndStudent(session.id, student.id);
+        if (existing) {
+          repositories.attendanceRecords.update(existing.id, {
+            ...existing,
+            status: "present",
+            recordedAt: now
+          });
+        } else {
+          repositories.attendanceRecords.create({
+            sessionId: session.id,
+            studentId: student.id,
+            status: "present",
+            recordedAt: now
+          });
+        }
+      });
+
+      refreshState();
+    },
+
+    // ACTIVITY & TIMER ACTIONS
+    loadDefaultActivities: (sessionId) => {
+      loadDefaultActivitiesForSession(sessionId);
+      refreshState();
+    },
+    createSessionActivity: (input) => {
+      repositories.sessionActivities.create(input);
+      refreshState();
+    },
+    updateSessionActivity: (id, input) => {
+      repositories.sessionActivities.update(id, input);
+      refreshState();
+    },
+    deleteSessionActivity: (id) => {
+      repositories.sessionActivities.delete(id);
+      refreshState();
+    },
+
+    // ASSESSMENT ACTIONS
+    createAssessmentDefinition: (input) => {
+      repositories.assessmentDefinitions.create(input);
+      refreshState();
+    },
+    updateAssessmentDefinition: (id, input) => {
+      repositories.assessmentDefinitions.update(id, input);
+      refreshState();
+    },
+    deleteAssessmentDefinition: (id) => {
+      if (window.confirm("Hapus definisi tes/penilaian ini?")) {
+        repositories.assessmentDefinitions.delete(id);
+        refreshState();
+      }
+    },
+    createAssessmentSession: (input) => {
+      const res = repositories.assessmentSessions.create(input);
+      refreshState();
+      return res.at(-1);
+    },
+    saveAssessmentResult: (input) => {
+      const existing = repositories.assessmentResults.findAll().find(
+        (r) =>
+          r.sessionId === input.sessionId &&
+          r.studentId === input.studentId &&
+          (input.assessmentSessionId ? r.assessmentSessionId === input.assessmentSessionId : true)
+      );
+
+      if (existing) {
+        repositories.assessmentResults.update(existing.id, {
+          ...existing,
+          ...input
+        });
+      } else {
+        repositories.assessmentResults.create(input);
+      }
+      refreshState();
+    },
+
+    // GROWTH RECORDS & MEASUREMENTS
+    createGrowthRecord: (input) => {
+      repositories.growthRecords.create(input);
+      // Sync latest measurements to student entity
+      if (input.studentId) {
+        const student = repositories.students.findById(input.studentId);
+        if (student) {
+          repositories.students.update(student.id, {
+            ...student,
+            heightCm: Number(input.heightCm) || student.heightCm,
+            weightKg: Number(input.weightKg) || student.weightKg
+          });
+        }
+      }
+      refreshState();
+    },
+    deleteGrowthRecord: (id) => {
+      repositories.growthRecords.delete(id);
+      refreshState();
+    },
+
+    // OBSERVATIONS
+    createObservation: (input) => {
+      repositories.studentObservations.create(input);
+      refreshState();
+    },
+
+    // TEACHING SESSION LIFECYCLE
     createSession: (input) => {
-      sessionManager.createSession(input);
+      const created = sessionManager.createSession(input);
+      const newSession = Array.isArray(created) ? created.at(-1) : created;
+      if (newSession) {
+        explicitSessionId = newSession.id;
+        loadDefaultActivitiesForSession(newSession.id);
+      }
       refreshState();
     },
     startSession: (id) => {
@@ -208,6 +390,10 @@ function createCrudActions() {
       sessionManager.resumeSession(id);
       refreshState();
     },
+    updateSessionNotes: (id, notes) => {
+      repositories.sessions.update(id, { notes });
+      refreshState();
+    },
     finishSession: (id) => {
       sessionManager.finishSession(id);
       refreshState();
@@ -219,6 +405,56 @@ function createCrudActions() {
       }
     }
   };
+}
+
+function loadDefaultActivitiesForSession(sessionId) {
+  const existing = repositories.sessionActivities.findBySession(sessionId);
+  if (existing.length > 0) return;
+
+  const defaults = [
+    {
+      sessionId,
+      name: "Pemanasan Dinamis & Peregangan",
+      type: "pemanasan",
+      durationMinutes: 10,
+      notes: "Jogging keliling lapangan 2 putaran + peregangan kepala ke kaki",
+      status: "pending"
+    },
+    {
+      sessionId,
+      name: "Materi & Demonstrasi Teknik",
+      type: "materi",
+      durationMinutes: 15,
+      notes: "Penjelasan aba-aba, posisi tubuh, dan peragaan guru",
+      status: "pending"
+    },
+    {
+      sessionId,
+      name: "Praktik & Drill Berpasangan / Kelompok",
+      type: "latihan",
+      durationMinutes: 20,
+      notes: "Pengulangan gerakan mandiri dengan koreksi langsung",
+      status: "pending"
+    },
+    {
+      sessionId,
+      name: "Aplikasi / Permainan Lapangan",
+      type: "permainan",
+      durationMinutes: 20,
+      notes: "Game sederhana yang mempraktikkan keterampilan materi",
+      status: "pending"
+    },
+    {
+      sessionId,
+      name: "Pendinginan, Evaluasi & Doa",
+      type: "pendinginan",
+      durationMinutes: 10,
+      notes: "Pelepasan otot, evaluasi bersama, dan rekap kehadiran",
+      status: "pending"
+    }
+  ];
+
+  defaults.forEach((d) => repositories.sessionActivities.create(d));
 }
 
 function exportData() {
@@ -272,7 +508,7 @@ function renderApp() {
     ...createCrudActions()
   };
 
-  const sessionNotice = sessionContext.resumeAvailable
+  const sessionNotice = sessionContext.resumeAvailable && appState.currentScreen !== SCREENS.session
     ? createResumeBanner(sessionContext.session)
     : null;
 
@@ -289,6 +525,32 @@ function renderApp() {
     ),
     createNavigation(appState.currentScreen, setScreen)
   );
+
+  // Render modal on top if active
+  if (activeModalStudentId) {
+    appRoot.append(
+      renderStudentDetailModal(
+        activeModalStudentId,
+        {
+          ...appState,
+          growthRecords: repositories.growthRecords.findAll(),
+          attendanceRecords: repositories.attendanceRecords.findAll(),
+          assessmentResults: repositories.assessmentResults.findAll(),
+          assessmentDefinitions: repositories.assessmentDefinitions.findAll(),
+          observations: repositories.studentObservations.findAll(),
+          sessions: repositories.sessions.findAll(),
+          classes: appState.classes,
+          students: appState.students,
+          tags: appState.studentTags,
+          actions
+        },
+        () => {
+          activeModalStudentId = null;
+          renderApp();
+        }
+      )
+    );
+  }
 }
 
 function createResumeBanner(session) {
@@ -297,9 +559,9 @@ function createResumeBanner(session) {
 
   const text = document.createElement("div");
   const title = document.createElement("strong");
-  title.textContent = "Lanjutkan sesi sebelumnya?";
+  title.textContent = "Lanjutkan sesi mengajar aktif?";
   const subtitle = document.createElement("span");
-  subtitle.textContent = session ? `Sesi ${session.sessionNumber || ""} masih ${session.status}.` : "";
+  subtitle.textContent = session ? `Sesi ${session.sessionNumber || ""} (${session.topic || "PJOK"}) masih ${session.status}.` : "";
   text.append(title, subtitle);
 
   const button = document.createElement("button");

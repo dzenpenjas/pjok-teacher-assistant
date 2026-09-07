@@ -1,4 +1,4 @@
-export const APP_SCHEMA_VERSION = 3;
+export const APP_SCHEMA_VERSION = 4;
 
 export const SCREENS = {
   dashboard: "dashboard",
@@ -17,7 +17,13 @@ export const COLLECTIONS = {
   studentNotes: "studentNotes",
   studentTags: "studentTags",
   sessions: "sessions",
-  attendanceRecords: "attendanceRecords"
+  attendanceRecords: "attendanceRecords",
+  sessionActivities: "sessionActivities",
+  assessmentDefinitions: "assessmentDefinitions",
+  assessmentSessions: "assessmentSessions",
+  assessmentResults: "assessmentResults",
+  growthRecords: "growthRecords",
+  studentObservations: "studentObservations"
 };
 
 export const DEFAULT_APP_STATE = {
@@ -34,6 +40,12 @@ export const DEFAULT_APP_STATE = {
   studentTags: [],
   sessions: [],
   attendanceRecords: [],
+  sessionActivities: [],
+  assessmentDefinitions: [],
+  assessmentSessions: [],
+  assessmentResults: [],
+  growthRecords: [],
+  studentObservations: [],
   session: null,
   updatedAt: null
 };
@@ -51,6 +63,12 @@ export function createInitialState() {
     studentTags: [],
     sessions: [],
     attendanceRecords: [],
+    sessionActivities: [],
+    assessmentDefinitions: [],
+    assessmentSessions: [],
+    assessmentResults: [],
+    growthRecords: [],
+    studentObservations: [],
     session: null,
     updatedAt: new Date().toISOString()
   };

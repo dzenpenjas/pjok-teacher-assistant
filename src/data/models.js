@@ -134,3 +134,116 @@ export function createAttendanceRecord(input = {}) {
     recordedAt: input.recordedAt || nowIso()
   };
 }
+
+export function calculateBmi(heightCm, weightKg) {
+  const height = parseFloat(heightCm);
+  const weight = parseFloat(weightKg);
+  if (!height || !weight || height <= 0 || weight <= 0) {
+    return { bmi: null, category: "-" };
+  }
+  const heightM = height / 100;
+  const bmiVal = weight / (heightM * heightM);
+  const bmi = Math.round(bmiVal * 10) / 10;
+
+  let category = "Normal";
+  if (bmi < 17.0) {
+    category = "Sangat Kurus";
+  } else if (bmi < 18.5) {
+    category = "Kurus";
+  } else if (bmi <= 25.0) {
+    category = "Normal";
+  } else if (bmi <= 27.0) {
+    category = "Gemuk";
+  } else {
+    category = "Obesitas";
+  }
+
+  return { bmi, category };
+}
+
+export function createGrowthRecord(input = {}) {
+  const { bmi, category } = calculateBmi(input.heightCm, input.weightKg);
+  return {
+    ...withMeta(input, "growth"),
+    studentId: input.studentId || "",
+    date: input.date || nowIso().slice(0, 10),
+    heightCm: input.heightCm ? String(input.heightCm) : "",
+    weightKg: input.weightKg ? String(input.weightKg) : "",
+    bmi: input.bmi || bmi,
+    bmiCategory: input.bmiCategory || category,
+    note: input.note || ""
+  };
+}
+
+export function createSessionActivity(input = {}) {
+  return {
+    ...withMeta(input, "activity"),
+    sessionId: input.sessionId || "",
+    name: input.name || "",
+    type: input.type || "latihan", // pemanasan, materi, latihan, permainan, tes, pendinginan
+    durationMinutes: Number(input.durationMinutes) || 10,
+    status: input.status || "pending", // pending, active, completed
+    startedAt: input.startedAt || null,
+    endedAt: input.endedAt || null,
+    notes: input.notes || ""
+  };
+}
+
+export function createAssessmentDefinition(input = {}) {
+  return {
+    ...withMeta(input, "assess-def"),
+    name: input.name || "",
+    category: input.category || "Keterampilan", // Keterampilan, Kebugaran Jasmani, Sikap/Perilaku, Pengetahuan
+    method: input.method || "numeric", // stopwatch, numeric, rubric
+    unit: input.unit || "", // detik, cm, kali, poin
+    direction: input.direction || "higher_better", // higher_better, lower_better
+    rubricScale: Number(input.rubricScale) || 4,
+    rubricLevels: Array.isArray(input.rubricLevels)
+      ? input.rubricLevels
+      : [
+          { level: 1, label: "Perlu Bimbingan", desc: "Belum menguasai teknik dasar" },
+          { level: 2, label: "Cukup", desc: "Mulai menguasai dengan bimbingan" },
+          { level: 3, label: "Baik", desc: "Menguasai teknik dengan mandiri" },
+          { level: 4, label: "Sangat Baik", desc: "Menguasai teknik secara konsisten dan tangkas" }
+        ],
+    description: input.description || ""
+  };
+}
+
+export function createAssessmentSession(input = {}) {
+  return {
+    ...withMeta(input, "assess-sess"),
+    sessionId: input.sessionId || "",
+    definitionId: input.definitionId || "",
+    classId: input.classId || "",
+    date: input.date || nowIso().slice(0, 10),
+    title: input.title || "",
+    notes: input.notes || ""
+  };
+}
+
+export function createAssessmentResult(input = {}) {
+  return {
+    ...withMeta(input, "result"),
+    assessmentSessionId: input.assessmentSessionId || "",
+    sessionId: input.sessionId || "",
+    studentId: input.studentId || "",
+    value: input.value !== undefined ? input.value : "",
+    numericValue: input.numericValue !== undefined && input.numericValue !== null ? Number(input.numericValue) : null,
+    formattedValue: input.formattedValue || (input.value ? String(input.value) : "-"),
+    rubricLevel: input.rubricLevel ? Number(input.rubricLevel) : null,
+    note: input.note || "",
+    recordedAt: input.recordedAt || nowIso()
+  };
+}
+
+export function createStudentObservation(input = {}) {
+  return {
+    ...withMeta(input, "obs"),
+    sessionId: input.sessionId || "",
+    studentId: input.studentId || "",
+    text: input.text || "",
+    type: input.type || "umum", // umum, positif, evaluasi, cedera, potensi
+    recordedAt: input.recordedAt || nowIso()
+  };
+}

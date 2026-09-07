@@ -10,4 +10,8 @@ export class StudentRepository extends BaseRepository {
       ...storage
     });
   }
+
+  findByClass(classId) {
+    return this.list().filter((student) => student.classId === classId);
+  }
 }
