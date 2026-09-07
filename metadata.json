@@ -1,0 +1,8 @@
+{
+  "name": "PJOK Teacher Assistant",
+  "description": "PJOK Teacher Assistant membantu guru PJOK mengelola pembelajaran lapangan secara cepat dan offline.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

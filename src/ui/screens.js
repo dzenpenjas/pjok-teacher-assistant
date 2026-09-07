@@ -90,7 +90,21 @@ function renderSettings(state) {
   return screen;
 }
 
-export function renderScreen(screenId, state, actions) {
+export function renderScreen(screenIdOrState, stateOrActions, maybeActions) {
+  let screenId;
+  let state;
+  let actions;
+
+  if (typeof screenIdOrState === "string") {
+    screenId = screenIdOrState;
+    state = stateOrActions;
+    actions = maybeActions;
+  } else {
+    state = screenIdOrState;
+    actions = stateOrActions;
+    screenId = state?.currentScreen || SCREENS.dashboard;
+  }
+
   if (screenId === SCREENS.masterData) {
     return renderMasterDataScreen(state, actions);
   }

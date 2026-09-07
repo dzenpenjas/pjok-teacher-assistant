@@ -53,10 +53,10 @@ export function renderAttendancePanel(context) {
 
     const actions = createElement("div", "attendance-actions");
     actions.append(
-      createStatusButton("Hadir", "present", context.onSetStatus(student.id), record?.status === "present"),
-      createStatusButton("Izin", "excused", context.onSetStatus(student.id), record?.status === "excused"),
-      createStatusButton("Sakit", "sick", context.onSetStatus(student.id), record?.status === "sick"),
-      createStatusButton("Alfa", "absent", context.onSetStatus(student.id), record?.status === "absent")
+      createStatusButton("Hadir", "present", (status) => context.onSetStatus(student.id, status), record?.status === "present"),
+      createStatusButton("Izin", "excused", (status) => context.onSetStatus(student.id, status), record?.status === "excused"),
+      createStatusButton("Sakit", "sick", (status) => context.onSetStatus(student.id, status), record?.status === "sick"),
+      createStatusButton("Alfa", "absent", (status) => context.onSetStatus(student.id, status), record?.status === "absent")
     );
 
     row.append(info, actions);
