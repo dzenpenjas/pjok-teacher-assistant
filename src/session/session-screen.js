@@ -161,6 +161,19 @@ export function renderSessionScreen(session, context) {
 
   // --- TEACHING SESSION WORKSPACE (ACTIVE OR PLANNED) ---
 
+  // Top Nav Back Row
+  const topNavRow = createElement("div", "session-top-nav-bar");
+  const backBtn = createElement("button", "btn-back-nav");
+  backBtn.type = "button";
+  backBtn.append(document.createTextNode("← Keluar ke Daftar Kelas"));
+  backBtn.addEventListener("click", () => {
+    if (context.actions?.navigate) {
+      context.actions.navigate("classes");
+    }
+  });
+  topNavRow.append(backBtn);
+  screen.append(topNavRow);
+
   // Top Session Header Card
   const headerCard = createElement("section", "session-workspace-header");
 
@@ -268,10 +281,10 @@ export function renderSessionScreen(session, context) {
   let lastCapturedStopwatchTime = null;
 
   const tabs = [
-    { id: "attendance", label: "Absensi", icon: () => ICONS.users(18) },
-    { id: "activity", label: "Aktivitas", icon: () => ICONS.timer(18) },
-    { id: "assessment", label: "Penilaian", icon: () => ICONS.target(18) },
-    { id: "summary", label: "Ringkasan", icon: () => ICONS.clipboardCheck(18) }
+    { id: "attendance", step: "1", label: "Absensi", icon: () => ICONS.users(18) },
+    { id: "activity", step: "2", label: "Aktivitas", icon: () => ICONS.timer(18) },
+    { id: "assessment", step: "3", label: "Penilaian", icon: () => ICONS.target(18) },
+    { id: "summary", step: "4", label: "Ringkasan", icon: () => ICONS.clipboardCheck(18) }
   ];
 
   tabs.forEach((tab) => {
@@ -281,7 +294,10 @@ export function renderSessionScreen(session, context) {
     );
     btn.type = "button";
     btn.dataset.tab = tab.id;
-    btn.append(tab.icon(), createElement("strong", "tab-title", tab.label));
+    btn.append(
+      createElement("span", "tab-step-badge", tab.step),
+      createElement("strong", "tab-title", tab.label)
+    );
     btn.addEventListener("click", () => {
       activeTab = tab.id;
       renderTab();

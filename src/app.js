@@ -93,6 +93,33 @@ function createCrudActions() {
     },
 
     quickStartClassSession: (classId) => {
+      // 1. If this class already has an active or paused session, resume it directly
+      const existingActiveForClass = repositories.sessions.findByClass(classId).find((s) => s.status === "active" || s.status === "paused");
+      if (existingActiveForClass) {
+        explicitSessionId = existingActiveForClass.id;
+        refreshState();
+        setScreen(SCREENS.session);
+        return;
+      }
+
+      // 2. If another class has an active session, prompt teacher before auto-pausing
+      const currentActive = sessionManager.getResumeCandidate();
+      if (currentActive && currentActive.classId !== classId && (currentActive.status === "active" || currentActive.status === "paused")) {
+        const currentClassObj = (appState.classes || []).find((c) => c.id === currentActive.classId);
+        const targetClassObj = (appState.classes || []).find((c) => c.id === classId);
+        const currentName = currentClassObj ? currentClassObj.name : "sebelumnya";
+        const targetName = targetClassObj ? targetClassObj.name : "baru";
+
+        const proceed = window.confirm(
+          `Anda sedang memiliki sesi mengajar aktif untuk Kelas ${currentName}.\n\n` +
+          `Mulai sesi untuk Kelas ${targetName}?\n` +
+          `Sesi Kelas ${currentName} akan otomatis dijeda (pause) dan dapat dilanjutkan kembali kapan saja.`
+        );
+        if (!proceed) {
+          return;
+        }
+      }
+
       const existingSessionsForClass = repositories.sessions.findByClass(classId);
       const nextNum = existingSessionsForClass.length + 1;
       const today = new Date().toISOString().slice(0, 10);

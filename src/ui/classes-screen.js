@@ -41,17 +41,17 @@ export function renderClassesScreen(state, actions) {
     const header = createElement("header", "screen-header-row");
     const titleGroup = createElement("div");
     const eyebrow = createElement("p", "eyebrow");
-    eyebrow.append(ICONS.book(15), document.createTextNode(" Pusat Manajemen Kelas"));
-    titleGroup.append(eyebrow, createElement("h1", "screen-title", "Kelas & Siswa"));
+    eyebrow.append(ICONS.book(15), document.createTextNode(" Pusat Mengajar & Kelas"));
+    titleGroup.append(eyebrow, createElement("h1", "screen-title", "Daftar Kelas"));
     titleGroup.append(
       createElement(
         "p",
         "screen-copy",
-        "Pilih kelas untuk melihat siswa, menambah anggota kelas, atau langsung mulai sesi mengajar di lapangan."
+        "Pilih kelas untuk langsung mulai mengajar di lapangan atau kelola siswa."
       )
     );
 
-    const addBtn = createElement("button", "primary-action compact-action");
+    const addBtn = createElement("button", "btn-tool btn-tool-primary compact-action");
     addBtn.type = "button";
     addBtn.append(ICONS.plus(16), document.createTextNode(" Tambah Kelas"));
     addBtn.addEventListener("click", () => {
@@ -73,12 +73,26 @@ export function renderClassesScreen(state, actions) {
       return;
     }
 
+    const tags = state.studentTags || [];
+    const healthTagIds = new Set(
+      tags
+        .filter((t) => {
+          const n = (t.name || "").toLowerCase();
+          return n.includes("asma") || n.includes("cedera") || n.includes("perhatian") || n.includes("sakit") || n.includes("khusus");
+        })
+        .map((t) => t.id)
+    );
+
     const grid = createElement("div", "class-cards-grid");
 
     classes.forEach((c) => {
       const classStudents = (state.students || []).filter((s) => s.classId === c.id);
       const classSessions = (state.sessions || []).filter((sess) => sess.classId === c.id);
       const activeSession = (state.sessions || []).find((sess) => sess.classId === c.id && (sess.status === "active" || sess.status === "paused"));
+      
+      const attentionCount = classStudents.filter((st) => {
+        return (Array.isArray(st.tagIds) && st.tagIds.some((id) => healthTagIds.has(id))) || (st.noteIds && st.noteIds.length > 0);
+      }).length;
 
       const card = createElement("article", "class-summary-card");
 
@@ -86,7 +100,7 @@ export function renderClassesScreen(state, actions) {
       const titleWrap = createElement("div");
       titleWrap.append(
         createElement("h2", "class-card-name", c.name),
-        createElement("p", "class-card-meta", `Tingkat ${c.gradeLevel || "-"} ${c.homeroomTeacher ? `• Wali: ${c.homeroomTeacher}` : ""}`)
+        createElement("p", "class-card-meta", `${classStudents.length} Siswa ${c.homeroomTeacher ? `• Wali: ${c.homeroomTeacher}` : ""}`)
       );
 
       if (activeSession) {
@@ -97,29 +111,27 @@ export function renderClassesScreen(state, actions) {
       }
       card.append(topRow);
 
-      // Stats row
-      const statsRow = createElement("div", "class-card-stats");
-      statsRow.append(
-        createPillStat("Siswa", classStudents.length, ICONS.users(14)),
-        createPillStat("Sesi", classSessions.length, ICONS.whistle(14))
-      );
-      card.append(statsRow);
+      if (attentionCount > 0) {
+        const warnBadge = createElement("div", "class-attention-row", `⚠️ ${attentionCount} siswa memiliki catatan kesehatan khusus`);
+        card.append(warnBadge);
+      }
 
       // Action Buttons
       const actionsRow = createElement("div", "class-card-actions");
       
-      const startBtn = createElement("button", "btn-start-session-card");
+      const startBtn = createElement("button", "primary-action btn-start-session-card");
       startBtn.type = "button";
-      startBtn.append(ICONS.play(16), document.createTextNode(" Mulai Sesi"));
-      startBtn.addEventListener("click", () => {
+      startBtn.append(ICONS.play(18), document.createTextNode(activeSession ? " Lanjutkan Sesi" : " Mulai Sesi"));
+      startBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
         if (actions?.quickStartClassSession) {
           actions.quickStartClassSession(c.id);
         }
       });
 
-      const openBtn = createElement("button", "btn-open-class-card");
+      const openBtn = createElement("button", "btn-tool btn-open-class-card");
       openBtn.type = "button";
-      openBtn.append(ICONS.users(16), document.createTextNode(" Kelola Siswa"));
+      openBtn.append(ICONS.users(16), document.createTextNode(" Buka Siswa"));
       openBtn.addEventListener("click", () => {
         selectedClassId = c.id;
         render();
@@ -167,16 +179,18 @@ export function renderClassesScreen(state, actions) {
       createElement("p", "screen-copy", `Tingkat ${classRoom.gradeLevel || "-"} • Total ${classStudents.length} Siswa • ${classSessions.length} Sesi Terlaksana`)
     );
 
-    const actionCluster = createElement("div", "class-header-actions");
-    const startSessBtn = createElement("button", "primary-action compact-action");
-    startSessBtn.type = "button";
-    startSessBtn.append(ICONS.play(16), document.createTextNode(" Mulai Sesi"));
-    startSessBtn.addEventListener("click", () => {
+    // Big Primary Start Session CTA
+    const mainStartBtn = createElement("button", "primary-action btn-detail-start-session");
+    mainStartBtn.type = "button";
+    mainStartBtn.append(ICONS.play(18), document.createTextNode(" Mulai Sesi Mengajar Kelas Ini"));
+    mainStartBtn.addEventListener("click", () => {
       if (actions?.quickStartClassSession) {
         actions.quickStartClassSession(classRoom.id);
       }
     });
 
+    // Secondary Admin Toolbar
+    const adminCluster = createElement("div", "class-admin-cluster");
     const addStudentBtn = createElement("button", "btn-tool btn-tool-primary");
     addStudentBtn.type = "button";
     addStudentBtn.append(ICONS.plus(15), document.createTextNode(" Tambah Siswa"));
@@ -187,7 +201,7 @@ export function renderClassesScreen(state, actions) {
 
     const editClassBtn = createElement("button", "btn-tool");
     editClassBtn.type = "button";
-    editClassBtn.append(ICONS.settings(15), document.createTextNode(" Edit"));
+    editClassBtn.append(ICONS.settings(15), document.createTextNode(" Edit Nama"));
     editClassBtn.addEventListener("click", () => {
       const newName = window.prompt("Nama Kelas:", classRoom.name);
       if (newName && newName.trim()) {
@@ -196,17 +210,19 @@ export function renderClassesScreen(state, actions) {
       }
     });
 
-    const deleteClassBtn = createElement("button", "btn-tool danger-button");
+    const deleteClassBtn = createElement("button", "btn-tool text-subtle");
     deleteClassBtn.type = "button";
-    deleteClassBtn.append(ICONS.trash(15), document.createTextNode(" Hapus"));
+    deleteClassBtn.append(ICONS.trash(15), document.createTextNode(" Hapus Kelas"));
     deleteClassBtn.addEventListener("click", () => {
-      actions.deleteClass(classRoom.id);
-      selectedClassId = null;
-      render();
+      if (window.confirm(`Hapus Kelas "${classRoom.name}" beserta seluruh data siswa dan riwayat sesinya?\nTindakan ini tidak dapat dibatalkan.`)) {
+        actions.deleteClass(classRoom.id);
+        selectedClassId = null;
+        render();
+      }
     });
 
-    actionCluster.append(startSessBtn, addStudentBtn, editClassBtn, deleteClassBtn);
-    header.append(titleGroup, actionCluster);
+    adminCluster.append(addStudentBtn, editClassBtn, deleteClassBtn);
+    header.append(titleGroup, mainStartBtn, adminCluster);
     container.append(header);
 
     // Tab Switcher
@@ -283,17 +299,15 @@ export function renderClassesScreen(state, actions) {
       const grid = createElement("div", "students-grid");
       filtered.forEach((student) => {
         const card = createElement("article", "student-card-item");
+        card.setAttribute("role", "button");
+        card.tabIndex = 0;
+        card.addEventListener("click", () => actions.openStudentDetail(student.id));
 
         const infoRow = createElement("div", "student-card-main");
-        const avatar = createStudentAvatar(student, "student-card-avatar");
-        avatar.style.cursor = "pointer";
-        avatar.addEventListener("click", () => actions.openStudentDetail(student.id));
+        const avatar = createStudentAvatar(student, 46);
 
         const textCol = createElement("div", "student-card-meta");
         const nameEl = createElement("strong", "student-card-name", student.name);
-        nameEl.style.cursor = "pointer";
-        nameEl.addEventListener("click", () => actions.openStudentDetail(student.id));
-
         const subEl = createElement("span", "student-card-sub", `NIS: ${student.studentNumber || "-"} • ${student.gender === "female" ? "Perempuan" : "Laki-laki"}`);
 
         textCol.append(nameEl, subEl);
@@ -318,16 +332,14 @@ export function renderClassesScreen(state, actions) {
 
         // Actions on student
         const actionsCol = createElement("div", "student-card-actions");
-        const profileBtn = createElement("button", "btn-tool", "Profil");
+        const profileBtn = createElement("button", "btn-tool", "Lihat Profil");
         profileBtn.type = "button";
-        profileBtn.addEventListener("click", () => actions.openStudentDetail(student.id));
+        profileBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          actions.openStudentDetail(student.id);
+        });
 
-        const delBtn = createElement("button", "btn-tool danger-button", "Hapus");
-        delBtn.type = "button";
-        delBtn.addEventListener("click", () => actions.deleteStudent(student.id));
-
-        actionsCol.append(profileBtn, delBtn);
-
+        actionsCol.append(profileBtn);
         card.append(infoRow, actionsCol);
         grid.append(card);
       });
