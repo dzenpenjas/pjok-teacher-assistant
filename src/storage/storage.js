@@ -107,13 +107,35 @@ export function saveState(state) {
     updatedAt: new Date().toISOString()
   });
 
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+  } catch (error) {
+    if (error.name === "QuotaExceededError" || error.code === 22) {
+      console.error("Local Storage kuota hampir penuh saat menyimpan data.", error);
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert("Peringatan: Penyimpanan lokal browser hampir penuh. Silakan ekspor cadangan data di menu Pengaturan.");
+      }
+    } else {
+      console.error("Gagal menyimpan data ke Local Storage:", error);
+    }
+  }
   return nextState;
 }
 
 export function replaceState(state) {
   const nextState = normalizeState(state);
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+  } catch (error) {
+    if (error.name === "QuotaExceededError" || error.code === 22) {
+      console.error("Local Storage kuota hampir penuh saat memulihkan data.", error);
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert("Peringatan: Penyimpanan lokal browser hampir penuh. Data tidak dapat disimpan sepenuhnya.");
+      }
+    } else {
+      console.error("Gagal memperbarui data ke Local Storage:", error);
+    }
+  }
   return nextState;
 }
 

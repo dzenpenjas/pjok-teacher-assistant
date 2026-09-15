@@ -1,4 +1,6 @@
 import { calculateBmi } from "../data/models.js";
+import { createStudentAvatar } from "./student-avatar.js";
+import { openCameraModal } from "./camera-modal.js";
 import { ICONS } from "./icons.js";
 
 function createElement(tagName, className, textContent) {
@@ -38,7 +40,33 @@ export function renderStudentDetailModal(studentId, context, onClose) {
   const headerRow = createElement("div", "modal-header-row");
   const studentHeader = createElement("div", "modal-student-identity");
   
-  const avatar = createElement("div", "student-avatar modal-avatar", getInitials(student.name));
+  const avatarWrapper = createElement("div", "modal-avatar-wrapper");
+  const avatar = createStudentAvatar(student, "modal-avatar profile-avatar-main");
+  avatarWrapper.append(avatar);
+
+  const changePhotoBtn = createElement("button", "avatar-camera-btn");
+  changePhotoBtn.type = "button";
+  changePhotoBtn.setAttribute("aria-label", "Ganti foto siswa");
+  changePhotoBtn.title = "Ambil/ganti foto siswa";
+  changePhotoBtn.append(ICONS.camera(16));
+  changePhotoBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openCameraModal({
+      title: `Foto: ${student.name}`,
+      onCapture: (newPhoto) => {
+        if (context.actions?.updateStudent) {
+          context.actions.updateStudent(student.id, {
+            ...student,
+            photo: newPhoto
+          });
+        }
+        const updatedAvatar = createStudentAvatar({ ...student, photo: newPhoto }, "modal-avatar profile-avatar-main");
+        avatar.replaceWith(updatedAvatar);
+      }
+    });
+  });
+  avatarWrapper.append(changePhotoBtn);
+
   const textGroup = createElement("div", "modal-identity-text");
   textGroup.append(createElement("h2", "modal-student-name", student.name));
   textGroup.append(
@@ -65,7 +93,7 @@ export function renderStudentDetailModal(studentId, context, onClose) {
     });
   }
   textGroup.append(tagsWrap);
-  studentHeader.append(avatar, textGroup);
+  studentHeader.append(avatarWrapper, textGroup);
 
   const closeBtn = createElement("button", "modal-close-btn");
   closeBtn.type = "button";
@@ -75,6 +103,27 @@ export function renderStudentDetailModal(studentId, context, onClose) {
 
   headerRow.append(studentHeader, closeBtn);
   modal.append(headerRow);
+
+  // Identity & Physical Quick Meta Bar
+  const profileMetaBar = createElement("div", "profile-meta-bar");
+  if (student.birthDate) {
+    profileMetaBar.append(createElement("span", "profile-meta-chip", `Lahir: ${student.birthDate}`));
+  }
+  if (student.heightCm) {
+    profileMetaBar.append(createElement("span", "profile-meta-chip", `TB: ${student.heightCm} cm`));
+  }
+  if (student.weightKg) {
+    profileMetaBar.append(createElement("span", "profile-meta-chip", `BB: ${student.weightKg} kg`));
+  }
+  const studentNotes = (context.studentNotes || context.notes || []).filter(
+    (n) => (student.noteIds || []).includes(n.id) || n.studentId === student.id
+  );
+  if (studentNotes.length > 0) {
+    profileMetaBar.append(createElement("span", "profile-meta-chip profile-note-chip", `Catatan: ${studentNotes[0].text}`));
+  }
+  if (profileMetaBar.children.length > 0) {
+    modal.append(profileMetaBar);
+  }
 
   // MODAL TABS
   const navTabs = createElement("div", "modal-nav-tabs");

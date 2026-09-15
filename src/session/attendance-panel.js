@@ -1,4 +1,5 @@
 import { ICONS } from "../ui/icons.js";
+import { createStudentAvatar } from "../ui/student-avatar.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -175,7 +176,7 @@ export function renderAttendancePanel(context) {
       // Left: Avatar + Info
       const info = createElement("div", "attendance-info");
       
-      const avatar = createElement("div", "student-avatar", getInitials(student.name));
+      const avatar = createStudentAvatar(student);
       const textMeta = createElement("div", "student-text-meta");
       
       const nameEl = createElement("strong", "student-name", student.name);

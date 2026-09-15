@@ -1,5 +1,6 @@
 import { SCREENS } from "../data/schema.js";
 import { ICONS } from "./icons.js";
+import { createStudentAvatar } from "./student-avatar.js";
 import { renderMasterDataScreen } from "./master-data-screen.js";
 import { renderSessionScreen } from "../session/session-screen.js";
 
@@ -200,8 +201,11 @@ function renderDashboard(state, actions = (typeof window !== "undefined" && wind
       row.title = "Buka profil & riwayat siswa";
 
       const left = createElement("div", "radar-item-left");
-      left.append(createElement("strong", "radar-student-name", st.name));
-      left.append(createElement("span", "radar-student-sub", cl?.name ? `Kelas ${cl.name}` : "Siswa PJOK"));
+      const avatar = createStudentAvatar(st, "radar-avatar");
+      const infoText = createElement("div", "radar-info-text");
+      infoText.append(createElement("strong", "radar-student-name", st.name));
+      infoText.append(createElement("span", "radar-student-sub", cl?.name ? `Kelas ${cl.name}` : "Siswa PJOK"));
+      left.append(avatar, infoText);
 
       const tagPills = createElement("div", "student-tags-inline");
       if (Array.isArray(st.tagIds)) {
