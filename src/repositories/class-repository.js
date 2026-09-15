@@ -10,4 +10,58 @@ export class ClassRepository extends BaseRepository {
       ...storage
     });
   }
+
+  delete(classId) {
+    return this.deleteCascade(classId);
+  }
+
+  deleteCascade(classId) {
+    const state = this.loadState();
+    const classes = (state.classes || []).filter((c) => c.id !== classId);
+    const studentsToDelete = (state.students || []).filter((s) => s.classId === classId);
+    const studentIdsToDelete = new Set(studentsToDelete.map((s) => s.id));
+    const students = (state.students || []).filter((s) => !studentIdsToDelete.has(s.id));
+
+    const sessionsToDelete = (state.sessions || []).filter((sess) => sess.classId === classId);
+    const sessionIdsToDelete = new Set(sessionsToDelete.map((sess) => sess.id));
+    const sessions = (state.sessions || []).filter((sess) => !sessionIdsToDelete.has(sess.id));
+
+    const attendanceRecords = (state.attendanceRecords || []).filter(
+      (r) => !studentIdsToDelete.has(r.studentId) && !sessionIdsToDelete.has(r.sessionId)
+    );
+    const assessmentResults = (state.assessmentResults || []).filter(
+      (r) => !studentIdsToDelete.has(r.studentId) && !sessionIdsToDelete.has(r.sessionId)
+    );
+    const growthRecords = (state.growthRecords || []).filter(
+      (r) => !studentIdsToDelete.has(r.studentId)
+    );
+    const studentObservations = (state.studentObservations || []).filter(
+      (r) => !studentIdsToDelete.has(r.studentId) && !sessionIdsToDelete.has(r.sessionId)
+    );
+    const studentNotes = (state.studentNotes || []).filter(
+      (r) => !studentIdsToDelete.has(r.studentId)
+    );
+    const sessionActivities = (state.sessionActivities || []).filter(
+      (a) => !sessionIdsToDelete.has(a.sessionId)
+    );
+    const assessmentSessions = (state.assessmentSessions || []).filter(
+      (as) => as.classId !== classId && !sessionIdsToDelete.has(as.sessionId)
+    );
+
+    const nextState = {
+      ...state,
+      classes,
+      students,
+      sessions,
+      attendanceRecords,
+      assessmentResults,
+      growthRecords,
+      studentObservations,
+      studentNotes,
+      sessionActivities,
+      assessmentSessions
+    };
+    this.saveState(nextState);
+    return classes;
+  }
 }

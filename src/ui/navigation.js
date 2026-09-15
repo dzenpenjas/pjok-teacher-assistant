@@ -3,9 +3,10 @@ import { ICONS } from "./icons.js";
 
 const NAV_ITEMS = [
   { id: SCREENS.dashboard, label: "Beranda", icon: () => ICONS.home(20) },
-  { id: SCREENS.session, label: "Sesi Mengajar", icon: () => ICONS.whistle(20), isPrimary: true },
-  { id: SCREENS.masterData, label: "Master Data", icon: () => ICONS.users(20) },
-  { id: SCREENS.settings, label: "Pengaturan", icon: () => ICONS.settings(20) }
+  { id: SCREENS.classes, label: "Kelas", icon: () => ICONS.book(20) },
+  { id: SCREENS.session, label: "Sesi", icon: () => ICONS.whistle(20), isPrimary: true },
+  { id: SCREENS.students, label: "Siswa", icon: () => ICONS.users(20) },
+  { id: SCREENS.settings, label: "Lainnya", icon: () => ICONS.settings(20) }
 ];
 
 export function createNavigation(currentScreen, onNavigate) {

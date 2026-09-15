@@ -190,6 +190,15 @@ export function renderSessionScreen(session, context) {
   topMetaRow.append(sessionTitleCol, statusBadge);
   headerCard.append(topMetaRow);
 
+  if (session.status === "completed" || session.status === "cancelled") {
+    const banner = createElement(
+      "div",
+      "session-readonly-banner",
+      "🔒 Sesi ini telah berstatus " + (session.status === "completed" ? "Selesai (Diarsipkan)" : "Dibatalkan") + ". Data absensi, aktivitas, dan nilai tersimpan aman sebagai arsip resmi."
+    );
+    headerCard.append(banner);
+  }
+
   // Quick Action Controls Toolbar
   const controlToolbar = createElement("div", "session-control-toolbar");
 

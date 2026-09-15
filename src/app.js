@@ -1,5 +1,5 @@
 import { SCREENS } from "./data/schema.js";
-import { importStateFromJson, exportStateAsJson } from "./storage/backup.js";
+import { importStateFromJson, exportStateAsJson, inspectBackupJson } from "./storage/backup.js";
 import { loadState, saveState } from "./storage/storage.js";
 import { createRepositoryContext } from "./repositories/repository-context.js";
 import { SessionManager } from "./services/session-manager.js";
@@ -96,65 +96,77 @@ function createCrudActions() {
       const existingSessionsForClass = repositories.sessions.findByClass(classId);
       const nextNum = existingSessionsForClass.length + 1;
       const today = new Date().toISOString().slice(0, 10);
-      const school = appState.schools[0];
-      const teacher = appState.teachers[0];
+      const school = repositories.schools.get();
+      const teacher = repositories.teachers.get();
       const academicYear = appState.academicYears[0];
       const semester = appState.semesters[0];
 
-      const created = repositories.sessions.create({
-        schoolId: school?.id || "",
-        teacherId: teacher?.id || "",
-        academicYearId: academicYear?.id || "",
-        semesterId: semester?.id || "",
-        classId,
-        sessionNumber: nextNum,
-        date: today,
-        startTime: "07:30",
-        topic: `Pertemuan PJOK Ke-${nextNum}`,
-        material: "Praktik Kebugaran & Gerak Dasar",
-        location: "Lapangan Utama",
-        weather: "Cerah",
-        status: "active",
-        state: "ACTIVE"
-      });
+      const newSession = sessionManager.createSession(
+        {
+          schoolId: school?.id || "",
+          teacherId: teacher?.id || "",
+          academicYearId: academicYear?.id || "",
+          semesterId: semester?.id || "",
+          classId,
+          sessionNumber: nextNum,
+          date: today,
+          startTime: "07:30",
+          topic: `Pertemuan PJOK Ke-${nextNum}`,
+          material: "Praktik Kebugaran & Gerak Dasar",
+          location: "Lapangan Utama",
+          weather: "Cerah"
+        },
+        { startImmediately: true, autoPauseOther: true }
+      );
 
-      const newSession = created.at(-1);
       if (newSession) {
         explicitSessionId = newSession.id;
-        // Auto-load standard PJOK activity stages
         loadDefaultActivitiesForSession(newSession.id);
       }
+      refreshState();
       setScreen(SCREENS.session);
+    },
+
+    // SINGLETON PROFILES
+    saveSchool: (input) => {
+      repositories.schools.save(input);
+      refreshState();
+    },
+    saveSchoolProfile: (input) => {
+      repositories.schools.save(input);
+      refreshState();
+    },
+    saveTeacher: (input) => {
+      repositories.teachers.save(input);
+      refreshState();
+    },
+    saveTeacherProfile: (input) => {
+      repositories.teachers.save(input);
+      refreshState();
     },
 
     // MASTER DATA ACTIONS
     createSchool: (input) => {
-      repositories.schools.create(input);
+      repositories.schools.save(input);
       refreshState();
     },
     updateSchool: (id, input) => {
-      repositories.schools.update(id, input);
+      repositories.schools.save(input);
       refreshState();
     },
-    deleteSchool: (id) => {
-      if (window.confirm("Hapus sekolah ini?")) {
-        repositories.schools.delete(id);
-        refreshState();
-      }
+    deleteSchool: () => {
+      window.alert("Data sekolah merupakan profil utama dan tidak dapat dihapus.");
     },
     createTeacher: (input) => {
-      repositories.teachers.create(input);
+      repositories.teachers.save(input);
       refreshState();
     },
     updateTeacher: (id, input) => {
-      repositories.teachers.update(id, input);
+      repositories.teachers.save(input);
       refreshState();
     },
-    deleteTeacher: (id) => {
-      if (window.confirm("Hapus guru ini?")) {
-        repositories.teachers.delete(id);
-        refreshState();
-      }
+    deleteTeacher: () => {
+      window.alert("Data guru merupakan profil utama dan tidak dapat dihapus.");
     },
     createAcademicYear: (input) => {
       repositories.academicYears.create(input);
@@ -193,8 +205,13 @@ function createCrudActions() {
       refreshState();
     },
     deleteClass: (id) => {
-      if (window.confirm("Hapus kelas ini?")) {
-        repositories.classes.delete(id);
+      const classStudents = repositories.students.findByClass(id);
+      const classSessions = repositories.sessions.findByClass(id);
+      const msg = `Hapus kelas ini?\n` +
+        `Terdapat ${classStudents.length} siswa dan ${classSessions.length} sesi mengajar yang akan dihapus.\n` +
+        `Semua data absensi dan penilaian terkait kelas ini akan dibersihkan. Lanjutkan?`;
+      if (window.confirm(msg)) {
+        repositories.classes.deleteCascade(id);
         refreshState();
       }
     },
@@ -236,8 +253,12 @@ function createCrudActions() {
       refreshState();
     },
     deleteStudent: (id) => {
-      if (window.confirm("Hapus siswa ini?")) {
-        repositories.students.delete(id);
+      const student = repositories.students.findById(id);
+      const studentName = student?.name ? `"${student.name}"` : "siswa ini";
+      const msg = `Hapus ${studentName}?\n` +
+        `Semua data riwayat absensi, hasil tes penilaian fisik, grafik pertumbuhan, dan observasi siswa ini akan dihapus secara permanen. Lanjutkan?`;
+      if (window.confirm(msg)) {
+        repositories.students.deleteCascade(id);
         refreshState();
       }
     },
@@ -332,12 +353,22 @@ function createCrudActions() {
       return res.at(-1);
     },
     saveAssessmentResult: (input) => {
-      const existing = repositories.assessmentResults.findAll().find(
-        (r) =>
-          r.sessionId === input.sessionId &&
-          r.studentId === input.studentId &&
-          (input.assessmentSessionId ? r.assessmentSessionId === input.assessmentSessionId : true)
-      );
+      const session = repositories.sessions.findById(input.sessionId);
+      if (session && sessionManager.isReadOnly(session)) {
+        return;
+      }
+
+      const allResults = repositories.assessmentResults.findAll();
+      const existing = allResults.find((r) => {
+        if (r.studentId !== input.studentId) return false;
+        if (input.assessmentSessionId && r.assessmentSessionId) {
+          return r.assessmentSessionId === input.assessmentSessionId;
+        }
+        if (input.definitionId && r.definitionId) {
+          return r.sessionId === input.sessionId && r.definitionId === input.definitionId;
+        }
+        return r.sessionId === input.sessionId;
+      });
 
       if (existing) {
         repositories.assessmentResults.update(existing.id, {
@@ -476,18 +507,25 @@ function exportData() {
   URL.revokeObjectURL(url);
 }
 
-function importData(file) {
-  if (!window.confirm("Import data akan mengganti data lokal saat ini. Lanjutkan?")) {
-    return;
-  }
+function importData(fileOrText) {
+  const getTextPromise = typeof fileOrText === "string"
+    ? Promise.resolve(fileOrText)
+    : (fileOrText && typeof fileOrText.text === "function" ? fileOrText.text() : Promise.reject(new Error("Invalid file or text")));
 
-  file.text()
+  getTextPromise
     .then((text) => {
+      const check = inspectBackupJson(text);
+      if (!check.valid) {
+        window.alert(`Data cadangan tidak valid:\n${check.error}`);
+        return;
+      }
+
       appState = importStateFromJson(text);
-      renderApp();
+      refreshState();
+      window.alert("Data cadangan berhasil dipulihkan.");
     })
     .catch((error) => {
-      window.alert("File backup tidak dapat dibaca.");
+      window.alert("File backup tidak dapat diproses.");
       console.warn("Import data gagal.", error);
     });
 }

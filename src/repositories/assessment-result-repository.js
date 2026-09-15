@@ -24,6 +24,11 @@ export class AssessmentResultRepository extends BaseRepository {
   }
 
   findBySessionAndStudent(sessionId, studentId) {
-    return this.list().find((res) => res.sessionId === sessionId && res.studentId === studentId) || null;
+    return this.list().filter((res) => res.sessionId === sessionId && res.studentId === studentId);
+  }
+
+  findByAssessmentSessionAndStudent(assessmentSessionId, studentId) {
+    if (!assessmentSessionId || !studentId) return null;
+    return this.list().find((res) => res.assessmentSessionId === assessmentSessionId && res.studentId === studentId) || null;
   }
 }

@@ -30,22 +30,55 @@ export class SessionManager {
     return this.getActiveSession() || this.getPausedSession();
   }
 
-  createSession(input) {
-    return this.sessionRepository.create({
+  isEditable(session) {
+    if (!session) return false;
+    return (
+      session.status === SESSION_STATUS.planned ||
+      session.status === SESSION_STATUS.active ||
+      session.status === SESSION_STATUS.paused
+    );
+  }
+
+  isReadOnly(session) {
+    if (!session) return true;
+    return (
+      session.status === SESSION_STATUS.completed ||
+      session.status === SESSION_STATUS.cancelled
+    );
+  }
+
+  createSession(input, options = {}) {
+    const created = this.sessionRepository.create({
       ...input,
       status: SESSION_STATUS.planned,
       state: SESSION_ENGINE_STATE.NOT_STARTED
     });
+    const newSession = Array.isArray(created) ? created.at(-1) : created;
+
+    if (options.startImmediately && newSession) {
+      return this.startSession(newSession.id, { autoPauseOther: true });
+    }
+
+    return newSession;
   }
 
-  startSession(sessionId) {
+  startSession(sessionId, options = { autoPauseOther: true }) {
     const session = this.sessionRepository.findById(sessionId);
-    const activeSession = this.getActiveSession();
-    if (!session || (activeSession && activeSession.id !== sessionId)) {
+    if (!session) {
       return null;
     }
 
-    if (session.status !== SESSION_STATUS.planned) {
+    // Enforce invariant: Only 1 ACTIVE session at a time
+    const activeSession = this.getActiveSession();
+    if (activeSession && activeSession.id !== sessionId) {
+      if (options.autoPauseOther) {
+        this.pauseSession(activeSession.id);
+      } else {
+        return null;
+      }
+    }
+
+    if (session.status !== SESSION_STATUS.planned && session.status !== SESSION_STATUS.paused) {
       return null;
     }
 
@@ -54,11 +87,12 @@ export class SessionManager {
       session,
       SESSION_STATUS.active,
       SESSION_ENGINE_STATE.ACTIVE,
-      "session-started",
+      session.status === SESSION_STATUS.paused ? "session-resumed" : "session-started",
       { startTime: session.startTime || startedAt }
     );
 
-    return this.sessionRepository.update(session.id, updatedSession);
+    this.sessionRepository.update(session.id, updatedSession);
+    return this.sessionRepository.findById(session.id);
   }
 
   pauseSession(sessionId) {
@@ -74,24 +108,12 @@ export class SessionManager {
       "session-paused"
     );
 
-    return this.sessionRepository.update(session.id, updatedSession);
+    this.sessionRepository.update(session.id, updatedSession);
+    return this.sessionRepository.findById(session.id);
   }
 
   resumeSession(sessionId) {
-    const session = this.sessionRepository.findById(sessionId);
-    const activeSession = this.getActiveSession();
-    if (!session || session.status !== SESSION_STATUS.paused || (activeSession && activeSession.id !== sessionId)) {
-      return null;
-    }
-
-    const updatedSession = setSessionState(
-      session,
-      SESSION_STATUS.active,
-      SESSION_ENGINE_STATE.ACTIVE,
-      "session-resumed"
-    );
-
-    return this.sessionRepository.update(session.id, updatedSession);
+    return this.startSession(sessionId, { autoPauseOther: true });
   }
 
   finishSession(sessionId) {
@@ -109,7 +131,8 @@ export class SessionManager {
       { endTime: finishedAt }
     );
 
-    return this.sessionRepository.update(session.id, updatedSession);
+    this.sessionRepository.update(session.id, updatedSession);
+    return this.sessionRepository.findById(session.id);
   }
 
   cancelSession(sessionId) {
@@ -126,6 +149,7 @@ export class SessionManager {
       { endTime: new Date().toISOString() }
     );
 
-    return this.sessionRepository.update(session.id, updatedSession);
+    this.sessionRepository.update(session.id, updatedSession);
+    return this.sessionRepository.findById(session.id);
   }
 }

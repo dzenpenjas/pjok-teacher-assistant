@@ -113,15 +113,24 @@ export function renderSummaryPanel(context) {
   notesTitle.append(ICONS.file(18), document.createTextNode(" Catatan & Refleksi Guru"));
   notesCard.append(notesTitle);
 
+  const isReadOnly = session.status === "completed" || session.status === "cancelled";
   const notesForm = createElement("form", "master-form");
   const notesText = document.createElement("textarea");
   notesText.rows = 3;
-  notesText.placeholder = "Catatan evaluasi proses pembelajaran, kendala alat/lapangan, atau tindak lanjut pertemuan berikutnya...";
+  notesText.placeholder = isReadOnly ? "Tidak ada catatan." : "Catatan evaluasi proses pembelajaran, kendala alat/lapangan, atau tindak lanjut pertemuan berikutnya...";
   notesText.value = session.notes || "";
+  if (isReadOnly) {
+    notesText.disabled = true;
+  }
 
   const saveNotesBtn = createElement("button", "text-button", "Simpan Catatan");
   saveNotesBtn.type = "button";
+  if (isReadOnly) {
+    saveNotesBtn.disabled = true;
+    saveNotesBtn.style.display = "none";
+  }
   saveNotesBtn.addEventListener("click", () => {
+    if (isReadOnly) return;
     if (context.onUpdateSessionNotes) {
       context.onUpdateSessionNotes(session.id, notesText.value.trim());
     }

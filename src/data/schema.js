@@ -2,9 +2,11 @@ export const APP_SCHEMA_VERSION = 4;
 
 export const SCREENS = {
   dashboard: "dashboard",
-  masterData: "master-data",
+  classes: "classes",
   session: "session",
-  settings: "settings"
+  students: "students",
+  settings: "settings",
+  masterData: "classes"
 };
 
 export const COLLECTIONS = {

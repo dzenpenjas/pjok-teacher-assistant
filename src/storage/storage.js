@@ -54,7 +54,7 @@ function migrateState(rawState) {
   return state;
 }
 
-function normalizeState(state) {
+export function normalizeState(state) {
   if (!isPlainObject(state)) {
     return {
       ...createInitialState(),
@@ -76,6 +76,34 @@ function normalizeState(state) {
       ? migrated[collectionName]
       : [];
   });
+
+  // Invariant 1: Singleton School - exactly 1 active school
+  if (nextState.schools.length > 1) {
+    nextState.schools = [nextState.schools[0]];
+  }
+
+  // Invariant 2: Singleton Teacher - exactly 1 active teacher
+  if (nextState.teachers.length > 1) {
+    nextState.teachers = [nextState.teachers[0]];
+  }
+
+  // Invariant 3: Single Active Session - at most 1 active session
+  const activeSessions = (nextState.sessions || []).filter((s) => s.status === "active");
+  if (activeSessions.length > 1) {
+    // Keep the most recently updated or last one active, pause previous ones
+    const keepActiveId = activeSessions[activeSessions.length - 1].id;
+    nextState.sessions = nextState.sessions.map((s) => {
+      if (s.status === "active" && s.id !== keepActiveId) {
+        return { ...s, status: "paused" };
+      }
+      return s;
+    });
+  }
+
+  // Map legacy master-data screen to classes
+  if (nextState.currentScreen === "master-data") {
+    nextState.currentScreen = "classes";
+  }
 
   const hasMasterData = Object.values(COLLECTIONS).some(
     (collectionName) => nextState[collectionName].length > 0

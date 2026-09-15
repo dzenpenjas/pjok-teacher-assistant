@@ -24,16 +24,40 @@ export function renderAssessmentPanel(context) {
   const definitions = context.definitions || [];
   const assessmentSessions = context.assessmentSessions || [];
   const assessmentResults = context.assessmentResults || [];
+  const isReadOnly = session.status === "completed" || session.status === "cancelled";
 
-  // Find or determine active assessment session for this teaching session
-  let activeAssessSess = assessmentSessions.find((as) => as.sessionId === session.id) || null;
-  let activeDefinition = activeAssessSess
-    ? definitions.find((d) => d.id === activeAssessSess.definitionId)
-    : definitions[0] || null;
+  // Active definition selection
+  let activeDefinition = definitions[0] || null;
+  
+  // Find or create assessment session for selected definition
+  function getOrCreateAssessSess(defId) {
+    if (!defId) return null;
+    let found = assessmentSessions.find(
+      (as) => as.sessionId === session.id && as.definitionId === defId
+    );
+    if (!found && !isReadOnly && context.onCreateAssessmentSession) {
+      const defObj = definitions.find((d) => d.id === defId);
+      if (defObj) {
+        found = context.onCreateAssessmentSession({
+          sessionId: session.id,
+          definitionId: defObj.id,
+          classId: session.classId,
+          date: session.date,
+          title: `Penilaian ${defObj.name}`
+        });
+      }
+    }
+    return found || null;
+  }
+
+  let activeAssessSess = activeDefinition ? getOrCreateAssessSess(activeDefinition.id) : null;
 
   // Header
   const header = createElement("div", "panel-header-row");
   header.append(createElement("h2", "section-title", "Penilaian Pembelajaran"));
+  if (isReadOnly) {
+    header.append(createElement("span", "session-status-badge status-completed", "🔒 Arsip (Hanya Baca)"));
+  }
   panel.append(header);
 
   // Selector Bar
@@ -55,22 +79,7 @@ export function renderAssessmentPanel(context) {
   defSelect.addEventListener("change", () => {
     const selectedDefId = defSelect.value;
     activeDefinition = definitions.find((d) => d.id === selectedDefId) || null;
-    
-    // Find or create assessment session
-    let existing = assessmentSessions.find(
-      (as) => as.sessionId === session.id && as.definitionId === selectedDefId
-    );
-
-    if (!existing && context.onCreateAssessmentSession && activeDefinition) {
-      existing = context.onCreateAssessmentSession({
-        sessionId: session.id,
-        definitionId: activeDefinition.id,
-        classId: session.classId,
-        date: session.date,
-        title: `Penilaian ${activeDefinition.name}`
-      });
-    }
-    activeAssessSess = existing || null;
+    activeAssessSess = activeDefinition ? getOrCreateAssessSess(activeDefinition.id) : null;
     renderScoringArea();
   });
 
@@ -95,9 +104,11 @@ export function renderAssessmentPanel(context) {
       return;
     }
 
-    // Results mapping for the current assessment session or session
+    // Results mapping strictly isolated for the active assessment session or definition
     const currentResults = assessmentResults.filter(
-      (r) => (activeAssessSess && r.assessmentSessionId === activeAssessSess.id) || r.sessionId === session.id
+      (r) =>
+        (activeAssessSess && r.assessmentSessionId === activeAssessSess.id) ||
+        (!activeAssessSess && r.sessionId === session.id && r.definitionId === activeDefinition.id)
     );
     const resultMap = new Map(currentResults.map((r) => [r.studentId, r]));
 
@@ -177,10 +188,14 @@ export function renderAssessmentPanel(context) {
             `${lvl.level}. ${lvl.label}`
           );
           rBtn.type = "button";
+          if (isReadOnly) {
+            rBtn.disabled = true;
+          }
           if (lvl.desc) {
             rBtn.title = lvl.desc;
           }
           rBtn.addEventListener("click", () => {
+            if (isReadOnly) return;
             saveResult({
               studentId: student.id,
               value: String(lvl.level),
@@ -202,6 +217,9 @@ export function renderAssessmentPanel(context) {
         valInput.step = activeDefinition.method === "stopwatch" ? "0.01" : "1";
         valInput.className = "assess-num-input";
         valInput.placeholder = `Nilai (${activeDefinition.unit || ""})`;
+        if (isReadOnly) {
+          valInput.disabled = true;
+        }
         if (existingResult?.value !== undefined && existingResult?.value !== null) {
           valInput.value = existingResult.value;
         }
@@ -211,7 +229,11 @@ export function renderAssessmentPanel(context) {
         // Quick Save Button
         const saveBtn = createElement("button", "btn-tool btn-tool-primary", "Simpan");
         saveBtn.type = "button";
+        if (isReadOnly) {
+          saveBtn.disabled = true;
+        }
         saveBtn.addEventListener("click", () => {
+          if (isReadOnly) return;
           const val = valInput.value.trim();
           if (!val) return;
           const num = parseFloat(val);
@@ -227,7 +249,7 @@ export function renderAssessmentPanel(context) {
         numRow.append(valInput, unitLabel, saveBtn);
 
         // If context has last captured stopwatch time, offer quick button
-        if (context.lastCapturedStopwatch && activeDefinition.method === "stopwatch") {
+        if (!isReadOnly && context.lastCapturedStopwatch && activeDefinition.method === "stopwatch") {
           const pasteSwBtn = createElement("button", "btn-tool btn-tool-send");
           pasteSwBtn.type = "button";
           pasteSwBtn.append(ICONS.timer(14), document.createTextNode(` Tempel ${context.lastCapturedStopwatch}s`));
@@ -245,11 +267,15 @@ export function renderAssessmentPanel(context) {
       const noteInput = document.createElement("input");
       noteInput.type = "text";
       noteInput.className = "assess-note-input";
-      noteInput.placeholder = "Catatan evaluasi guru (misal: start bagus, lentur)...";
+      noteInput.placeholder = isReadOnly ? "Catatan evaluasi" : "Catatan evaluasi guru (misal: start bagus, lentur)...";
+      if (isReadOnly) {
+        noteInput.disabled = true;
+      }
       if (existingResult?.note) {
         noteInput.value = existingResult.note;
       }
       noteInput.addEventListener("change", () => {
+        if (isReadOnly) return;
         if (existingResult) {
           saveResult({
             ...existingResult,
@@ -267,10 +293,12 @@ export function renderAssessmentPanel(context) {
   }
 
   function saveResult(payload) {
+    if (isReadOnly) return;
     if (context.onSaveAssessmentResult) {
       context.onSaveAssessmentResult({
         ...payload,
         sessionId: session.id,
+        definitionId: activeDefinition?.id || "",
         assessmentSessionId: activeAssessSess?.id || "",
         recordedAt: new Date().toISOString()
       });

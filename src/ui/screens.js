@@ -1,7 +1,9 @@
 import { SCREENS } from "../data/schema.js";
 import { ICONS } from "./icons.js";
 import { createStudentAvatar } from "./student-avatar.js";
-import { renderMasterDataScreen } from "./master-data-screen.js";
+import { renderClassesScreen } from "./classes-screen.js";
+import { renderStudentsScreen } from "./students-screen.js";
+import { renderSettingsScreen } from "./settings-screen.js";
 import { renderSessionScreen } from "../session/session-screen.js";
 
 function createElement(tagName, className, textContent) {
@@ -31,6 +33,13 @@ function createStat(label, value, iconFn) {
   item.append(createElement("strong", "", value));
   item.append(createElement("span", "", label));
   return item;
+}
+
+function createMiniStat(label, value) {
+  const box = createElement("div", "dash-mini-stat");
+  box.append(createElement("strong", "dash-mini-val", value));
+  box.append(createElement("span", "dash-mini-lbl", label));
+  return box;
 }
 
 function renderDashboard(state, actions = (typeof window !== "undefined" && window.actions) || {}) {
@@ -63,7 +72,7 @@ function renderDashboard(state, actions = (typeof window !== "undefined" && wind
   );
   screen.append(banner);
 
-  // 2. ACTIVE OR CANDIDATE TEACHING SESSION CARD
+  // 2. ACTIVE OR RESUME TEACHING SESSION CARD
   const activeSession = state.session || null;
   const activeClass = activeSession
     ? (state.classes || []).find((c) => c.id === activeSession.classId)
@@ -132,15 +141,19 @@ function renderDashboard(state, actions = (typeof window !== "undefined" && wind
       createElement(
         "p",
         "screen-copy",
-        "Pilih kelas untuk langsung membuka lembar absensi, stopwatch, dan penilaian materi lapangan:"
+        "Pilih kelas untuk langsung membuka lembar absensi cepat, aktivitas latihan, dan penilaian tes gerak:"
       )
     );
 
     const classButtons = createElement("div", "dash-quick-class-grid");
     (state.classes || []).forEach((c) => {
+      const classStudents = (state.students || []).filter((s) => s.classId === c.id);
       const cBtn = createElement("button", "btn-quick-class");
       cBtn.type = "button";
-      cBtn.append(ICONS.plus(16), document.createTextNode(` Kelas ${c.name}`));
+      cBtn.append(
+        createElement("strong", "", c.name),
+        createElement("span", "text-subtle", ` • ${classStudents.length} Siswa`)
+      );
       cBtn.addEventListener("click", () => {
         if (actions?.quickStartClassSession) {
           actions.quickStartClassSession(c.id);
@@ -153,7 +166,7 @@ function renderDashboard(state, actions = (typeof window !== "undefined" && wind
 
     if ((state.classes || []).length === 0) {
       classButtons.append(
-        createElement("p", "empty-copy", "Belum ada data kelas. Tambahkan kelas di Master Data terlebih dahulu.")
+        createElement("p", "empty-copy", "Belum ada data kelas. Buka tab Kelas untuk menambahkan kelas.")
       );
     }
 
@@ -171,7 +184,7 @@ function renderDashboard(state, actions = (typeof window !== "undefined" && wind
     createElement(
       "p",
       "dash-section-desc",
-      "Siswa dengan catatan khusus atau riwayat kesehatan (asma, cedera, alergi) yang perlu dipantau saat praktik lapangan."
+      "Siswa dengan catatan medis khusus (asma, riwayat cedera, kondisi khusus) yang perlu dipantau saat pemanasan dan olahraga intens."
     )
   );
 
@@ -193,7 +206,7 @@ function renderDashboard(state, actions = (typeof window !== "undefined" && wind
   const radarList = createElement("div", "dash-radar-list");
 
   if (flaggedStudents.length === 0) {
-    radarList.append(createElement("p", "empty-copy", "Semua siswa dalam status siap beraktivitas normal di lapangan."));
+    radarList.append(createElement("p", "empty-copy", "Semua siswa dalam status sehat siap beraktivitas normal di lapangan."));
   } else {
     flaggedStudents.slice(0, 6).forEach((st) => {
       const cl = (state.classes || []).find((c) => c.id === st.classId);
@@ -201,7 +214,7 @@ function renderDashboard(state, actions = (typeof window !== "undefined" && wind
       row.title = "Buka profil & riwayat siswa";
 
       const left = createElement("div", "radar-item-left");
-      const avatar = createStudentAvatar(st, "radar-avatar");
+      const avatar = createStudentAvatar(st, 38);
       const infoText = createElement("div", "radar-info-text");
       infoText.append(createElement("strong", "radar-student-name", st.name));
       infoText.append(createElement("span", "radar-student-sub", cl?.name ? `Kelas ${cl.name}` : "Siswa PJOK"));
@@ -240,87 +253,39 @@ function renderDashboard(state, actions = (typeof window !== "undefined" && wind
   stats.append(createStat("Definisi Tes", String((state.assessmentDefinitions || []).length)));
   screen.append(stats);
 
-  // 5. QUICK ACTIONS
+  // 5. QUICK SHORTCUTS
   const quickLinks = createElement("div", "dash-quick-links");
-  const masterBtn = createElement("button", "text-button");
-  masterBtn.type = "button";
-  masterBtn.append(ICONS.users(18), document.createTextNode(" Master Data"));
-  masterBtn.addEventListener("click", () => {
+
+  const classBtn = createElement("button", "text-button");
+  classBtn.type = "button";
+  classBtn.append(ICONS.book(18), document.createTextNode(" Kelola Kelas"));
+  classBtn.addEventListener("click", () => {
     if (actions?.navigate) {
-      actions.navigate(SCREENS.masterData);
+      actions.navigate(SCREENS.classes);
     }
   });
 
-  const backupBtn = createElement("button", "text-button");
-  backupBtn.type = "button";
-  backupBtn.append(ICONS.settings(18), document.createTextNode(" Cadangan & Pengaturan"));
-  backupBtn.addEventListener("click", () => {
+  const studentsBtn = createElement("button", "text-button");
+  studentsBtn.type = "button";
+  studentsBtn.append(ICONS.users(18), document.createTextNode(" Direktori Siswa"));
+  studentsBtn.addEventListener("click", () => {
+    if (actions?.navigate) {
+      actions.navigate(SCREENS.students);
+    }
+  });
+
+  const settingsBtn = createElement("button", "text-button");
+  settingsBtn.type = "button";
+  settingsBtn.append(ICONS.settings(18), document.createTextNode(" Pengaturan & Cadangan"));
+  settingsBtn.addEventListener("click", () => {
     if (actions?.navigate) {
       actions.navigate(SCREENS.settings);
     }
   });
 
-  quickLinks.append(masterBtn, backupBtn);
+  quickLinks.append(classBtn, studentsBtn, settingsBtn);
   screen.append(quickLinks);
 
-  return screen;
-}
-
-function createMiniStat(label, value) {
-  const box = createElement("div", "dash-mini-stat");
-  box.append(createElement("strong", "dash-mini-val", value));
-  box.append(createElement("span", "dash-mini-lbl", label));
-  return box;
-}
-
-function renderSettings(state, actions = (typeof window !== "undefined" && window.actions) || {}) {
-  const screen = createElement("main", "screen");
-  const eyebrow = createElement("p", "eyebrow");
-  eyebrow.append(ICONS.database(15), document.createTextNode(" Data Lokal & Cadangan"));
-  screen.append(eyebrow);
-  screen.append(createElement("h1", "screen-title", "Pengaturan & Data"));
-
-  const updatedAt = state.updatedAt
-    ? new Intl.DateTimeFormat("id-ID", {
-        dateStyle: "medium",
-        timeStyle: "short"
-      }).format(new Date(state.updatedAt))
-    : "Belum ada";
-
-  screen.append(createElement("p", "screen-copy", `Pembaruan terakhir: ${updatedAt}. Data tersimpan secara offline di perangkat.`));
-  screen.append(
-    createElement(
-      "p",
-      "screen-copy",
-      "Gunakan Export untuk mengunduh cadangan JSON ke penyimpanan HP, dan Import untuk memulihkan data kapan saja tanpa perlu internet."
-    )
-  );
-
-  const actionsRow = createElement("div", "data-actions");
-  const exportButton = createElement("button", "primary-action compact-action");
-  exportButton.type = "button";
-  exportButton.append(ICONS.copy(18), document.createTextNode(" Export Cadangan Data"));
-  exportButton.addEventListener("click", () => {
-    if (actions?.exportData) {
-      actions.exportData();
-    }
-  });
-
-  const importLabel = createElement("label", "import-action");
-  importLabel.append(ICONS.database(18), document.createTextNode(" Import Cadangan Data"));
-  const importInput = document.createElement("input");
-  importInput.type = "file";
-  importInput.accept = "application/json,.json";
-  importInput.addEventListener("change", (event) => {
-    const [file] = event.target.files;
-    if (file && actions?.importData) {
-      actions.importData(file);
-    }
-    event.target.value = "";
-  });
-  importLabel.append(importInput);
-  actionsRow.append(exportButton, importLabel);
-  screen.append(actionsRow);
   return screen;
 }
 
@@ -341,8 +306,12 @@ export function renderScreen(screenIdOrState, stateOrActions, maybeActions) {
     screenId = state?.currentScreen || SCREENS.dashboard;
   }
 
-  if (screenId === SCREENS.masterData) {
-    return renderMasterDataScreen(state, actions);
+  if (screenId === SCREENS.classes || screenId === SCREENS.masterData) {
+    return renderClassesScreen(state, actions);
+  }
+
+  if (screenId === SCREENS.students) {
+    return renderStudentsScreen(state, actions);
   }
 
   if (screenId === SCREENS.session) {
@@ -380,9 +349,8 @@ export function renderScreen(screenIdOrState, stateOrActions, maybeActions) {
   }
 
   if (screenId === SCREENS.settings) {
-    return renderSettings(state, actions);
+    return renderSettingsScreen(state, actions);
   }
 
   return renderDashboard(state, actions);
 }
-
