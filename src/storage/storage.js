@@ -51,15 +51,25 @@ function migrateState(rawState) {
     state.schemaVersion = 4;
   }
 
+  if (currentVersion < 5) {
+    state.schedules = Array.isArray(state.schedules) ? state.schedules : [];
+    if (!state.activeAcademicYearId && Array.isArray(state.academicYears)) {
+      const activeYear = state.academicYears.find((y) => y.isActive);
+      state.activeAcademicYearId = activeYear ? activeYear.id : (state.academicYears[0]?.id || null);
+    }
+    if (!state.activeSemesterId && Array.isArray(state.semesters)) {
+      const activeSem = state.semesters.find((s) => s.isActive);
+      state.activeSemesterId = activeSem ? activeSem.id : (state.semesters[0]?.id || null);
+    }
+    state.schemaVersion = 5;
+  }
+
   return state;
 }
 
 export function normalizeState(state) {
   if (!isPlainObject(state)) {
-    return {
-      ...createInitialState(),
-      ...createSeedData()
-    };
+    return createInitialState();
   }
 
   const migrated = migrateState(state);
@@ -77,12 +87,12 @@ export function normalizeState(state) {
       : [];
   });
 
-  // Invariant 1: Singleton School - exactly 1 active school
+  // Invariant 1: Singleton School - at most 1 school
   if (nextState.schools.length > 1) {
     nextState.schools = [nextState.schools[0]];
   }
 
-  // Invariant 2: Singleton Teacher - exactly 1 active teacher
+  // Invariant 2: Singleton Teacher - at most 1 teacher
   if (nextState.teachers.length > 1) {
     nextState.teachers = [nextState.teachers[0]];
   }
@@ -90,7 +100,6 @@ export function normalizeState(state) {
   // Invariant 3: Single Active Session - at most 1 active session
   const activeSessions = (nextState.sessions || []).filter((s) => s.status === "active");
   if (activeSessions.length > 1) {
-    // Keep the most recently updated or last one active, pause previous ones
     const keepActiveId = activeSessions[activeSessions.length - 1].id;
     nextState.sessions = nextState.sessions.map((s) => {
       if (s.status === "active" && s.id !== keepActiveId) {
@@ -103,17 +112,6 @@ export function normalizeState(state) {
   // Map legacy master-data screen to classes
   if (nextState.currentScreen === "master-data") {
     nextState.currentScreen = "classes";
-  }
-
-  const hasMasterData = Object.values(COLLECTIONS).some(
-    (collectionName) => nextState[collectionName].length > 0
-  );
-
-  if (!hasMasterData) {
-    return {
-      ...nextState,
-      ...createSeedData()
-    };
   }
 
   return nextState;
@@ -135,9 +133,14 @@ export function saveState(state) {
     updatedAt: new Date().toISOString()
   });
 
+  let success = true;
+  let saveError = null;
+
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
   } catch (error) {
+    success = false;
+    saveError = error;
     if (error.name === "QuotaExceededError" || error.code === 22) {
       console.error("Local Storage kuota hampir penuh saat menyimpan data.", error);
       if (typeof window !== "undefined" && typeof window.alert === "function") {
@@ -147,6 +150,12 @@ export function saveState(state) {
       console.error("Gagal menyimpan data ke Local Storage:", error);
     }
   }
+
+  Object.assign(nextState, {
+    success,
+    error: saveError
+  });
+
   return nextState;
 }
 

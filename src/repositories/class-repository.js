@@ -11,6 +11,28 @@ export class ClassRepository extends BaseRepository {
     });
   }
 
+  getActiveClasses() {
+    return this.list().filter((c) => c.status !== "archived");
+  }
+
+  archiveClass(classId) {
+    const state = this.loadState();
+    const classes = (state.classes || []).map((c) =>
+      c.id === classId ? { ...c, status: "archived" } : c
+    );
+    // Deactivate schedules associated with this class
+    const schedules = (state.schedules || []).map((s) =>
+      s.classId === classId ? { ...s, active: false } : s
+    );
+    const nextState = {
+      ...state,
+      classes,
+      schedules
+    };
+    this.saveState(nextState);
+    return classes.find((c) => c.id === classId) || null;
+  }
+
   delete(classId) {
     return this.deleteCascade(classId);
   }

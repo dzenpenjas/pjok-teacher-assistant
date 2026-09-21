@@ -1,4 +1,4 @@
-export const APP_SCHEMA_VERSION = 4;
+export const APP_SCHEMA_VERSION = 5;
 
 export const SCREENS = {
   dashboard: "dashboard",
@@ -19,6 +19,7 @@ export const COLLECTIONS = {
   studentNotes: "studentNotes",
   studentTags: "studentTags",
   sessions: "sessions",
+  schedules: "schedules",
   attendanceRecords: "attendanceRecords",
   sessionActivities: "sessionActivities",
   assessmentDefinitions: "assessmentDefinitions",
@@ -32,6 +33,8 @@ export const DEFAULT_APP_STATE = {
   schemaVersion: APP_SCHEMA_VERSION,
   currentScreen: SCREENS.dashboard,
   activeSessionId: null,
+  activeAcademicYearId: null,
+  activeSemesterId: null,
   schools: [],
   academicYears: [],
   semesters: [],
@@ -41,6 +44,7 @@ export const DEFAULT_APP_STATE = {
   studentNotes: [],
   studentTags: [],
   sessions: [],
+  schedules: [],
   attendanceRecords: [],
   sessionActivities: [],
   assessmentDefinitions: [],
@@ -55,6 +59,8 @@ export const DEFAULT_APP_STATE = {
 export function createInitialState() {
   return {
     ...DEFAULT_APP_STATE,
+    activeAcademicYearId: null,
+    activeSemesterId: null,
     schools: [],
     academicYears: [],
     semesters: [],
@@ -64,6 +70,7 @@ export function createInitialState() {
     studentNotes: [],
     studentTags: [],
     sessions: [],
+    schedules: [],
     attendanceRecords: [],
     sessionActivities: [],
     assessmentDefinitions: [],

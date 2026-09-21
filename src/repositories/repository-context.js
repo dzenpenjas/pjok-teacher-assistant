@@ -16,6 +16,8 @@ import { AssessmentResultRepository } from "./assessment-result-repository.js";
 import { GrowthRecordRepository } from "./growth-record-repository.js";
 import { ObservationRepository } from "./observation-repository.js";
 
+import { ScheduleRepository } from "./schedule-repository.js";
+
 export function createRepositoryContext() {
   const storage = {
     loadState,
@@ -29,6 +31,7 @@ export function createRepositoryContext() {
     teachers: new TeacherRepository(storage),
     classes: new ClassRepository(storage),
     sessions: new SessionRepository(storage),
+    schedules: new ScheduleRepository(storage),
     attendanceRecords: new AttendanceRepository(storage),
     students: new StudentRepository(storage),
     tags: new TagRepository(storage),

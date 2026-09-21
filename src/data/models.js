@@ -59,7 +59,8 @@ export function createClassRoom(input = {}) {
     name: input.name || "",
     grade: input.grade || "",
     academicYearId: input.academicYearId || "",
-    teacherId: input.teacherId || ""
+    teacherId: input.teacherId || "",
+    status: input.status || "active" // active | archived
   };
 }
 
@@ -91,7 +92,24 @@ export function createStudentTag(input = {}) {
   return {
     ...withMeta(input, "tag"),
     name: input.name || "",
-    color: input.color || "#116149"
+    color: input.color || "#116149",
+    category: input.category || "other", // health, attention, behavior, achievement, special_need, other
+    severity: input.severity || "info" // info, warning, critical
+  };
+}
+
+export function createTeachingSchedule(input = {}) {
+  return {
+    ...withMeta(input, "sched"),
+    dayOfWeek: Number(input.dayOfWeek) || 1, // 1=Senin, 2=Selasa, 3=Rabu, 4=Kamis, 5=Jumat, 6=Sabtu
+    startTime: input.startTime || "",
+    endTime: input.endTime || "",
+    classId: input.classId || "",
+    location: input.location || "",
+    note: input.note || "",
+    active: input.active !== undefined ? Boolean(input.active) : true,
+    academicYearId: input.academicYearId || "",
+    semesterId: input.semesterId || ""
   };
 }
 
@@ -145,20 +163,8 @@ export function calculateBmi(heightCm, weightKg) {
   const bmiVal = weight / (heightM * heightM);
   const bmi = Math.round(bmiVal * 10) / 10;
 
-  let category = "Normal";
-  if (bmi < 17.0) {
-    category = "Sangat Kurus";
-  } else if (bmi < 18.5) {
-    category = "Kurus";
-  } else if (bmi <= 25.0) {
-    category = "Normal";
-  } else if (bmi <= 27.0) {
-    category = "Gemuk";
-  } else {
-    category = "Obesitas";
-  }
-
-  return { bmi, category };
+  // Elementary student growth indicator (without adult diagnostic labeling)
+  return { bmi, category: "-" };
 }
 
 export function createGrowthRecord(input = {}) {

@@ -6,6 +6,7 @@ import { SessionManager } from "./services/session-manager.js";
 import { createNavigation } from "./ui/navigation.js";
 import { renderScreen } from "./ui/screens.js";
 import { renderStudentDetailModal } from "./ui/student-detail-modal.js";
+import { createSeedData } from "./data/seed.js";
 
 const appRoot = document.querySelector("#app");
 let appState = loadState();

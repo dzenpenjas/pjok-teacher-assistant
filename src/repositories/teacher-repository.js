@@ -16,13 +16,7 @@ export class TeacherRepository extends BaseRepository {
     if (list.length > 0) {
       return list[0];
     }
-    const defaultTeacher = createTeacher({
-      name: "Bapak Dzen",
-      employeeNumber: "PJOK-001",
-      phone: "081234567890"
-    });
-    this.save(defaultTeacher);
-    return defaultTeacher;
+    return null;
   }
 
   save(data) {

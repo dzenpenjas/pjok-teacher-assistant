@@ -14,7 +14,8 @@ import {
   createStudentNote,
   createStudentObservation,
   createStudentTag,
-  createTeacher
+  createTeacher,
+  createTeachingSchedule
 } from "./models.js";
 
 export function createSeedData() {
@@ -65,12 +66,12 @@ export function createSeedData() {
   });
 
   const tags = [
-    createStudentTag({ id: "tag-seed-talented", name: "Berbakat", color: "#0f766e" }),
-    createStudentTag({ id: "tag-seed-attention", name: "Perlu Perhatian", color: "#b45309" }),
-    createStudentTag({ id: "tag-seed-special", name: "Berkebutuhan Khusus", color: "#6d28d9" }),
-    createStudentTag({ id: "tag-seed-injury", name: "Cedera", color: "#b91c1c" }),
-    createStudentTag({ id: "tag-seed-health", name: "Penyakit Asma", color: "#0369a1" }),
-    createStudentTag({ id: "tag-seed-o2sn", name: "O2SN", color: "#15803d" })
+    createStudentTag({ id: "tag-seed-talented", name: "Berbakat", color: "#0f766e", category: "achievement", severity: "info" }),
+    createStudentTag({ id: "tag-seed-attention", name: "Perlu Perhatian", color: "#b45309", category: "attention", severity: "warning" }),
+    createStudentTag({ id: "tag-seed-special", name: "Berkebutuhan Khusus", color: "#6d28d9", category: "special_need", severity: "warning" }),
+    createStudentTag({ id: "tag-seed-injury", name: "Cedera", color: "#b91c1c", category: "health", severity: "critical" }),
+    createStudentTag({ id: "tag-seed-health", name: "Penyakit Asma", color: "#0369a1", category: "health", severity: "warning" }),
+    createStudentTag({ id: "tag-seed-o2sn", name: "O2SN", color: "#15803d", category: "achievement", severity: "info" })
   ];
 
   const students = [
@@ -256,8 +257,8 @@ export function createSeedData() {
     location: "Lapangan Rumput Utama",
     weather: "Cerah berawan (pagi)",
     notes: "Siapkan 4 cone kerucut dan 2 stopwatch lapangan.",
-    status: "active",
-    state: "ACTIVE"
+    status: "planned",
+    state: "NOT_STARTED"
   });
 
   // Activities for the active session
@@ -375,6 +376,33 @@ export function createSeedData() {
     })
   ];
 
+  const schedules = [
+    createTeachingSchedule({
+      id: "sched-seed-1",
+      dayOfWeek: 1, // Senin
+      startTime: "07:30",
+      endTime: "09:00",
+      classId: classA.id,
+      location: "Lapangan Utama",
+      note: "Kelas 5A PJOK",
+      active: true,
+      academicYearId: academicYear.id,
+      semesterId: semester.id
+    }),
+    createTeachingSchedule({
+      id: "sched-seed-2",
+      dayOfWeek: 2, // Selasa
+      startTime: "07:30",
+      endTime: "09:00",
+      classId: classB.id,
+      location: "Lapangan Utama",
+      note: "Kelas 5B PJOK",
+      active: true,
+      academicYearId: academicYear.id,
+      semesterId: semester.id
+    })
+  ];
+
   return {
     schools: [school],
     academicYears: [academicYear],
@@ -384,6 +412,7 @@ export function createSeedData() {
     students,
     studentTags: tags,
     studentNotes: notes,
+    schedules,
     assessmentDefinitions,
     growthRecords,
     sessions: [activeSession],

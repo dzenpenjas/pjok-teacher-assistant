@@ -16,13 +16,7 @@ export class SchoolRepository extends BaseRepository {
     if (list.length > 0) {
       return list[0];
     }
-    const defaultSchool = createSchool({
-      name: "SD Negeri Harapan",
-      address: "Jl. Lapangan Sehat No. 1",
-      phone: "021-000000"
-    });
-    this.save(defaultSchool);
-    return defaultSchool;
+    return null;
   }
 
   save(data) {

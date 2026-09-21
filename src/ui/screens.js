@@ -5,6 +5,8 @@ import { renderClassesScreen } from "./classes-screen.js";
 import { renderStudentsScreen } from "./students-screen.js";
 import { renderSettingsScreen } from "./settings-screen.js";
 import { renderSessionScreen } from "../session/session-screen.js";
+import { isAppConfigured, renderFirstRunSetup } from "./first-run-setup.js";
+import { localDayOfWeek, getDayNameIndonesian } from "../utils/date-utils.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -25,16 +27,6 @@ function getGreeting() {
   return "Selamat Malam";
 }
 
-function createStat(label, value, iconFn) {
-  const item = createElement("div", "stat-item");
-  if (iconFn) {
-    item.append(iconFn());
-  }
-  item.append(createElement("strong", "", value));
-  item.append(createElement("span", "", label));
-  return item;
-}
-
 function createMiniStat(label, value) {
   const box = createElement("div", "dash-mini-stat");
   box.append(createElement("strong", "dash-mini-val", value));
@@ -43,6 +35,10 @@ function createMiniStat(label, value) {
 }
 
 function renderDashboard(state, actions = (typeof window !== "undefined" && window.actions) || {}) {
+  if (!isAppConfigured(state)) {
+    return renderFirstRunSetup(state, actions);
+  }
+
   const screen = createElement("main", "screen wide-screen dashboard-clean-screen");
   
   // 1. Contextual Header with Date & Greeting
@@ -131,12 +127,59 @@ function renderDashboard(state, actions = (typeof window !== "undefined" && wind
     sessionCard.append(openBtn);
     screen.append(sessionCard);
 
+  }
+
+  // 3. TODAY'S TEACHING SCHEDULE
+  const todayDayNum = localDayOfWeek();
+  const dayName = getDayNameIndonesian(todayDayNum);
+  const todaySchedules = (state.schedules || []).filter((s) => s.active && s.dayOfWeek === todayDayNum);
+
+  const scheduleSection = createElement("section", "dash-section-card");
+  const schedHeader = createElement("div", "section-header-compact");
+  const schedTitle = createElement("h2", "dash-section-title");
+  schedTitle.append(ICONS.calendar(18), document.createTextNode(` Jadwal Mengajar Hari Ini (${dayName})`));
+  schedHeader.append(schedTitle);
+  scheduleSection.append(schedHeader);
+
+  if (todaySchedules.length === 0) {
+    scheduleSection.append(createElement("p", "empty-copy", `Tidak ada jadwal mengajar rutin untuk hari ${dayName}.`));
   } else {
-    // No active session: Quick Class Launcher
+    const schedList = createElement("div", "dash-schedule-list");
+    todaySchedules.forEach((sched) => {
+      const targetClass = (state.classes || []).find((c) => c.id === sched.classId);
+      const schedCard = createElement("div", "dash-schedule-card");
+
+      const left = createElement("div", "dash-sched-left");
+      const timeTag = createElement("span", "dash-sched-time", `${sched.startTime} - ${sched.endTime}`);
+      const className = createElement("strong", "dash-sched-class", targetClass ? `Kelas ${targetClass.name}` : "Kelas PJOK");
+      const locText = createElement("span", "dash-sched-loc", `📍 ${sched.location || "Lapangan Sekolah"}`);
+      left.append(timeTag, className, locText);
+
+      const startBtn = createElement("button", "primary-action compact-action btn-dash-start");
+      startBtn.type = "button";
+      startBtn.append(ICONS.play(16), document.createTextNode(" Mulai Mengajar"));
+      startBtn.addEventListener("click", () => {
+        if (actions?.startSessionForClass && targetClass) {
+          actions.startSessionForClass(targetClass.id, {
+            startTime: sched.startTime,
+            location: sched.location
+          });
+        }
+      });
+
+      schedCard.append(left, startBtn);
+      schedList.append(schedCard);
+    });
+    scheduleSection.append(schedList);
+  }
+  screen.append(scheduleSection);
+
+  // 4. QUICK CLASS LAUNCHER (Active Classes Only)
+  if (!activeSession) {
     const launchSection = createElement("section", "dash-classes-section");
     const launchHeader = createElement("div", "section-header-compact");
     const launchTitle = createElement("h2", "dash-section-title");
-    launchTitle.append(ICONS.book(18), document.createTextNode(" Pilih Kelas & Mulai Mengajar"));
+    launchTitle.append(ICONS.book(18), document.createTextNode(" Daftar Kelas Aktif"));
     launchHeader.append(launchTitle);
     launchSection.append(launchHeader);
 
@@ -144,21 +187,22 @@ function renderDashboard(state, actions = (typeof window !== "undefined" && wind
     const healthTagIds = new Set(
       tags
         .filter((t) => {
-          const n = (t.name || "").toLowerCase();
-          return n.includes("asma") || n.includes("cedera") || n.includes("perhatian") || n.includes("sakit") || n.includes("khusus");
+          const cat = t.category || "other";
+          const sev = t.severity || "info";
+          return cat === "health" || cat === "attention" || cat === "special_need" || sev === "warning" || sev === "critical";
         })
         .map((t) => t.id)
     );
 
     const classesGrid = createElement("div", "dash-quick-class-grid");
-    const classes = state.classes || [];
+    const activeClasses = (state.classes || []).filter((c) => c.status !== "archived");
 
-    if (classes.length === 0) {
+    if (activeClasses.length === 0) {
       classesGrid.append(
-        createElement("p", "empty-copy", "Belum ada kelas terdaftar. Buka menu Kelas untuk menambahkan kelas.")
+        createElement("p", "empty-copy", "Belum ada kelas aktif terdaftar. Buka menu Kelas untuk menambahkan kelas.")
       );
     } else {
-      classes.forEach((c) => {
+      activeClasses.forEach((c) => {
         const classStudents = (state.students || []).filter((s) => s.classId === c.id);
         const attentionCount = classStudents.filter((st) => {
           return (Array.isArray(st.tagIds) && st.tagIds.some((id) => healthTagIds.has(id))) || (st.noteIds && st.noteIds.length > 0);
@@ -179,13 +223,11 @@ function renderDashboard(state, actions = (typeof window !== "undefined" && wind
 
         const startBtn = createElement("button", "primary-action compact-action btn-dash-start");
         startBtn.type = "button";
-        startBtn.append(ICONS.play(16), document.createTextNode(" Mulai Sesi"));
+        startBtn.append(ICONS.play(16), document.createTextNode(" Mulai Mengajar"));
         startBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (actions?.quickStartClassSession) {
-            actions.quickStartClassSession(c.id);
-          } else if (actions?.navigate) {
-            actions.navigate(SCREENS.session);
+          if (actions?.startSessionForClass) {
+            actions.startSessionForClass(c.id);
           }
         });
         cCard.append(startBtn);
@@ -204,7 +246,7 @@ function renderDashboard(state, actions = (typeof window !== "undefined" && wind
     screen.append(launchSection);
   }
 
-  // 3. STUDENT HEALTH & ATTENTION RADAR (Compact, focus on safety)
+  // 5. STUDENT HEALTH & ATTENTION RADAR
   const attentionSection = createElement("section", "dash-section-card");
   const radarTitle = createElement("h3", "dash-section-title");
   radarTitle.append(ICONS.alert(18), document.createTextNode(" Catatan Kesehatan & Perhatian Siswa"));
@@ -214,8 +256,9 @@ function renderDashboard(state, actions = (typeof window !== "undefined" && wind
   const healthTagIds = new Set(
     tags
       .filter((t) => {
-        const n = (t.name || "").toLowerCase();
-        return n.includes("asma") || n.includes("cedera") || n.includes("perhatian") || n.includes("sakit") || n.includes("khusus");
+        const cat = t.category || "other";
+        const sev = t.severity || "info";
+        return cat === "health" || cat === "attention" || cat === "special_need" || sev === "warning" || sev === "critical";
       })
       .map((t) => t.id)
   );
