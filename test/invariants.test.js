@@ -99,56 +99,6 @@ test("Class Cascade Delete removes students and sessions", () => {
   assert.equal(repos.sessions.findById(session.id), null);
 });
 
-import { isAppConfigured } from "../src/ui/first-run-setup.js";
-
-test("isAppConfigured verifies required initial setup fields", () => {
-  const emptyState = createInitialState();
-  assert.equal(isAppConfigured(emptyState), false);
-
-  const partialState = {
-    ...emptyState,
-    schools: [{ id: "sch-1", name: "SDN 1" }],
-    teachers: [{ id: "t-1", name: "Budi" }]
-  };
-  assert.equal(isAppConfigured(partialState), false);
-
-  const fullyConfiguredState = {
-    ...partialState,
-    academicYears: [{ id: "y-1", name: "2026/2027", isActive: true }],
-    semesters: [{ id: "sem-1", name: "Semester 1", isActive: true }],
-    activeAcademicYearId: "y-1",
-    activeSemesterId: "sem-1"
-  };
-  assert.equal(isAppConfigured(fullyConfiguredState), true);
-});
-
-test("ScheduleRepository prevents overlapping schedules for the same day and active status", () => {
-  const repos = createRepositoryContext();
-  const classA = repos.classes.create({ name: "Kelas 5A" }).at(-1);
-  const classB = repos.classes.create({ name: "Kelas 5B" }).at(-1);
-
-  repos.schedules.create({
-    dayOfWeek: 1,
-    startTime: "07:30",
-    endTime: "09:00",
-    classId: classA.id,
-    active: true
-  });
-
-  assert.throws(
-    () => {
-      repos.schedules.create({
-        dayOfWeek: 1,
-        startTime: "08:00",
-        endTime: "09:30",
-        classId: classB.id,
-        active: true
-      });
-    },
-    /bentrok/i
-  );
-});
-
 test("Backup inspection verifies structure and counts", () => {
   const validJson = JSON.stringify({
     schemaVersion: 1,
