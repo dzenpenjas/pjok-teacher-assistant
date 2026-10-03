@@ -1,4 +1,4 @@
-const CACHE_NAME = "pjok-teacher-assistant-v29";
+const CACHE_NAME = "pjok-teacher-assistant-v30";
 
 const APP_ASSETS = [
   "./",

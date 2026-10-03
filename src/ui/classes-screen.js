@@ -23,6 +23,7 @@ export function renderClassesScreen(state, actions) {
   let isCreatingAssessment = false;
   let activeAssessmentSessionId = null;
   let activeAssessmentStudentIndex = 0;
+  let activeAssessmentItemIndex = 0;
   let showAddClassModal = false;
   let showAddStudentModal = false;
   let activeTab = "students"; // "students" | "assessments" | "sessions"
@@ -838,12 +839,25 @@ export function renderClassesScreen(state, actions) {
         card.append(matRow);
       }
 
+      // Helper to check if student is completely scored
+      const isStudentComplete = (studentId) => {
+        const res = (state.assessmentResults || []).find(
+          (r) => r.assessmentSessionId === as.id && r.studentId === studentId
+        );
+        if (!res) return false;
+        const items = Array.isArray(as.itemsSnapshot) ? as.itemsSnapshot : [];
+        if (items.length > 0) {
+          const itemResList = Array.isArray(res.itemResults) ? res.itemResults : [];
+          return items.every((it) => {
+            const match = itemResList.find((ir) => ir.itemId === it.id);
+            return match && match.rubricLevel !== undefined && match.rubricLevel !== null && !Number.isNaN(Number(match.rubricLevel));
+          });
+        }
+        return res.value !== "" && res.value !== undefined && res.value !== null;
+      };
+
       // Progress calculation per assessmentSessionId
-      const scoredCount = students.filter((st) =>
-        (state.assessmentResults || []).some(
-          (r) => r.assessmentSessionId === as.id && r.studentId === st.id && r.value !== "" && r.value !== undefined && r.value !== null
-        )
-      ).length;
+      const scoredCount = students.filter((st) => isStudentComplete(st.id)).length;
 
       const total = students.length;
       const pct = total > 0 ? Math.round((scoredCount / total) * 100) : 0;
@@ -866,6 +880,7 @@ export function renderClassesScreen(state, actions) {
       startBtn.addEventListener("click", () => {
         activeAssessmentSessionId = as.id;
         activeAssessmentStudentIndex = 0;
+        activeAssessmentItemIndex = 0;
         render();
       });
 
@@ -1328,11 +1343,25 @@ export function renderClassesScreen(state, actions) {
       createElement("div", "student-stepper-counter", `Siswa ${activeAssessmentStudentIndex + 1} dari ${classStudents.length}`)
     );
 
+    const isStudentComplete = (studentId) => {
+      const res = (state.assessmentResults || []).find(
+        (r) => r.assessmentSessionId === as.id && r.studentId === studentId
+      );
+      if (!res) return false;
+      const items = Array.isArray(as.itemsSnapshot) ? as.itemsSnapshot : [];
+      if (items.length > 0) {
+        const itemResList = Array.isArray(res.itemResults) ? res.itemResults : [];
+        return items.every((it) => {
+          const match = itemResList.find((ir) => ir.itemId === it.id);
+          return match && match.rubricLevel !== undefined && match.rubricLevel !== null && !Number.isNaN(Number(match.rubricLevel));
+        });
+      }
+      return res.value !== "" && res.value !== undefined && res.value !== null;
+    };
+
     const jumpPills = createElement("div", "student-jump-pills");
     classStudents.forEach((st, idx) => {
-      const hasScore = (state.assessmentResults || []).some(
-        (r) => r.assessmentSessionId === as.id && r.studentId === st.id && r.value !== "" && r.value !== undefined && r.value !== null
-      );
+      const hasScore = isStudentComplete(st.id);
       const pill = createElement(
         "button",
         `student-jump-pill ${idx === activeAssessmentStudentIndex ? "is-active" : ""} ${hasScore ? "is-scored" : ""}`,
@@ -1342,6 +1371,7 @@ export function renderClassesScreen(state, actions) {
       pill.title = `${st.name} (${hasScore ? "Sudah dinilai" : "Belum dinilai"})`;
       pill.addEventListener("click", () => {
         activeAssessmentStudentIndex = idx;
+        activeAssessmentItemIndex = 0;
         render();
       });
       jumpPills.append(pill);
@@ -1368,47 +1398,86 @@ export function renderClassesScreen(state, actions) {
     );
     profileWrap.append(avatar, nameWrap);
 
-    const scoreBadge = createElement(
-      "span",
-      `assess-score-badge ${currentResult?.value ? "badge-has-score" : ""}`,
-      currentResult?.formattedValue || "Belum dinilai"
-    );
+    const assessmentItems = Array.isArray(as.itemsSnapshot) ? as.itemsSnapshot : [];
+    const isItemBased = (def?.method === "rubric" || !def?.method) && assessmentItems.length > 0;
 
-    studentHeader.append(profileWrap, scoreBadge);
-    focusCard.append(studentHeader);
+    if (isItemBased) {
+      if (activeAssessmentItemIndex < 0) activeAssessmentItemIndex = 0;
+      if (activeAssessmentItemIndex >= assessmentItems.length) activeAssessmentItemIndex = assessmentItems.length - 1;
 
-    // Note Input
-    const noteField = createElement("label", "field");
-    noteField.append(createElement("span", "field-label", "Catatan Evaluasi Guru (Opsional)"));
-    const noteInput = document.createElement("input");
-    noteInput.type = "text";
-    noteInput.className = "input-text";
-    noteInput.placeholder = "Catatan evaluasi khusus...";
-    if (currentResult?.note) {
-      noteInput.value = currentResult.note;
-    }
-    noteField.append(noteInput);
+      const currentItem = assessmentItems[activeAssessmentItemIndex];
+      const currentItemResults = Array.isArray(currentResult?.itemResults) ? currentResult.itemResults : [];
+      const completedItemCount = assessmentItems.filter((it) => {
+        const r = currentItemResults.find((ir) => ir.itemId === it.id);
+        return r && r.rubricLevel !== undefined && r.rubricLevel !== null && !Number.isNaN(Number(r.rubricLevel));
+      }).length;
+      const allItemsComplete = assessmentItems.length > 0 && completedItemCount === assessmentItems.length;
 
-    // Rubric / Scoring Controls
-    const method = def?.method || "rubric";
+      const scoreBadgeWrap = createElement("div", "text-right");
+      if (allItemsComplete) {
+        const scale = Number(currentItem.rubricScale) || 5;
+        const finalScore = currentResult?.numericScore !== null && currentResult?.numericScore !== undefined
+          ? currentResult.numericScore
+          : (currentResult?.averageRubricScore ? Math.round((currentResult.averageRubricScore / scale) * 100) : 0);
+        const avgScore = currentResult?.averageRubricScore ? Number(currentResult.averageRubricScore).toFixed(2) : "0.00";
 
-    if (method === "rubric") {
-      const defaultRubricLevels = [
-        { level: 1, label: "Belum Berkembang", desc: "Belum menunjukkan kemampuan yang dinilai dan masih memerlukan bimbingan penuh." },
-        { level: 2, label: "Mulai Berkembang", desc: "Mulai menunjukkan kemampuan tetapi masih memerlukan banyak arahan atau bantuan." },
-        { level: 3, label: "Cukup Berkembang", desc: "Mampu menunjukkan kemampuan utama dengan cukup baik, meskipun belum konsisten." },
-        { level: 4, label: "Berkembang Baik", desc: "Mampu menunjukkan kemampuan dengan baik dan relatif mandiri." },
-        { level: 5, label: "Berkembang Sangat Baik", desc: "Mampu menunjukkan kemampuan dengan sangat baik, mandiri, dan konsisten." }
+        scoreBadgeWrap.append(
+          createElement("span", "assess-score-badge badge-has-score block text-sm font-bold", `Nilai ${finalScore}`),
+          createElement("span", "text-xs text-subtle font-medium mt-1 block", `Rata-rata Rubrik ${avgScore} / ${scale}`)
+        );
+      } else {
+        scoreBadgeWrap.append(
+          createElement(
+            "span",
+            `assess-score-badge ${completedItemCount > 0 ? "badge-has-score" : ""}`,
+            completedItemCount > 0 ? `${completedItemCount} dari ${assessmentItems.length} pertanyaan selesai` : "Belum dinilai"
+          )
+        );
+      }
+
+      studentHeader.append(profileWrap, scoreBadgeWrap);
+      focusCard.append(studentHeader);
+
+      const itemFocusCard = createElement("div", "mt-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-4");
+
+      const itemMetaRow = createElement("div", "flex items-center justify-between text-xs text-subtle font-medium border-b border-slate-100 dark:border-slate-800 pb-2");
+      itemMetaRow.append(
+        createElement("span", "font-bold text-slate-700 dark:text-slate-300", `Pertanyaan ${activeAssessmentItemIndex + 1} dari ${assessmentItems.length}`),
+        createElement("span", "badge-subtle", `Skala 1–${currentItem.rubricScale || 5}`)
+      );
+      itemFocusCard.append(itemMetaRow);
+
+      const promptText = createElement("p", "text-base font-semibold text-slate-900 dark:text-slate-100 leading-snug", currentItem.prompt || "Butir Asesmen");
+      itemFocusCard.append(promptText);
+
+      const defaultLevels = [
+        { level: 1, label: "Belum Berkembang", desc: "Belum mengetahui atau belum mampu memberikan jawaban yang sesuai." },
+        { level: 2, label: "Mulai Berkembang", desc: "Sudah mencoba menjawab, tetapi jawaban masih belum tepat." },
+        { level: 3, label: "Cukup Berkembang", desc: "Jawaban belum sepenuhnya benar, tetapi sudah masuk pada konteks yang dinilai." },
+        { level: 4, label: "Berkembang Baik", desc: "Mampu memberikan jawaban yang benar secara sederhana." },
+        { level: 5, label: "Berkembang Sangat Baik", desc: "Mampu memberikan jawaban yang benar, tepat, dan jelas." }
       ];
 
-      const levels = as.rubricSnapshot?.levels?.length > 0
-        ? as.rubricSnapshot.levels
-        : (def?.rubricLevels?.length > 0 ? def.rubricLevels : defaultRubricLevels);
+      const levels = Array.isArray(currentItem.rubricLevels) && currentItem.rubricLevels.length > 0
+        ? currentItem.rubricLevels
+        : defaultLevels.slice(0, Number(currentItem.rubricScale) || 5);
+
+      const existingItemResult = currentItemResults.find((ir) => ir.itemId === currentItem.id);
+      const selectedRubricLevel = existingItemResult ? existingItemResult.rubricLevel : null;
 
       const rubricGrid = createElement("div", "scoring-rubric-grid");
 
+      const itemNoteField = createElement("label", "field mt-3");
+      itemNoteField.append(createElement("span", "field-label text-xs", "Catatan Jawaban / Observasi (Opsional)"));
+      const itemNoteInput = document.createElement("input");
+      itemNoteInput.type = "text";
+      itemNoteInput.className = "input-text text-xs";
+      itemNoteInput.placeholder = "Catatan observasi untuk butir pertanyaan ini...";
+      itemNoteInput.value = existingItemResult?.note || "";
+      itemNoteField.append(itemNoteInput);
+
       levels.forEach((lvl) => {
-        const isSelected = currentResult?.rubricLevel === lvl.level;
+        const isSelected = selectedRubricLevel === lvl.level;
         const rBtn = createElement(
           "button",
           `scoring-rubric-btn level-${lvl.level} ${isSelected ? "is-selected" : ""}`
@@ -1418,25 +1487,71 @@ export function renderClassesScreen(state, actions) {
 
         rBtn.append(
           createElement("span", "scoring-rubric-num", String(lvl.level)),
-          createElement("span", "scoring-rubric-label", lvl.label)
+          createElement("span", "scoring-rubric-label", lvl.label || `Level ${lvl.level}`)
         );
+        if (lvl.desc) {
+          rBtn.append(createElement("span", "text-xs text-subtle mt-1 text-left line-clamp-2", lvl.desc));
+        }
 
         rBtn.addEventListener("click", () => {
+          const chosenLevel = Number(lvl.level);
+          const noteVal = itemNoteInput.value.trim();
+
+          const nextItemResults = [...currentItemResults];
+          const existingIdx = nextItemResults.findIndex((ir) => ir.itemId === currentItem.id);
+          const itemPayload = {
+            itemId: currentItem.id,
+            rubricLevel: chosenLevel,
+            note: noteVal
+          };
+          if (existingIdx >= 0) {
+            nextItemResults[existingIdx] = itemPayload;
+          } else {
+            nextItemResults.push(itemPayload);
+          }
+
+          const validResults = nextItemResults.filter(
+            (ir) => ir.rubricLevel !== undefined && ir.rubricLevel !== null && !Number.isNaN(Number(ir.rubricLevel))
+          );
+
+          const sum = validResults.reduce((acc, curr) => acc + Number(curr.rubricLevel), 0);
+          const avg = validResults.length > 0 ? Math.round((sum / validResults.length) * 100) / 100 : null;
+
+          const isAllComplete = assessmentItems.length > 0 && assessmentItems.every((it) =>
+            nextItemResults.some((ir) => ir.itemId === it.id && ir.rubricLevel !== undefined && ir.rubricLevel !== null && !Number.isNaN(Number(ir.rubricLevel)))
+          );
+
+          const scale = Number(currentItem.rubricScale) || 5;
+          const numericScore = isAllComplete && avg !== null
+            ? Math.round((avg / scale) * 100)
+            : null;
+
+          const formattedValue = isAllComplete
+            ? `Nilai ${numericScore}`
+            : `${validResults.length}/${assessmentItems.length} butir`;
+
           if (actions?.saveAssessmentResult) {
             actions.saveAssessmentResult({
               assessmentSessionId: as.id,
               definitionId: as.definitionId || "",
               studentId: currentStudent.id,
-              value: String(lvl.level),
-              numericValue: lvl.level,
-              rubricLevel: lvl.level,
-              formattedValue: `Skala ${lvl.level} (${lvl.label})`,
-              note: noteInput.value.trim()
+              itemResults: nextItemResults,
+              averageRubricScore: avg,
+              numericScore,
+              value: isAllComplete ? String(numericScore) : "",
+              numericValue: isAllComplete ? numericScore : null,
+              formattedValue,
+              note: currentResult?.note || ""
             });
           }
 
-          if (activeAssessmentStudentIndex < classStudents.length - 1) {
-            activeAssessmentStudentIndex++;
+          if (activeAssessmentItemIndex < assessmentItems.length - 1) {
+            activeAssessmentItemIndex++;
+          } else {
+            activeAssessmentItemIndex = 0;
+            if (activeAssessmentStudentIndex < classStudents.length - 1) {
+              activeAssessmentStudentIndex++;
+            }
           }
           render();
         });
@@ -1444,72 +1559,176 @@ export function renderClassesScreen(state, actions) {
         rubricGrid.append(rBtn);
       });
 
-      focusCard.append(rubricGrid);
-    } else {
-      // Numeric or Stopwatch
-      const numRow = createElement("div", "assess-num-row");
-      const valInput = document.createElement("input");
-      valInput.type = "number";
-      valInput.step = method === "stopwatch" ? "0.01" : "1";
-      valInput.className = "assess-num-input";
-      valInput.placeholder = `Nilai (${def?.unit || ""})`;
-      if (currentResult?.value !== undefined && currentResult?.value !== null) {
-        valInput.value = currentResult.value;
-      }
+      itemFocusCard.append(rubricGrid, itemNoteField);
+      focusCard.append(itemFocusCard);
 
-      const saveBtn = createElement("button", "primary-action compact-action", "Simpan Nilai");
-      saveBtn.type = "button";
-      saveBtn.addEventListener("click", () => {
-        const val = valInput.value.trim();
-        if (!val) return;
-        const num = parseFloat(val);
-        if (actions?.saveAssessmentResult) {
-          actions.saveAssessmentResult({
-            assessmentSessionId: as.id,
-            definitionId: as.definitionId || "",
-            studentId: currentStudent.id,
-            value: val,
-            numericValue: isNaN(num) ? null : num,
-            formattedValue: `${val} ${def?.unit || ""}`.trim(),
-            note: noteInput.value.trim()
-          });
+      // Bottom Prev / Next Nav for items
+      const navButtons = createElement("div", "scoring-nav-buttons mt-4 flex items-center justify-between");
+      const prevItemBtn = createElement("button", "btn-tool", "← Pertanyaan Sebelumnya");
+      prevItemBtn.type = "button";
+      prevItemBtn.disabled = activeAssessmentItemIndex === 0;
+      prevItemBtn.addEventListener("click", () => {
+        if (activeAssessmentItemIndex > 0) {
+          activeAssessmentItemIndex--;
+          render();
         }
-        if (activeAssessmentStudentIndex < classStudents.length - 1) {
-          activeAssessmentStudentIndex++;
-        }
-        render();
       });
 
-      numRow.append(valInput, saveBtn);
-      focusCard.append(numRow);
+      const nextItemBtn = createElement("button", "btn-tool", "Pertanyaan Berikutnya →");
+      nextItemBtn.type = "button";
+      nextItemBtn.disabled = activeAssessmentItemIndex === assessmentItems.length - 1;
+      nextItemBtn.addEventListener("click", () => {
+        if (activeAssessmentItemIndex < assessmentItems.length - 1) {
+          activeAssessmentItemIndex++;
+          render();
+        }
+      });
+
+      navButtons.append(prevItemBtn, nextItemBtn);
+      focusCard.append(navButtons);
+    } else {
+      // Legacy Scoring Controls
+      const scoreBadge = createElement(
+        "span",
+        `assess-score-badge ${currentResult?.value ? "badge-has-score" : ""}`,
+        currentResult?.formattedValue || "Belum dinilai"
+      );
+      studentHeader.append(profileWrap, scoreBadge);
+      focusCard.append(studentHeader);
+
+      const noteField = createElement("label", "field");
+      noteField.append(createElement("span", "field-label", "Catatan Evaluasi Guru (Opsional)"));
+      const noteInput = document.createElement("input");
+      noteInput.type = "text";
+      noteInput.className = "input-text";
+      noteInput.placeholder = "Catatan evaluasi khusus...";
+      if (currentResult?.note) {
+        noteInput.value = currentResult.note;
+      }
+      noteField.append(noteInput);
+
+      const method = def?.method || "rubric";
+      if (method === "rubric") {
+        const defaultRubricLevels = [
+          { level: 1, label: "Belum Berkembang", desc: "Belum menunjukkan kemampuan yang dinilai dan masih memerlukan bimbingan penuh." },
+          { level: 2, label: "Mulai Berkembang", desc: "Mulai menunjukkan kemampuan tetapi masih memerlukan banyak arahan atau bantuan." },
+          { level: 3, label: "Cukup Berkembang", desc: "Mampu menunjukkan kemampuan utama dengan cukup baik, meskipun belum konsisten." },
+          { level: 4, label: "Berkembang Baik", desc: "Mampu menunjukkan kemampuan dengan baik dan relatif mandiri." },
+          { level: 5, label: "Berkembang Sangat Baik", desc: "Mampu menunjukkan kemampuan dengan sangat baik, mandiri, dan konsisten." }
+        ];
+
+        const levels = as.rubricSnapshot?.levels?.length > 0
+          ? as.rubricSnapshot.levels
+          : (def?.rubricLevels?.length > 0 ? def.rubricLevels : defaultRubricLevels);
+
+        const rubricGrid = createElement("div", "scoring-rubric-grid");
+
+        levels.forEach((lvl) => {
+          const isSelected = currentResult?.rubricLevel === lvl.level;
+          const rBtn = createElement(
+            "button",
+            `scoring-rubric-btn level-${lvl.level} ${isSelected ? "is-selected" : ""}`
+          );
+          rBtn.type = "button";
+          if (lvl.desc) rBtn.title = lvl.desc;
+
+          rBtn.append(
+            createElement("span", "scoring-rubric-num", String(lvl.level)),
+            createElement("span", "scoring-rubric-label", lvl.label)
+          );
+
+          rBtn.addEventListener("click", () => {
+            if (actions?.saveAssessmentResult) {
+              actions.saveAssessmentResult({
+                assessmentSessionId: as.id,
+                definitionId: as.definitionId || "",
+                studentId: currentStudent.id,
+                value: String(lvl.level),
+                numericValue: lvl.level,
+                rubricLevel: lvl.level,
+                formattedValue: `Skala ${lvl.level} (${lvl.label})`,
+                note: noteInput.value.trim()
+              });
+            }
+
+            if (activeAssessmentStudentIndex < classStudents.length - 1) {
+              activeAssessmentStudentIndex++;
+            }
+            render();
+          });
+
+          rubricGrid.append(rBtn);
+        });
+
+        focusCard.append(rubricGrid);
+      } else {
+        const numRow = createElement("div", "assess-num-row");
+        const valInput = document.createElement("input");
+        valInput.type = "number";
+        valInput.step = method === "stopwatch" ? "0.01" : "1";
+        valInput.className = "assess-num-input";
+        valInput.placeholder = `Nilai (${def?.unit || ""})`;
+        if (currentResult?.value !== undefined && currentResult?.value !== null) {
+          valInput.value = currentResult.value;
+        }
+
+        const saveBtn = createElement("button", "primary-action compact-action", "Simpan Nilai");
+        saveBtn.type = "button";
+        saveBtn.addEventListener("click", () => {
+          const val = valInput.value.trim();
+          if (!val) return;
+          const num = parseFloat(val);
+          if (actions?.saveAssessmentResult) {
+            actions.saveAssessmentResult({
+              assessmentSessionId: as.id,
+              definitionId: as.definitionId || "",
+              studentId: currentStudent.id,
+              value: val,
+              numericValue: isNaN(num) ? null : num,
+              formattedValue: `${val} ${def?.unit || ""}`.trim(),
+              note: noteInput.value.trim()
+            });
+          }
+          if (activeAssessmentStudentIndex < classStudents.length - 1) {
+            activeAssessmentStudentIndex++;
+          }
+          render();
+        });
+
+        numRow.append(valInput, saveBtn);
+        focusCard.append(numRow);
+      }
+
+      focusCard.append(noteField);
+
+      // Bottom Prev / Next Nav for Students
+      const navButtons = createElement("div", "scoring-nav-buttons");
+      const prevBtn = createElement("button", "btn-tool", "← Siswa Sebelumnya");
+      prevBtn.type = "button";
+      prevBtn.disabled = activeAssessmentStudentIndex === 0;
+      prevBtn.addEventListener("click", () => {
+        if (activeAssessmentStudentIndex > 0) {
+          activeAssessmentStudentIndex--;
+          render();
+        }
+      });
+
+      const nextBtn = createElement("button", "btn-tool", "Siswa Berikutnya →");
+      nextBtn.type = "button";
+      nextBtn.disabled = activeAssessmentStudentIndex === classStudents.length - 1;
+      nextBtn.addEventListener("click", () => {
+        if (activeAssessmentStudentIndex < classStudents.length - 1) {
+          activeAssessmentStudentIndex++;
+          render();
+        }
+      });
+
+      navButtons.append(prevBtn, nextBtn);
+      focusCard.append(navButtons);
     }
 
-    focusCard.append(noteField);
-
-    // Bottom Prev / Next Nav
-    const navButtons = createElement("div", "scoring-nav-buttons");
-    const prevBtn = createElement("button", "btn-tool", "← Siswa Sebelumnya");
-    prevBtn.type = "button";
-    prevBtn.disabled = activeAssessmentStudentIndex === 0;
-    prevBtn.addEventListener("click", () => {
-      if (activeAssessmentStudentIndex > 0) {
-        activeAssessmentStudentIndex--;
-        render();
-      }
-    });
-
-    const nextBtn = createElement("button", "btn-tool", "Siswa Berikutnya →");
-    nextBtn.type = "button";
-    nextBtn.disabled = activeAssessmentStudentIndex === classStudents.length - 1;
-    nextBtn.addEventListener("click", () => {
-      if (activeAssessmentStudentIndex < classStudents.length - 1) {
-        activeAssessmentStudentIndex++;
-        render();
-      }
-    });
-
-    navButtons.append(prevBtn, nextBtn);
-    focusCard.append(navButtons);
+    container.append(focusCard);
+  }
 
     container.append(focusCard);
   }
