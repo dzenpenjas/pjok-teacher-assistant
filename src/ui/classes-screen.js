@@ -70,6 +70,10 @@ export function renderClassesScreen(state, actions) {
         createElement("p", "screen-copy", "Klik tombol 'Tambah Kelas' di atas untuk memulai.")
       );
       container.append(emptyCard);
+
+      if (showAddClassModal) {
+        container.append(renderAddClassModal());
+      }
       return;
     }
 
