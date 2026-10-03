@@ -15,6 +15,7 @@ const sessionManager = new SessionManager(repositories.sessions);
 
 let activeModalStudentId = null;
 let explicitSessionId = null;
+let settingsActiveTab = "school-teacher";
 
 // Export and expose actions globally early so external/test environments have access
 export let actions = {};
@@ -600,6 +601,11 @@ function createCrudActions() {
         sessionManager.cancelSession(id);
         refreshState();
       }
+    },
+    setSettingsActiveTab: (tabId) => {
+      const allowed = ["school-teacher", "academic", "tags", "assessments", "backup"];
+      settingsActiveTab = allowed.includes(tabId) ? tabId : "school-teacher";
+      renderApp();
     }
   };
 }
@@ -733,7 +739,8 @@ function renderApp() {
       {
         ...appState,
         session: sessionContext.session,
-        sessionContext
+        sessionContext,
+        settingsActiveTab
       },
       appActions
     ),

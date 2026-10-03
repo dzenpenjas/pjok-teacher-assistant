@@ -20,10 +20,10 @@ const SETTINGS_TABS = [
   { id: "backup", label: "Cadangan Data", icon: () => ICONS.database(16) }
 ];
 
-export function renderSettingsScreen(state, actions) {
+export function renderSettingsScreen(state, actions, options = {}) {
   const screen = createElement("main", "screen wide-screen settings-hub-screen");
 
-  let activeTab = "school-teacher";
+  let activeTab = options.activeTab || "school-teacher";
 
   const container = createElement("div", "settings-hub-container");
   screen.append(container);
@@ -57,8 +57,12 @@ export function renderSettingsScreen(state, actions) {
       btn.type = "button";
       btn.append(tab.icon(), document.createTextNode(` ${tab.label}`));
       btn.addEventListener("click", () => {
-        activeTab = tab.id;
-        render();
+        if (actions?.setSettingsActiveTab) {
+          actions.setSettingsActiveTab(tab.id);
+        } else {
+          activeTab = tab.id;
+          render();
+        }
       });
       tabRow.append(btn);
     });
@@ -165,7 +169,6 @@ export function renderSettingsScreen(state, actions) {
       const payload = formToObject(ayForm);
       if (actions?.createAcademicYear) {
         actions.createAcademicYear(payload);
-        render();
       }
     });
     ayCard.append(ayForm);
@@ -197,7 +200,6 @@ export function renderSettingsScreen(state, actions) {
       const payload = formToObject(semForm);
       if (actions?.createSemester) {
         actions.createSemester(payload);
-        render();
       }
     });
     semCard.append(semForm);
@@ -241,7 +243,6 @@ export function renderSettingsScreen(state, actions) {
       const payload = formToObject(form);
       if (actions?.createTag) {
         actions.createTag(payload);
-        render();
       }
     });
     card.append(form);
@@ -394,7 +395,6 @@ export function renderSettingsScreen(state, actions) {
 
       if (actions?.createAssessmentDefinition) {
         actions.createAssessmentDefinition(fullPayload);
-        render();
       }
     });
     card.append(form);

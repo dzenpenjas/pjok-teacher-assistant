@@ -372,7 +372,9 @@ export function renderScreen(screenIdOrState, stateOrActions, maybeActions) {
   }
 
   if (screenId === SCREENS.settings) {
-    return renderSettingsScreen(state, actions);
+    return renderSettingsScreen(state, actions, {
+      activeTab: state.settingsActiveTab
+    });
   }
 
   return renderDashboard(state, actions);
