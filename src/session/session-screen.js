@@ -277,8 +277,15 @@ export function renderSessionScreen(session, context) {
   const tabsContainer = createElement("div", "workspace-tabs-row");
   const tabContent = createElement("div", "workspace-tab-content");
 
-  let activeTab = context.initialTab || "attendance"; // attendance, activity, assessment, summary
-  let lastCapturedStopwatchTime = null;
+  const sessionUi = context.uiState?.session || {
+    activeTab: context.initialTab || "attendance",
+    activeAssessmentDefinitionId: null,
+    lastCapturedStopwatchTime: null
+  };
+
+  if (!sessionUi.activeTab) {
+    sessionUi.activeTab = context.initialTab || "attendance";
+  }
 
   const tabs = [
     { id: "attendance", step: "1", label: "Absensi", icon: () => ICONS.users(18) },
@@ -290,7 +297,7 @@ export function renderSessionScreen(session, context) {
   tabs.forEach((tab) => {
     const btn = createElement(
       "button",
-      `workspace-tab-btn ${tab.id === activeTab ? "is-active" : ""}`
+      `workspace-tab-btn ${tab.id === sessionUi.activeTab ? "is-active" : ""}`
     );
     btn.type = "button";
     btn.dataset.tab = tab.id;
@@ -299,7 +306,7 @@ export function renderSessionScreen(session, context) {
       createElement("strong", "tab-title", tab.label)
     );
     btn.addEventListener("click", () => {
-      activeTab = tab.id;
+      sessionUi.activeTab = tab.id;
       renderTab();
     });
     tabsContainer.append(btn);
@@ -310,10 +317,10 @@ export function renderSessionScreen(session, context) {
   function renderTab() {
     tabContent.replaceChildren();
     tabsContainer.querySelectorAll(".workspace-tab-btn").forEach((b) => {
-      b.classList.toggle("is-active", b.dataset.tab === activeTab);
+      b.classList.toggle("is-active", b.dataset.tab === sessionUi.activeTab);
     });
 
-    if (activeTab === "attendance") {
+    if (sessionUi.activeTab === "attendance") {
       tabContent.append(
         renderAttendancePanel({
           session,
@@ -333,7 +340,7 @@ export function renderSessionScreen(session, context) {
           }
         })
       );
-    } else if (activeTab === "activity") {
+    } else if (sessionUi.activeTab === "activity") {
       tabContent.append(
         renderActivityPanel({
           session,
@@ -351,21 +358,22 @@ export function renderSessionScreen(session, context) {
             context.actions.deleteSessionActivity(id);
           },
           onCaptureStopwatch: (seconds) => {
-            lastCapturedStopwatchTime = seconds;
-            activeTab = "assessment";
+            sessionUi.lastCapturedStopwatchTime = seconds;
+            sessionUi.activeTab = "assessment";
             renderTab();
           }
         })
       );
-    } else if (activeTab === "assessment") {
+    } else if (sessionUi.activeTab === "assessment") {
       tabContent.append(
         renderAssessmentPanel({
           session,
+          sessionUi,
           students: context.students || [],
           definitions: context.assessmentDefinitions || [],
           assessmentSessions: context.assessmentSessions || [],
           assessmentResults: context.assessmentResults || [],
-          lastCapturedStopwatch: lastCapturedStopwatchTime,
+          lastCapturedStopwatch: sessionUi.lastCapturedStopwatchTime,
           onCreateAssessmentSession: (input) => {
             return context.actions.createAssessmentSession(input);
           },
@@ -374,7 +382,7 @@ export function renderSessionScreen(session, context) {
           }
         })
       );
-    } else if (activeTab === "summary") {
+    } else if (sessionUi.activeTab === "summary") {
       tabContent.append(
         renderSummaryPanel({
           session,

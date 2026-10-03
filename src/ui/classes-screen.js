@@ -18,17 +18,18 @@ function createElement(tagName, className, textContent) {
 export function renderClassesScreen(state, actions) {
   const screen = createElement("main", "screen wide-screen classes-hub-screen");
 
-  // State local to screen for selected class
-  let selectedClassId = null;
-  let isGrowthScreening = false;
-  let isCreatingAssessment = false;
-  let activeAssessmentSessionId = null;
-  let activeAssessmentStudentIndex = 0;
-  let activeAssessmentItemIndex = 0;
+  const classUi = state?.uiState?.classes || {
+    selectedClassId: null,
+    mode: "list",
+    activeTab: "students",
+    activeAssessmentSessionId: null,
+    activeAssessmentStudentIndex: 0,
+    activeAssessmentItemIndex: 0,
+    studentSearchQuery: ""
+  };
+
   let showAddClassModal = false;
   let showAddStudentModal = false;
-  let activeTab = "students"; // "students" | "assessments" | "sessions"
-  let studentSearchQuery = "";
 
   const container = createElement("div", "classes-hub-container");
   screen.append(container);
@@ -36,20 +37,18 @@ export function renderClassesScreen(state, actions) {
   function render() {
     container.replaceChildren();
 
-    if (selectedClassId) {
-      if (isGrowthScreening) {
-        renderClassGrowthScreening(selectedClassId);
-      } else if (isCreatingAssessment) {
-        renderCreateAssessmentView(selectedClassId);
-      } else if (activeAssessmentSessionId) {
-        renderScoringWorkflowView(selectedClassId, activeAssessmentSessionId);
-      } else {
-        renderClassDetail(selectedClassId);
-      }
+    if (classUi.mode === "growth" && classUi.selectedClassId) {
+      renderClassGrowthScreening(classUi.selectedClassId);
+    } else if (classUi.mode === "create-assessment" && classUi.selectedClassId) {
+      renderCreateAssessmentView(classUi.selectedClassId);
+    } else if (classUi.mode === "scoring" && classUi.selectedClassId && classUi.activeAssessmentSessionId) {
+      renderScoringWorkflowView(classUi.selectedClassId, classUi.activeAssessmentSessionId);
+    } else if (classUi.selectedClassId) {
+      renderClassDetail(classUi.selectedClassId);
     } else {
-      isGrowthScreening = false;
-      isCreatingAssessment = false;
-      activeAssessmentSessionId = null;
+      classUi.mode = "list";
+      classUi.selectedClassId = null;
+      classUi.activeAssessmentSessionId = null;
       renderClassList();
     }
   }
@@ -154,7 +153,8 @@ export function renderClassesScreen(state, actions) {
       openBtn.type = "button";
       openBtn.append(ICONS.users(16), document.createTextNode(" Buka Siswa"));
       openBtn.addEventListener("click", () => {
-        selectedClassId = c.id;
+        classUi.selectedClassId = c.id;
+        classUi.mode = "detail";
         render();
       });
 
@@ -175,7 +175,8 @@ export function renderClassesScreen(state, actions) {
   function renderClassDetail(classId) {
     const classRoom = (state.classes || []).find((c) => c.id === classId);
     if (!classRoom) {
-      selectedClassId = null;
+      classUi.selectedClassId = null;
+      classUi.mode = "list";
       render();
       return;
     }
@@ -188,7 +189,9 @@ export function renderClassesScreen(state, actions) {
     backBtn.type = "button";
     backBtn.append(document.createTextNode("← Kembali ke Daftar Kelas"));
     backBtn.addEventListener("click", () => {
-      selectedClassId = null;
+      classUi.selectedClassId = null;
+      classUi.mode = "list";
+      classUi.activeAssessmentSessionId = null;
       render();
     });
     container.append(backBtn);
@@ -216,7 +219,7 @@ export function renderClassesScreen(state, actions) {
     createAssessBtn.type = "button";
     createAssessBtn.append(ICONS.plus(15), document.createTextNode(" Tambah Asesmen"));
     createAssessBtn.addEventListener("click", () => {
-      isCreatingAssessment = true;
+      classUi.mode = "create-assessment";
       render();
     });
 
@@ -224,7 +227,7 @@ export function renderClassesScreen(state, actions) {
     growthScreeningBtn.type = "button";
     growthScreeningBtn.append(ICONS.chart(15), document.createTextNode(" Pemeriksaan Pertumbuhan"));
     growthScreeningBtn.addEventListener("click", () => {
-      isGrowthScreening = true;
+      classUi.mode = "growth";
       render();
     });
 
@@ -253,7 +256,9 @@ export function renderClassesScreen(state, actions) {
     deleteClassBtn.addEventListener("click", () => {
       if (window.confirm(`Hapus Kelas "${classRoom.name}" beserta seluruh data siswa dan riwayat sesinya?\nTindakan ini tidak dapat dibatalkan.`)) {
         actions.deleteClass(classRoom.id);
-        selectedClassId = null;
+        classUi.selectedClassId = null;
+        classUi.mode = "list";
+        classUi.activeAssessmentSessionId = null;
         render();
       }
     });
@@ -268,43 +273,43 @@ export function renderClassesScreen(state, actions) {
     const tabsRow = createElement("div", "subnav-tabs-row");
     const tabStudents = createElement(
       "button",
-      `subnav-tab ${activeTab === "students" ? "is-active" : ""}`,
+      `subnav-tab ${classUi.activeTab === "students" ? "is-active" : ""}`,
       `Daftar Siswa (${classStudents.length})`
     );
     tabStudents.type = "button";
     tabStudents.addEventListener("click", () => {
-      activeTab = "students";
+      classUi.activeTab = "students";
       render();
     });
 
     const tabAssessments = createElement(
       "button",
-      `subnav-tab ${activeTab === "assessments" ? "is-active" : ""}`,
+      `subnav-tab ${classUi.activeTab === "assessments" ? "is-active" : ""}`,
       `Asesmen (${classAssessments.length})`
     );
     tabAssessments.type = "button";
     tabAssessments.addEventListener("click", () => {
-      activeTab = "assessments";
+      classUi.activeTab = "assessments";
       render();
     });
 
     const tabSessions = createElement(
       "button",
-      `subnav-tab ${activeTab === "sessions" ? "is-active" : ""}`,
+      `subnav-tab ${classUi.activeTab === "sessions" ? "is-active" : ""}`,
       `Riwayat Sesi (${classSessions.length})`
     );
     tabSessions.type = "button";
     tabSessions.addEventListener("click", () => {
-      activeTab = "sessions";
+      classUi.activeTab = "sessions";
       render();
     });
 
     tabsRow.append(tabStudents, tabAssessments, tabSessions);
     container.append(tabsRow);
 
-    if (activeTab === "students") {
+    if (classUi.activeTab === "students") {
       renderClassStudentsList(classStudents, classRoom);
-    } else if (activeTab === "assessments") {
+    } else if (classUi.activeTab === "assessments") {
       renderClassAssessmentsList(classAssessments, classRoom, classStudents);
     } else {
       renderClassSessionsList(classSessions, classRoom);
@@ -321,9 +326,9 @@ export function renderClassesScreen(state, actions) {
     searchInput.type = "search";
     searchInput.className = "search-input";
     searchInput.placeholder = "Cari nama atau NIS siswa...";
-    searchInput.value = studentSearchQuery;
+    searchInput.value = classUi.studentSearchQuery || "";
     searchInput.addEventListener("input", (e) => {
-      studentSearchQuery = e.target.value.toLowerCase();
+      classUi.studentSearchQuery = e.target.value.toLowerCase();
       renderClassStudentsCards();
     });
     searchBar.append(searchInput);
@@ -336,10 +341,10 @@ export function renderClassesScreen(state, actions) {
       listContainer.replaceChildren();
 
       const filtered = students.filter((s) => {
-        if (!studentSearchQuery) return true;
+        if (!classUi.studentSearchQuery) return true;
         return (
-          (s.name || "").toLowerCase().includes(studentSearchQuery) ||
-          (s.studentNumber || "").toLowerCase().includes(studentSearchQuery)
+          (s.name || "").toLowerCase().includes(classUi.studentSearchQuery) ||
+          (s.studentNumber || "").toLowerCase().includes(classUi.studentSearchQuery)
         );
       });
 
@@ -560,8 +565,9 @@ export function renderClassesScreen(state, actions) {
   function renderClassGrowthScreening(classId) {
     const classRoom = (state.classes || []).find((c) => c.id === classId);
     if (!classRoom) {
-      isGrowthScreening = false;
-      renderClassList();
+      classUi.selectedClassId = null;
+      classUi.mode = "list";
+      render();
       return;
     }
 
@@ -571,7 +577,7 @@ export function renderClassesScreen(state, actions) {
     backBtn.type = "button";
     backBtn.append(document.createTextNode(`← Kembali ke Detail ${classRoom.name}`));
     backBtn.addEventListener("click", () => {
-      isGrowthScreening = false;
+      classUi.mode = "detail";
       render();
     });
     container.append(backBtn);
@@ -714,7 +720,7 @@ export function renderClassesScreen(state, actions) {
     const cancelBtn = createElement("button", "btn-tool", "Batal");
     cancelBtn.type = "button";
     cancelBtn.addEventListener("click", () => {
-      isGrowthScreening = false;
+      classUi.mode = "detail";
       render();
     });
 
@@ -754,7 +760,7 @@ export function renderClassesScreen(state, actions) {
       }
 
       window.alert(`Berhasil menyimpan pemeriksaan pertumbuhan untuk ${recordsToSave.length} siswa.`);
-      isGrowthScreening = false;
+      classUi.mode = "detail";
       render();
     });
 
@@ -777,7 +783,7 @@ export function renderClassesScreen(state, actions) {
       addBtn.type = "button";
       addBtn.append(ICONS.plus(15), document.createTextNode(" Tambah Asesmen"));
       addBtn.addEventListener("click", () => {
-        isCreatingAssessment = true;
+        classUi.mode = "create-assessment";
         render();
       });
       emptyCard.append(addBtn);
@@ -808,7 +814,7 @@ export function renderClassesScreen(state, actions) {
     addBtn.type = "button";
     addBtn.append(ICONS.plus(15), document.createTextNode(" Tambah Asesmen"));
     addBtn.addEventListener("click", () => {
-      isCreatingAssessment = true;
+      classUi.mode = "create-assessment";
       render();
     });
     listHeader.append(heading, addBtn);
@@ -879,9 +885,10 @@ export function renderClassesScreen(state, actions) {
       const startBtn = createElement("button", "primary-action compact-action", scoredCount > 0 ? "Lanjutkan Penilaian" : "Mulai Penilaian");
       startBtn.type = "button";
       startBtn.addEventListener("click", () => {
-        activeAssessmentSessionId = as.id;
-        activeAssessmentStudentIndex = 0;
-        activeAssessmentItemIndex = 0;
+        classUi.activeAssessmentSessionId = as.id;
+        classUi.activeAssessmentStudentIndex = 0;
+        classUi.activeAssessmentItemIndex = 0;
+        classUi.mode = "scoring";
         render();
       });
 
@@ -897,8 +904,9 @@ export function renderClassesScreen(state, actions) {
   function renderCreateAssessmentView(classId) {
     const classRoom = (state.classes || []).find((c) => c.id === classId);
     if (!classRoom) {
-      isCreatingAssessment = false;
-      renderClassList();
+      classUi.selectedClassId = null;
+      classUi.mode = "list";
+      render();
       return;
     }
 
@@ -931,7 +939,7 @@ export function renderClassesScreen(state, actions) {
     backBtn.type = "button";
     backBtn.append(document.createTextNode(`← Kembali ke Detail ${classRoom.name}`));
     backBtn.addEventListener("click", () => {
-      isCreatingAssessment = false;
+      classUi.mode = "detail";
       render();
     });
     container.append(backBtn);
@@ -1327,7 +1335,7 @@ export function renderClassesScreen(state, actions) {
     const cancelBtn = createElement("button", "btn-tool", "Batal");
     cancelBtn.type = "button";
     cancelBtn.addEventListener("click", () => {
-      isCreatingAssessment = false;
+      classUi.mode = "detail";
       render();
     });
 
@@ -1425,8 +1433,8 @@ export function renderClassesScreen(state, actions) {
         });
       }
 
-      isCreatingAssessment = false;
-      activeTab = "assessments";
+      classUi.mode = "detail";
+      classUi.activeTab = "assessments";
       render();
     });
 
@@ -1437,7 +1445,8 @@ export function renderClassesScreen(state, actions) {
     const classRoom = (state.classes || []).find((c) => c.id === classId);
     const as = (state.assessmentSessions || []).find((s) => s.id === assessSessId);
     if (!classRoom || !as) {
-      activeAssessmentSessionId = null;
+      classUi.activeAssessmentSessionId = null;
+      classUi.mode = "detail";
       render();
       return;
     }
@@ -1449,8 +1458,9 @@ export function renderClassesScreen(state, actions) {
     backBtn.type = "button";
     backBtn.append(document.createTextNode(`← Kembali ke Asesmen ${classRoom.name}`));
     backBtn.addEventListener("click", () => {
-      activeAssessmentSessionId = null;
-      activeTab = "assessments";
+      classUi.activeAssessmentSessionId = null;
+      classUi.mode = "detail";
+      classUi.activeTab = "assessments";
       render();
     });
     container.append(backBtn);
@@ -1521,15 +1531,15 @@ export function renderClassesScreen(state, actions) {
     }
 
     // Clamp active student index
-    if (activeAssessmentStudentIndex < 0) activeAssessmentStudentIndex = 0;
-    if (activeAssessmentStudentIndex >= classStudents.length) activeAssessmentStudentIndex = classStudents.length - 1;
+    if (classUi.activeAssessmentStudentIndex < 0) classUi.activeAssessmentStudentIndex = 0;
+    if (classUi.activeAssessmentStudentIndex >= classStudents.length) classUi.activeAssessmentStudentIndex = classStudents.length - 1;
 
-    const currentStudent = classStudents[activeAssessmentStudentIndex];
+    const currentStudent = classStudents[classUi.activeAssessmentStudentIndex];
 
     // Stepper & Jump Bar
     const stepperBar = createElement("div", "student-stepper-bar");
     stepperBar.append(
-      createElement("div", "student-stepper-counter", `Siswa ${activeAssessmentStudentIndex + 1} dari ${classStudents.length}`)
+      createElement("div", "student-stepper-counter", `Siswa ${classUi.activeAssessmentStudentIndex + 1} dari ${classStudents.length}`)
     );
 
     const isStudentComplete = (studentId) => {
@@ -1553,14 +1563,14 @@ export function renderClassesScreen(state, actions) {
       const hasScore = isStudentComplete(st.id);
       const pill = createElement(
         "button",
-        `student-jump-pill ${idx === activeAssessmentStudentIndex ? "is-active" : ""} ${hasScore ? "is-scored" : ""}`,
+        `student-jump-pill ${idx === classUi.activeAssessmentStudentIndex ? "is-active" : ""} ${hasScore ? "is-scored" : ""}`,
         hasScore ? `✓ ${idx + 1}` : `${idx + 1}`
       );
       pill.type = "button";
       pill.title = `${st.name} (${hasScore ? "Sudah dinilai" : "Belum dinilai"})`;
       pill.addEventListener("click", () => {
-        activeAssessmentStudentIndex = idx;
-        activeAssessmentItemIndex = 0;
+        classUi.activeAssessmentStudentIndex = idx;
+        classUi.activeAssessmentItemIndex = 0;
         render();
       });
       jumpPills.append(pill);
@@ -1591,10 +1601,10 @@ export function renderClassesScreen(state, actions) {
     const isItemBased = (def?.method === "rubric" || !def?.method) && assessmentItems.length > 0;
 
     if (isItemBased) {
-      if (activeAssessmentItemIndex < 0) activeAssessmentItemIndex = 0;
-      if (activeAssessmentItemIndex >= assessmentItems.length) activeAssessmentItemIndex = assessmentItems.length - 1;
+      if (classUi.activeAssessmentItemIndex < 0) classUi.activeAssessmentItemIndex = 0;
+      if (classUi.activeAssessmentItemIndex >= assessmentItems.length) classUi.activeAssessmentItemIndex = assessmentItems.length - 1;
 
-      const currentItem = assessmentItems[activeAssessmentItemIndex];
+      const currentItem = assessmentItems[classUi.activeAssessmentItemIndex];
       const currentItemResults = Array.isArray(currentResult?.itemResults) ? currentResult.itemResults : [];
       const completedItemCount = assessmentItems.filter((it) => {
         const r = currentItemResults.find((ir) => ir.itemId === it.id);
@@ -1631,7 +1641,7 @@ export function renderClassesScreen(state, actions) {
 
       const itemMetaRow = createElement("div", "flex items-center justify-between text-xs text-subtle font-medium border-b border-slate-100 dark:border-slate-800 pb-2");
       itemMetaRow.append(
-        createElement("span", "font-bold text-slate-700 dark:text-slate-300", `Pertanyaan ${activeAssessmentItemIndex + 1} dari ${assessmentItems.length}`),
+        createElement("span", "font-bold text-slate-700 dark:text-slate-300", `Pertanyaan ${classUi.activeAssessmentItemIndex + 1} dari ${assessmentItems.length}`),
         createElement("span", "badge-subtle", `Skala 1–${currentItem.rubricScale || 5}`)
       );
       itemFocusCard.append(itemMetaRow);
@@ -1719,6 +1729,17 @@ export function renderClassesScreen(state, actions) {
             ? `Nilai ${numericScore}`
             : `${validResults.length}/${assessmentItems.length} butir`;
 
+          // 1. Calculate NEXT index position BEFORE calling saveAssessmentResult
+          if (classUi.activeAssessmentItemIndex < assessmentItems.length - 1) {
+            classUi.activeAssessmentItemIndex++;
+          } else {
+            classUi.activeAssessmentItemIndex = 0;
+            if (classUi.activeAssessmentStudentIndex < classStudents.length - 1) {
+              classUi.activeAssessmentStudentIndex++;
+            }
+          }
+
+          // 2. Call saveAssessmentResult
           if (actions?.saveAssessmentResult) {
             actions.saveAssessmentResult({
               assessmentSessionId: as.id,
@@ -1733,16 +1754,7 @@ export function renderClassesScreen(state, actions) {
               note: currentResult?.note || ""
             });
           }
-
-          if (activeAssessmentItemIndex < assessmentItems.length - 1) {
-            activeAssessmentItemIndex++;
-          } else {
-            activeAssessmentItemIndex = 0;
-            if (activeAssessmentStudentIndex < classStudents.length - 1) {
-              activeAssessmentStudentIndex++;
-            }
-          }
-          render();
+          // Do NOT call render() here because saveAssessmentResult triggers refreshState -> renderApp
         });
 
         rubricGrid.append(rBtn);
@@ -1755,20 +1767,20 @@ export function renderClassesScreen(state, actions) {
       const navButtons = createElement("div", "scoring-nav-buttons mt-4 flex items-center justify-between");
       const prevItemBtn = createElement("button", "btn-tool", "← Pertanyaan Sebelumnya");
       prevItemBtn.type = "button";
-      prevItemBtn.disabled = activeAssessmentItemIndex === 0;
+      prevItemBtn.disabled = classUi.activeAssessmentItemIndex === 0;
       prevItemBtn.addEventListener("click", () => {
-        if (activeAssessmentItemIndex > 0) {
-          activeAssessmentItemIndex--;
+        if (classUi.activeAssessmentItemIndex > 0) {
+          classUi.activeAssessmentItemIndex--;
           render();
         }
       });
 
       const nextItemBtn = createElement("button", "btn-tool", "Pertanyaan Berikutnya →");
       nextItemBtn.type = "button";
-      nextItemBtn.disabled = activeAssessmentItemIndex === assessmentItems.length - 1;
+      nextItemBtn.disabled = classUi.activeAssessmentItemIndex === assessmentItems.length - 1;
       nextItemBtn.addEventListener("click", () => {
-        if (activeAssessmentItemIndex < assessmentItems.length - 1) {
-          activeAssessmentItemIndex++;
+        if (classUi.activeAssessmentItemIndex < assessmentItems.length - 1) {
+          classUi.activeAssessmentItemIndex++;
           render();
         }
       });
@@ -1827,6 +1839,10 @@ export function renderClassesScreen(state, actions) {
           );
 
           rBtn.addEventListener("click", () => {
+            if (classUi.activeAssessmentStudentIndex < classStudents.length - 1) {
+              classUi.activeAssessmentStudentIndex++;
+            }
+
             if (actions?.saveAssessmentResult) {
               actions.saveAssessmentResult({
                 assessmentSessionId: as.id,
@@ -1839,11 +1855,6 @@ export function renderClassesScreen(state, actions) {
                 note: noteInput.value.trim()
               });
             }
-
-            if (activeAssessmentStudentIndex < classStudents.length - 1) {
-              activeAssessmentStudentIndex++;
-            }
-            render();
           });
 
           rubricGrid.append(rBtn);
@@ -1867,6 +1878,9 @@ export function renderClassesScreen(state, actions) {
           const val = valInput.value.trim();
           if (!val) return;
           const num = parseFloat(val);
+          if (classUi.activeAssessmentStudentIndex < classStudents.length - 1) {
+            classUi.activeAssessmentStudentIndex++;
+          }
           if (actions?.saveAssessmentResult) {
             actions.saveAssessmentResult({
               assessmentSessionId: as.id,
@@ -1878,10 +1892,6 @@ export function renderClassesScreen(state, actions) {
               note: noteInput.value.trim()
             });
           }
-          if (activeAssessmentStudentIndex < classStudents.length - 1) {
-            activeAssessmentStudentIndex++;
-          }
-          render();
         });
 
         numRow.append(valInput, saveBtn);
@@ -1894,20 +1904,20 @@ export function renderClassesScreen(state, actions) {
       const navButtons = createElement("div", "scoring-nav-buttons");
       const prevBtn = createElement("button", "btn-tool", "← Siswa Sebelumnya");
       prevBtn.type = "button";
-      prevBtn.disabled = activeAssessmentStudentIndex === 0;
+      prevBtn.disabled = classUi.activeAssessmentStudentIndex === 0;
       prevBtn.addEventListener("click", () => {
-        if (activeAssessmentStudentIndex > 0) {
-          activeAssessmentStudentIndex--;
+        if (classUi.activeAssessmentStudentIndex > 0) {
+          classUi.activeAssessmentStudentIndex--;
           render();
         }
       });
 
       const nextBtn = createElement("button", "btn-tool", "Siswa Berikutnya →");
       nextBtn.type = "button";
-      nextBtn.disabled = activeAssessmentStudentIndex === classStudents.length - 1;
+      nextBtn.disabled = classUi.activeAssessmentStudentIndex === classStudents.length - 1;
       nextBtn.addEventListener("click", () => {
-        if (activeAssessmentStudentIndex < classStudents.length - 1) {
-          activeAssessmentStudentIndex++;
+        if (classUi.activeAssessmentStudentIndex < classStudents.length - 1) {
+          classUi.activeAssessmentStudentIndex++;
           render();
         }
       });

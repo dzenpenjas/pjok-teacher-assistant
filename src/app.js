@@ -17,6 +17,23 @@ let activeModalStudentId = null;
 let explicitSessionId = null;
 let settingsActiveTab = "school-teacher";
 
+const uiState = {
+  classes: {
+    selectedClassId: null,
+    mode: "list",
+    activeTab: "students",
+    activeAssessmentSessionId: null,
+    activeAssessmentStudentIndex: 0,
+    activeAssessmentItemIndex: 0,
+    studentSearchQuery: ""
+  },
+  session: {
+    activeTab: "attendance",
+    activeAssessmentDefinitionId: null,
+    lastCapturedStopwatchTime: null
+  }
+};
+
 // Export and expose actions globally early so external/test environments have access
 export let actions = {};
 if (typeof window !== "undefined") {
@@ -740,7 +757,8 @@ function renderApp() {
         ...appState,
         session: sessionContext.session,
         sessionContext,
-        settingsActiveTab
+        settingsActiveTab,
+        uiState
       },
       appActions
     ),

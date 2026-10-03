@@ -20,37 +20,34 @@ export function renderAssessmentPanel(context) {
   }
 
   const session = context.session;
+  const sessionUi = context.sessionUi || {};
   const students = context.students || [];
   const definitions = context.definitions || [];
   const assessmentSessions = context.assessmentSessions || [];
   const assessmentResults = context.assessmentResults || [];
   const isReadOnly = session.status === "completed" || session.status === "cancelled";
 
-  // Active definition selection
-  let activeDefinition = definitions[0] || null;
-  
-  // Find or create assessment session for selected definition
-  function getOrCreateAssessSess(defId) {
-    if (!defId) return null;
-    let found = assessmentSessions.find(
-      (as) => as.sessionId === session.id && as.definitionId === defId
-    );
-    if (!found && !isReadOnly && context.onCreateAssessmentSession) {
-      const defObj = definitions.find((d) => d.id === defId);
-      if (defObj) {
-        found = context.onCreateAssessmentSession({
-          sessionId: session.id,
-          definitionId: defObj.id,
-          classId: session.classId,
-          date: session.date,
-          title: `Penilaian ${defObj.name}`
-        });
-      }
+  // Active definition selection resolved from sessionUi first, fallback definitions[0]
+  let activeDefinition = null;
+  if (sessionUi.activeAssessmentDefinitionId) {
+    activeDefinition = definitions.find((d) => d.id === sessionUi.activeAssessmentDefinitionId) || null;
+  }
+  if (!activeDefinition) {
+    activeDefinition = definitions[0] || null;
+    if (activeDefinition && sessionUi) {
+      sessionUi.activeAssessmentDefinitionId = activeDefinition.id;
     }
-    return found || null;
   }
 
-  let activeAssessSess = activeDefinition ? getOrCreateAssessSess(activeDefinition.id) : null;
+  // Find assessment session for selected definition (lookup only, NO creation on render)
+  function findAssessSess(defId) {
+    if (!defId) return null;
+    return assessmentSessions.find(
+      (as) => as.sessionId === session.id && as.definitionId === defId
+    ) || null;
+  }
+
+  let activeAssessSess = activeDefinition ? findAssessSess(activeDefinition.id) : null;
 
   // Header
   const header = createElement("div", "panel-header-row");
@@ -80,7 +77,10 @@ export function renderAssessmentPanel(context) {
   defSelect.addEventListener("change", () => {
     const selectedDefId = defSelect.value;
     activeDefinition = definitions.find((d) => d.id === selectedDefId) || null;
-    activeAssessSess = activeDefinition ? getOrCreateAssessSess(activeDefinition.id) : null;
+    if (sessionUi) {
+      sessionUi.activeAssessmentDefinitionId = selectedDefId;
+    }
+    activeAssessSess = activeDefinition ? findAssessSess(activeDefinition.id) : null;
     renderScoringArea();
   });
 
@@ -319,15 +319,28 @@ export function renderAssessmentPanel(context) {
 
   function saveResult(payload) {
     if (isReadOnly) return;
+    if (!activeDefinition) return;
+
+    let targetAssessSess = activeAssessSess;
+    if (!targetAssessSess && context.onCreateAssessmentSession) {
+      targetAssessSess = context.onCreateAssessmentSession({
+        sessionId: session.id,
+        definitionId: activeDefinition.id,
+        classId: session.classId,
+        date: session.date,
+        title: `Penilaian ${activeDefinition.name}`
+      });
+      activeAssessSess = targetAssessSess;
+    }
+
     if (context.onSaveAssessmentResult) {
       context.onSaveAssessmentResult({
         ...payload,
         sessionId: session.id,
-        definitionId: activeDefinition?.id || "",
-        assessmentSessionId: activeAssessSess?.id || "",
+        definitionId: activeDefinition.id,
+        assessmentSessionId: targetAssessSess?.id || "",
         recordedAt: new Date().toISOString()
       });
-      renderScoringArea();
     }
   }
 

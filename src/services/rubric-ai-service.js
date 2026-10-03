@@ -58,7 +58,7 @@ KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT BERIKUT (tanpa markdown atau teks lain
   ]
 }`;
 
-  const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+  const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent";
 
   const requestBody = {
     contents: [
@@ -72,8 +72,41 @@ KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT BERIKUT (tanpa markdown atau teks lain
       }
     ],
     generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.2
+      responseFormat: {
+        text: {
+          mimeType: "application/json",
+          schema: {
+            type: "object",
+            properties: {
+              rubricLevels: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    level: {
+                      type: "integer"
+                    },
+                    label: {
+                      type: "string"
+                    },
+                    desc: {
+                      type: "string"
+                    }
+                  },
+                  required: [
+                    "level",
+                    "label",
+                    "desc"
+                  ]
+                }
+              }
+            },
+            required: [
+              "rubricLevels"
+            ]
+          }
+        }
+      }
     }
   };
 
@@ -93,13 +126,18 @@ KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT BERIKUT (tanpa markdown atau teks lain
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => "");
+    if (response.status === 404) {
+      throw new Error(
+        `Model Gemini tidak tersedia untuk API key/project ini. API error (404): ${errorBody}`
+      );
+    }
     const error = new Error(`API error (${response.status}): ${errorBody}`);
     if (
-      response.status === 400 ||
       response.status === 401 ||
       response.status === 403 ||
       errorBody.includes("API_KEY_INVALID") ||
-      errorBody.includes("API key not valid")
+      errorBody.includes("API key not valid") ||
+      errorBody.includes("INVALID_API_KEY")
     ) {
       error.isApiKeyError = true;
     }
@@ -143,14 +181,26 @@ KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT BERIKUT (tanpa markdown atau teks lain
       throw new Error(`Missing level ${expectedLevel} in AI response`);
     }
     const levelNum = Number(item.level);
-    const desc = (item.desc || "").trim();
+    if (levelNum !== expectedLevel) {
+      throw new Error(
+        `Invalid rubric level order: expected ${expectedLevel}, got ${item.level}`
+      );
+    }
+    const label =
+      typeof item.label === "string" && item.label.trim()
+        ? item.label.trim()
+        : `Level ${expectedLevel}`;
+    const desc =
+      typeof item.desc === "string"
+        ? item.desc.trim()
+        : "";
     if (!desc) {
       throw new Error(`Empty description for level ${expectedLevel}`);
     }
     validatedLevels.push({
-      level: expectedLevel,
-      label: item.label || `Level ${expectedLevel}`,
-      desc: desc
+      level: levelNum,
+      label,
+      desc
     });
   }
 

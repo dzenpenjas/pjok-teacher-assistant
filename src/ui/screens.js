@@ -345,6 +345,7 @@ export function renderScreen(screenIdOrState, stateOrActions, maybeActions) {
 
     return renderSessionScreen(currentSession, {
       actions,
+      uiState: state.uiState,
       className: currentSession
         ? (state.classes || []).find((item) => item.id === currentSession.classId)?.name || ""
         : "",
