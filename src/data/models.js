@@ -196,45 +196,53 @@ export function createSessionActivity(input = {}) {
 }
 
 export function createAssessmentDefinition(input = {}) {
+  const method = input.method || "rubric";
+  const defaultScale = method === "rubric" ? 5 : 0;
+  const rubricScale = input.rubricScale !== undefined ? Number(input.rubricScale) : defaultScale;
+
+  const defaultRubricLevels = [
+    {
+      level: 1,
+      label: "Belum Berkembang",
+      desc: "Belum menunjukkan kemampuan yang dinilai dan masih memerlukan bimbingan penuh."
+    },
+    {
+      level: 2,
+      label: "Mulai Berkembang",
+      desc: "Mulai menunjukkan kemampuan tetapi masih memerlukan banyak arahan atau bantuan."
+    },
+    {
+      level: 3,
+      label: "Cukup Berkembang",
+      desc: "Mampu menunjukkan kemampuan utama dengan cukup baik, meskipun belum konsisten."
+    },
+    {
+      level: 4,
+      label: "Berkembang Baik",
+      desc: "Mampu menunjukkan kemampuan dengan baik dan relatif mandiri."
+    },
+    {
+      level: 5,
+      label: "Berkembang Sangat Baik",
+      desc: "Mampu menunjukkan kemampuan dengan sangat baik, mandiri, dan konsisten."
+    }
+  ];
+
+  const rubricLevels = Array.isArray(input.rubricLevels)
+    ? input.rubricLevels
+    : (rubricScale === 0 ? [] : defaultRubricLevels.slice(0, rubricScale));
+
   return {
     ...withMeta(input, "assess-def"),
     name: input.name || "",
     category: input.category || "keterampilan", // keterampilan, kebugaran, sikap, pengetahuan
     purpose: input.purpose || "formative", // pretest, formative, posttest, midterm, final
     assessmentType: input.assessmentType || "unspecified", // written, oral, practice, observation, unspecified
-    method: input.method || "rubric", // rubric, numeric, stopwatch
+    method,
     unit: input.unit || "", // detik, cm, kali, poin
     direction: input.direction || "higher_better", // higher_better, lower_better
-    rubricScale: Number(input.rubricScale) || 5,
-    rubricLevels: Array.isArray(input.rubricLevels)
-      ? input.rubricLevels
-      : [
-          {
-            level: 1,
-            label: "Belum Berkembang",
-            desc: "Belum menunjukkan kemampuan yang dinilai dan masih memerlukan bimbingan penuh."
-          },
-          {
-            level: 2,
-            label: "Mulai Berkembang",
-            desc: "Mulai menunjukkan kemampuan tetapi masih memerlukan banyak arahan atau bantuan."
-          },
-          {
-            level: 3,
-            label: "Cukup Berkembang",
-            desc: "Mampu menunjukkan kemampuan utama dengan cukup baik, meskipun belum konsisten."
-          },
-          {
-            level: 4,
-            label: "Berkembang Baik",
-            desc: "Mampu menunjukkan kemampuan dengan baik dan relatif mandiri."
-          },
-          {
-            level: 5,
-            label: "Berkembang Sangat Baik",
-            desc: "Mampu menunjukkan kemampuan dengan sangat baik, mandiri, dan konsisten."
-          }
-        ],
+    rubricScale,
+    rubricLevels,
     materials: Array.isArray(input.materials) ? input.materials : [],
     questions: Array.isArray(input.questions) ? input.questions : [],
     instructions: input.instructions || "",

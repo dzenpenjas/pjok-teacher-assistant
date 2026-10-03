@@ -292,6 +292,32 @@ export function renderSettingsScreen(state, actions, options = {}) {
     );
 
     const form = createElement("form", "master-form");
+    
+    const methodField = createSelectField({
+      label: "Tipe Skoring",
+      name: "method",
+      options: [
+        { value: "rubric", label: "Rubrik" },
+        { value: "numeric", label: "Nilai Angka" },
+        { value: "stopwatch", label: "Stopwatch / Waktu" }
+      ]
+    });
+
+    const scaleField = createSelectField({
+      label: "Skala Rubrik",
+      name: "rubricScale",
+      value: "5",
+      options: [
+        { value: "3", label: "Skala 1–3" },
+        { value: "4", label: "Skala 1–4" },
+        { value: "5", label: "Skala 1–5" }
+      ]
+    });
+
+    const rubricEditorContainer = createElement("div", "rubric-editor-container");
+    rubricEditorContainer.style.marginTop = "12px";
+    rubricEditorContainer.style.marginBottom = "12px";
+
     form.append(
       createField({ label: "Nama Rencana Asesmen (misal: Penilaian Gerak Lokomotor Dasar)", name: "name", required: true }),
       createSelectField({
@@ -326,15 +352,9 @@ export function renderSettingsScreen(state, actions, options = {}) {
           { value: "observation", label: "Observasi" }
         ]
       }),
-      createSelectField({
-        label: "Tipe Skoring",
-        name: "method",
-        options: [
-          { value: "rubric", label: "Rubrik Skala 1–5" },
-          { value: "numeric", label: "Nilai Angka" },
-          { value: "stopwatch", label: "Stopwatch / Waktu" }
-        ]
-      })
+      methodField,
+      scaleField,
+      rubricEditorContainer
     );
 
     // Textarea Materials
@@ -384,9 +404,149 @@ export function renderSettingsScreen(state, actions, options = {}) {
       createElement("button", "primary-action compact-action", "Tambah Rencana Asesmen")
     );
 
+    const methodSelect = methodField.querySelector('select[name="method"]');
+    const scaleSelect = scaleField.querySelector('select[name="rubricScale"]');
+
+    function getDefaultLevels(scale) {
+      if (scale === 3) {
+        return [
+          {
+            level: 1,
+            label: "Perlu Bimbingan",
+            desc: "Belum menunjukkan kemampuan yang dinilai dan masih memerlukan bimbingan penuh."
+          },
+          {
+            level: 2,
+            label: "Cukup",
+            desc: "Mampu menunjukkan kemampuan utama dengan cukup baik."
+          },
+          {
+            level: 3,
+            label: "Baik",
+            desc: "Mampu menunjukkan kemampuan dengan sangat baik dan mandiri."
+          }
+        ];
+      }
+      if (scale === 4) {
+        return [
+          {
+            level: 1,
+            label: "Perlu Bimbingan",
+            desc: "Belum menunjukkan kemampuan yang dinilai dan masih memerlukan bimbingan penuh."
+          },
+          {
+            level: 2,
+            label: "Cukup",
+            desc: "Mulai menunjukkan kemampuan tetapi masih memerlukan banyak arahan atau bantuan."
+          },
+          {
+            level: 3,
+            label: "Baik",
+            desc: "Mampu menunjukkan kemampuan utama dengan baik secara konsisten."
+          },
+          {
+            level: 4,
+            label: "Sangat Baik",
+            desc: "Mampu menunjukkan kemampuan dengan sangat baik, mandiri, dan konsisten."
+          }
+        ];
+      }
+      // Scale 5
+      return [
+        {
+          level: 1,
+          label: "Belum Berkembang",
+          desc: "Belum menunjukkan kemampuan yang dinilai dan masih memerlukan bimbingan penuh."
+        },
+        {
+          level: 2,
+          label: "Mulai Berkembang",
+          desc: "Mulai menunjukkan kemampuan tetapi masih memerlukan banyak arahan atau bantuan."
+        },
+        {
+          level: 3,
+          label: "Cukup Berkembang",
+          desc: "Mampu menunjukkan kemampuan utama dengan cukup baik, meskipun belum konsisten."
+        },
+        {
+          level: 4,
+          label: "Berkembang Baik",
+          desc: "Mampu menunjukkan kemampuan dengan baik dan relatif mandiri."
+        },
+        {
+          level: 5,
+          label: "Berkembang Sangat Baik",
+          desc: "Mampu menunjukkan kemampuan dengan sangat baik, mandiri, dan konsisten."
+        }
+      ];
+    }
+
+    const rubricDescriptions = {};
+
+    function syncRubricEditor() {
+      rubricEditorContainer.replaceChildren();
+      const scale = Number(scaleSelect.value) || 5;
+      const defaults = getDefaultLevels(scale);
+
+      defaults.forEach((item) => {
+        const row = createElement("div", "field");
+        row.style.marginTop = "8px";
+        const labelSpan = createElement("span", "font-medium text-sm text-subtle", `Rubrik ${item.level} — ${item.label}`);
+        const textarea = document.createElement("textarea");
+        textarea.className = "input-text";
+        textarea.rows = 2;
+        textarea.placeholder = `Deskripsi level ${item.level}...`;
+        textarea.value = rubricDescriptions[`${scale}-${item.level}`] || item.desc;
+        
+        textarea.addEventListener("input", (e) => {
+          rubricDescriptions[`${scale}-${item.level}`] = e.target.value;
+        });
+
+        row.append(labelSpan, textarea);
+        rubricEditorContainer.append(row);
+      });
+    }
+
+    function syncVisibility() {
+      const isRubric = methodSelect.value === "rubric";
+      if (isRubric) {
+        scaleField.style.display = "";
+        rubricEditorContainer.style.display = "";
+        syncRubricEditor();
+      } else {
+        scaleField.style.display = "none";
+        rubricEditorContainer.style.display = "none";
+      }
+    }
+
+    methodSelect.addEventListener("change", syncVisibility);
+    scaleSelect.addEventListener("change", syncRubricEditor);
+
+    // Initial sync
+    syncVisibility();
+
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const payload = formToObject(form);
+      const isRubric = payload.method === "rubric";
+
+      let finalScale = 0;
+      let finalLevels = [];
+
+      if (isRubric) {
+        finalScale = Number(payload.rubricScale) || 5;
+        const defaultLevels = getDefaultLevels(finalScale);
+        const textareas = rubricEditorContainer.querySelectorAll("textarea");
+        finalLevels = defaultLevels.map((item, index) => {
+          const customDesc = textareas[index] ? textareas[index].value.trim() : "";
+          return {
+            level: item.level,
+            label: item.label,
+            desc: customDesc || item.desc
+          };
+        });
+      }
+
       const materials = (matTextarea.value || "")
         .split("\n")
         .map((s) => s.trim())
@@ -399,6 +559,8 @@ export function renderSettingsScreen(state, actions, options = {}) {
 
       const fullPayload = {
         ...payload,
+        rubricScale: finalScale,
+        rubricLevels: finalLevels,
         materials,
         questions,
         instructions
