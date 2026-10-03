@@ -25,7 +25,13 @@ const uiState = {
     activeAssessmentSessionId: null,
     activeAssessmentStudentIndex: 0,
     activeAssessmentItemIndex: 0,
-    studentSearchQuery: ""
+    studentSearchQuery: "",
+    reportStudentId: null,
+    reportSelection: {
+      assessmentSessionIds: [],
+      growthRecordIds: [],
+      observationIds: []
+    }
   },
   session: {
     activeTab: "attendance",

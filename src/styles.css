@@ -3630,6 +3630,199 @@ textarea {
   opacity: 0.75;
 }
 
+/* RESULTS & REPORT SOURCE CENTER */
+.results-center-header {
+  margin-bottom: 16px;
+}
+
+.results-students-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.results-student-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--color-border, #dbe3d7);
+  background: var(--color-surface, #ffffff);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.results-student-card:hover {
+  border-color: var(--color-primary, #116149);
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+}
+
+.results-student-card-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.results-student-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.results-student-stats-row,
+.results-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.results-stat-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-surface-muted, #f0f4ee);
+  color: var(--color-text-muted, #4b5563);
+  border: 1px solid var(--color-border, #dbe3d7);
+}
+
+.results-stat-pill.is-score-badge {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #a7f3d0;
+  font-weight: 700;
+}
+
+.results-student-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-subtle, #f1f5f9);
+}
+
+/* STUDENT RESULTS REPORT VIEW */
+.report-student-header-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #dbe3d7);
+  border-radius: var(--radius-xl, 16px);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+  margin-bottom: 20px;
+}
+
+.report-student-header-meta {
+  flex: 1;
+}
+
+.report-source-section {
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #dbe3d7);
+  border-radius: var(--radius-xl, 16px);
+  padding: 18px;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+}
+
+.report-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border-subtle, #f1f5f9);
+}
+
+.report-section-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--color-text, #16231d);
+  margin: 0;
+}
+
+.report-source-card {
+  padding: 14px;
+  border: 1.5px solid var(--color-border, #dbe3d7);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--color-surface, #ffffff);
+  transition: all 0.15s ease;
+}
+
+.report-source-card.is-selected-source {
+  border-color: var(--color-primary, #116149);
+  background: #f0fdf4;
+}
+
+.report-source-checkbox,
+.report-source-check {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--color-primary, #116149);
+}
+
+.report-card-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.report-source-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.report-card-title {
+  color: var(--color-text, #16231d);
+}
+
+.report-assessment-detail,
+.report-item-detail-container {
+  background: var(--color-surface-muted, #f8fafc);
+  border-radius: var(--radius-md, 8px);
+  padding: 12px;
+}
+
+.report-item-detail-box {
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+}
+
+.report-summary-panel,
+.report-selected-summary {
+  background: var(--color-surface, #ffffff);
+  border: 2px solid var(--color-primary, #116149);
+  border-radius: var(--radius-xl, 16px);
+  padding: 18px;
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+}
+
+.report-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-summary-count-text {
+  color: var(--color-primary, #116149);
+  font-weight: 700;
+}
+
+.report-preview-panel,
+.preview-block {
+  border: 1px solid var(--color-border, #dbe3d7);
+}
+
+
 
 
 

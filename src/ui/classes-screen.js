@@ -25,8 +25,31 @@ export function renderClassesScreen(state, actions) {
     activeAssessmentSessionId: null,
     activeAssessmentStudentIndex: 0,
     activeAssessmentItemIndex: 0,
-    studentSearchQuery: ""
+    studentSearchQuery: "",
+    reportStudentId: null,
+    reportSelection: {
+      assessmentSessionIds: [],
+      growthRecordIds: [],
+      observationIds: []
+    }
   };
+
+  if (!classUi.reportSelection) {
+    classUi.reportSelection = {
+      assessmentSessionIds: [],
+      growthRecordIds: [],
+      observationIds: []
+    };
+  }
+  if (!Array.isArray(classUi.reportSelection.assessmentSessionIds)) {
+    classUi.reportSelection.assessmentSessionIds = [];
+  }
+  if (!Array.isArray(classUi.reportSelection.growthRecordIds)) {
+    classUi.reportSelection.growthRecordIds = [];
+  }
+  if (!Array.isArray(classUi.reportSelection.observationIds)) {
+    classUi.reportSelection.observationIds = [];
+  }
 
   let showAddClassModal = false;
   let showAddStudentModal = false;
@@ -43,12 +66,15 @@ export function renderClassesScreen(state, actions) {
       renderCreateAssessmentView(classUi.selectedClassId);
     } else if (classUi.mode === "scoring" && classUi.selectedClassId && classUi.activeAssessmentSessionId) {
       renderScoringWorkflowView(classUi.selectedClassId, classUi.activeAssessmentSessionId);
+    } else if (classUi.mode === "report-student" && classUi.selectedClassId && classUi.reportStudentId) {
+      renderStudentResultsReportView(classUi.selectedClassId, classUi.reportStudentId);
     } else if (classUi.selectedClassId) {
       renderClassDetail(classUi.selectedClassId);
     } else {
       classUi.mode = "list";
       classUi.selectedClassId = null;
       classUi.activeAssessmentSessionId = null;
+      classUi.reportStudentId = null;
       renderClassList();
     }
   }
@@ -293,6 +319,17 @@ export function renderClassesScreen(state, actions) {
       render();
     });
 
+    const tabReports = createElement(
+      "button",
+      `subnav-tab ${classUi.activeTab === "reports" ? "is-active" : ""}`,
+      "Hasil & Laporan"
+    );
+    tabReports.type = "button";
+    tabReports.addEventListener("click", () => {
+      classUi.activeTab = "reports";
+      render();
+    });
+
     const tabSessions = createElement(
       "button",
       `subnav-tab ${classUi.activeTab === "sessions" ? "is-active" : ""}`,
@@ -304,13 +341,15 @@ export function renderClassesScreen(state, actions) {
       render();
     });
 
-    tabsRow.append(tabStudents, tabAssessments, tabSessions);
+    tabsRow.append(tabStudents, tabAssessments, tabReports, tabSessions);
     container.append(tabsRow);
 
     if (classUi.activeTab === "students") {
       renderClassStudentsList(classStudents, classRoom);
     } else if (classUi.activeTab === "assessments") {
       renderClassAssessmentsList(classAssessments, classRoom, classStudents);
+    } else if (classUi.activeTab === "reports") {
+      renderClassResultsCenter(classRoom, classStudents);
     } else {
       renderClassSessionsList(classSessions, classRoom);
     }
@@ -441,6 +480,705 @@ export function renderClassesScreen(state, actions) {
     });
 
     container.append(list);
+  }
+
+  function renderClassResultsCenter(classRoom, students) {
+    const header = createElement("div", "results-center-header space-y-1 mb-4");
+    header.append(
+      createElement("h2", "sub-title font-bold text-base", "Hasil & Laporan"),
+      createElement(
+        "p",
+        "text-subtle text-xs",
+        "Lihat seluruh hasil asesmen, pertumbuhan, dan observasi siswa dalam satu tempat. Pilih siswa untuk menyiapkan sumber data laporan."
+      )
+    );
+    container.append(header);
+
+    const searchBar = createElement("div", "search-filter-bar");
+    const searchInput = document.createElement("input");
+    searchInput.type = "search";
+    searchInput.className = "search-input";
+    searchInput.placeholder = "Cari nama atau NIS siswa...";
+    searchInput.value = classUi.studentSearchQuery || "";
+    searchInput.addEventListener("input", (e) => {
+      classUi.studentSearchQuery = e.target.value.toLowerCase();
+      renderCards();
+    });
+    searchBar.append(searchInput);
+    container.append(searchBar);
+
+    const listContainer = createElement("div", "class-results-students-container mt-4");
+    container.append(listContainer);
+
+    function renderCards() {
+      listContainer.replaceChildren();
+
+      const filtered = students.filter((s) => {
+        if (!classUi.studentSearchQuery) return true;
+        return (
+          (s.name || "").toLowerCase().includes(classUi.studentSearchQuery) ||
+          (s.studentNumber || "").toLowerCase().includes(classUi.studentSearchQuery)
+        );
+      });
+
+      if (filtered.length === 0) {
+        listContainer.append(createElement("p", "empty-copy", "Tidak ada siswa yang cocok."));
+        return;
+      }
+
+      const grid = createElement("div", "results-students-grid");
+
+      filtered.forEach((student) => {
+        // Calculate student metrics
+        const studentResults = (state.assessmentResults || []).filter((r) => {
+          if (r.studentId !== student.id) return false;
+          const sess = (state.assessmentSessions || []).find(
+            (as) => as.id === r.assessmentSessionId || as.id === r.sessionId
+          );
+          return sess && sess.classId === classRoom.id;
+        });
+
+        const assessmentCount = studentResults.length;
+        const completedResults = studentResults.filter(
+          (r) => r.numericScore !== null && r.numericScore !== undefined
+        );
+        const completedCount = completedResults.length;
+
+        const growthCount = (state.growthRecords || []).filter(
+          (g) => g.studentId === student.id
+        ).length;
+
+        const observationCount = (state.studentObservations || []).filter(
+          (o) => o.studentId === student.id
+        ).length;
+
+        // Latest completed score by session date
+        let latestScoreText = "Belum ada nilai lengkap";
+        if (completedResults.length > 0) {
+          const sortedCompleted = completedResults
+            .map((r) => {
+              const sess = (state.assessmentSessions || []).find(
+                (as) => as.id === r.assessmentSessionId || as.id === r.sessionId
+              );
+              return {
+                result: r,
+                date: sess?.date || r.recordedAt || ""
+              };
+            })
+            .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+          if (sortedCompleted.length > 0 && sortedCompleted[0].result.numericScore !== null && sortedCompleted[0].result.numericScore !== undefined) {
+            latestScoreText = String(sortedCompleted[0].result.numericScore);
+          }
+        }
+
+        const card = createElement("article", "results-student-card");
+
+        const infoRow = createElement("div", "results-student-card-main");
+        const avatar = createStudentAvatar(student, 46);
+
+        const textCol = createElement("div", "results-student-card-meta");
+        const nameEl = createElement("strong", "student-card-name", student.name);
+        const subEl = createElement(
+          "span",
+          "student-card-sub",
+          `NIS: ${student.studentNumber || "-"} • ${student.gender === "female" ? "Perempuan" : "Laki-laki"}`
+        );
+        textCol.append(nameEl, subEl);
+
+        const statsRow = createElement("div", "results-student-stats-row");
+        statsRow.append(
+          createElement("span", "results-stat-pill", `Asesmen selesai: ${completedCount}`),
+          createElement("span", "results-stat-pill", `Pertumbuhan: ${growthCount}`),
+          createElement("span", "results-stat-pill", `Observasi: ${observationCount}`),
+          createElement(
+            "span",
+            `results-stat-pill ${latestScoreText !== "Belum ada nilai lengkap" ? "is-score-badge" : ""}`,
+            `Nilai terbaru: ${latestScoreText}`
+          )
+        );
+        textCol.append(statsRow);
+
+        infoRow.append(avatar, textCol);
+
+        const actionsCol = createElement("div", "results-student-card-actions");
+        const openBtn = createElement("button", "btn-tool btn-tool-primary", "Buka Rekap");
+        openBtn.type = "button";
+        openBtn.addEventListener("click", () => {
+          if (classUi.reportStudentId !== student.id) {
+            classUi.reportSelection = {
+              assessmentSessionIds: [],
+              growthRecordIds: [],
+              observationIds: []
+            };
+          }
+          classUi.reportStudentId = student.id;
+          classUi.mode = "report-student";
+          render();
+        });
+
+        actionsCol.append(openBtn);
+        card.append(infoRow, actionsCol);
+        grid.append(card);
+      });
+
+      listContainer.append(grid);
+    }
+
+    renderCards();
+  }
+
+  function renderStudentResultsReportView(classId, studentId) {
+    const classRoom = (state.classes || []).find((c) => c.id === classId);
+    const student = (state.students || []).find((s) => s.id === studentId);
+
+    if (!classRoom || !student) {
+      classUi.reportStudentId = null;
+      classUi.mode = "detail";
+      classUi.activeTab = "reports";
+      render();
+      return;
+    }
+
+    // Back Button
+    const backBtn = createElement("button", "btn-back-nav mb-4");
+    backBtn.type = "button";
+    backBtn.append(document.createTextNode("← Kembali ke Hasil & Laporan"));
+    backBtn.addEventListener("click", () => {
+      classUi.reportStudentId = null;
+      classUi.mode = "detail";
+      classUi.activeTab = "reports";
+      render();
+    });
+    container.append(backBtn);
+
+    // Student Header Card
+    const headerCard = createElement("header", "report-student-header-card");
+    const avatar = createStudentAvatar(student, 56);
+    const headerMeta = createElement("div", "report-student-header-meta");
+    headerMeta.append(
+      createElement("h1", "screen-title text-xl", "Rekap Hasil Siswa"),
+      createElement("h2", "sub-title text-lg font-bold mt-1", student.name),
+      createElement(
+        "p",
+        "screen-copy text-sm",
+        `${classRoom.name} • NIS: ${student.studentNumber || "-"} • ${student.gender === "female" ? "Perempuan" : "Laki-laki"}`
+      ),
+      createElement(
+        "p",
+        "text-subtle text-xs mt-1",
+        "Pilih data asesmen, pertumbuhan, dan observasi di bawah ini menggunakan checkbox sebagai sumber penyusunan laporan."
+      )
+    );
+    headerCard.append(avatar, headerMeta);
+    container.append(headerCard);
+
+    // Track local expanded states for assessments
+    const expandedAssessmentIds = new Set();
+    let isPreviewOpen = false;
+
+    // Build Data Sets
+    // 1. Assessments
+    const studentAssessments = (state.assessmentResults || [])
+      .map((r) => {
+        if (r.studentId !== student.id) return null;
+        const sess = (state.assessmentSessions || []).find(
+          (as) => as.id === r.assessmentSessionId || as.id === r.sessionId
+        );
+        if (!sess || sess.classId !== classId) return null;
+        const def = (state.assessmentDefinitions || []).find(
+          (d) => d.id === (sess.definitionId || r.definitionId)
+        );
+        return {
+          result: r,
+          assessmentSession: sess,
+          definition: def,
+          date: sess.date || r.recordedAt || ""
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+    // 2. Growth Records
+    const studentGrowth = (state.growthRecords || [])
+      .filter((g) => g.studentId === student.id)
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+    // 3. Observations
+    const studentObservations = (state.studentObservations || [])
+      .filter((o) => o.studentId === student.id)
+      .sort((a, b) => (b.recordedAt || b.date || "").localeCompare(a.recordedAt || a.date || ""));
+
+    const PURPOSE_MAP = {
+      pretest: "Pretest / Asesmen Awal",
+      formative: "Harian / Formatif",
+      posttest: "Posttest",
+      summative: "Sumatif Materi",
+      midterm: "UTS / STS",
+      final: "UAS / SAS"
+    };
+
+    const OBS_TYPE_MAP = {
+      umum: "Umum",
+      positif: "Positif",
+      evaluasi: "Evaluasi",
+      cedera: "Cedera / Kondisi",
+      potensi: "Potensi"
+    };
+
+    // Main Sections Container
+    const sectionsWrap = createElement("div", "report-sections-wrap space-y-6 mt-6");
+
+    // ==========================================
+    // SECTION 1: HASIL ASESMEN
+    // ==========================================
+    const assessSection = createElement("section", "report-source-section");
+    const assessHeader = createElement("div", "report-section-header");
+    assessHeader.append(
+      createElement("h2", "report-section-title", `Hasil Asesmen (${studentAssessments.length})`),
+      createElement("span", "text-subtle text-xs", "Pilih asesmen yang ingin dimasukkan ke laporan")
+    );
+    assessSection.append(assessHeader);
+
+    if (studentAssessments.length === 0) {
+      assessSection.append(createElement("p", "empty-copy", "Belum ada hasil asesmen."));
+    } else {
+      const assessList = createElement("div", "report-source-list space-y-3 mt-3");
+      studentAssessments.forEach(({ result, assessmentSession: sess, definition: def }) => {
+        const isChecked = (classUi.reportSelection.assessmentSessionIds || []).includes(sess.id);
+        const card = createElement("article", `report-source-card ${isChecked ? "is-selected-source" : ""}`);
+
+        // Card Top Row
+        const topRow = createElement("div", "report-card-top-row");
+        
+        // Left Checkbox & Title
+        const leftBox = createElement("div", "flex items-start gap-3 flex-1");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "report-source-check mt-1";
+        checkbox.checked = isChecked;
+        checkbox.addEventListener("change", (e) => {
+          if (e.target.checked) {
+            if (!classUi.reportSelection.assessmentSessionIds.includes(sess.id)) {
+              classUi.reportSelection.assessmentSessionIds.push(sess.id);
+            }
+          } else {
+            classUi.reportSelection.assessmentSessionIds = classUi.reportSelection.assessmentSessionIds.filter(
+              (id) => id !== sess.id
+            );
+          }
+          if (e.target.checked) {
+            card.classList.add("is-selected-source");
+          } else {
+            card.classList.remove("is-selected-source");
+          }
+          updateSummaryAndPreview();
+        });
+
+        const titleCol = createElement("div", "report-source-meta flex-1");
+        const titleText = createElement("strong", "report-card-title text-sm", sess.title || "Asesmen PJOK");
+        
+        const metaRow = createElement("div", "report-card-meta-row flex flex-wrap gap-2 text-xs text-subtle mt-1");
+        const purposeText = PURPOSE_MAP[sess.purpose] || sess.purpose || "Asesmen";
+        metaRow.append(
+          createElement("span", "badge badge-neutral text-xs", purposeText),
+          createElement("span", "", `📅 ${sess.date || "-"}`),
+          createElement("span", "", `📚 ${Array.isArray(sess.materials) ? sess.materials.join(", ") : (sess.materials || def?.materials || "-")}`)
+        );
+
+        titleCol.append(titleText, metaRow);
+        leftBox.append(checkbox, titleCol);
+
+        // Right Score Badge & Expand Button
+        const rightCol = createElement("div", "flex flex-col items-end gap-2");
+        let scoreBadge;
+        if (result.numericScore !== null && result.numericScore !== undefined) {
+          scoreBadge = createElement("span", "badge badge-success font-bold text-xs", `Nilai ${result.numericScore} / 100`);
+        } else {
+          const items = sess.itemsSnapshot || [];
+          const completedCount = items.filter((it) =>
+            (result.itemResults || []).some((ir) => ir.itemId === it.id && ir.rubricLevel !== null && ir.rubricLevel !== undefined && !Number.isNaN(Number(ir.rubricLevel)) && Number(ir.rubricLevel) > 0)
+          ).length;
+          scoreBadge = createElement("span", "badge badge-warning text-xs", `${completedCount} dari ${items.length} butir selesai`);
+        }
+
+        const detailToggleBtn = createElement("button", "btn-tool text-xs", "Lihat Detail");
+        detailToggleBtn.type = "button";
+
+        rightCol.append(scoreBadge, detailToggleBtn);
+        topRow.append(leftBox, rightCol);
+        card.append(topRow);
+
+        if (result.note) {
+          const generalNote = createElement("p", "text-xs text-subtle mt-2 italic bg-slate-50 dark:bg-slate-800 p-2 rounded", `Catatan Asesmen: ${result.note}`);
+          card.append(generalNote);
+        }
+
+        // Expandable Detail Container
+        const detailContainer = createElement("div", "report-assessment-detail report-item-detail-container mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2");
+        detailContainer.style.display = expandedAssessmentIds.has(sess.id) ? "block" : "none";
+        detailToggleBtn.textContent = expandedAssessmentIds.has(sess.id) ? "Tutup Detail" : "Lihat Detail";
+
+        detailToggleBtn.addEventListener("click", () => {
+          if (expandedAssessmentIds.has(sess.id)) {
+            expandedAssessmentIds.delete(sess.id);
+            detailContainer.style.display = "none";
+            detailToggleBtn.textContent = "Lihat Detail";
+          } else {
+            expandedAssessmentIds.add(sess.id);
+            detailContainer.style.display = "block";
+            detailToggleBtn.textContent = "Tutup Detail";
+          }
+        });
+
+        const items = sess.itemsSnapshot || [];
+        if (items.length === 0) {
+          detailContainer.append(createElement("p", "text-xs text-subtle", "Tidak ada rincian butir instrumen."));
+        } else {
+          items.forEach((item, itemIdx) => {
+            const itemBox = createElement("div", "report-item-detail-box bg-slate-50 dark:bg-slate-800 p-3 rounded-md space-y-1 text-xs");
+            const itemResult = (result.itemResults || []).find((ir) => ir.itemId === item.id);
+            
+            const promptRow = createElement("div", "font-medium text-slate-800 dark:text-slate-200");
+            promptRow.append(
+              createElement("span", "font-bold mr-1", `Pertanyaan / Instrumen (Butir ${itemIdx + 1}):`),
+              document.createTextNode(item.prompt || item.title || item.question || "-")
+            );
+            itemBox.append(promptRow);
+
+            const rubricScaleTotal = (item.rubricLevels || []).length || item.rubricScale || 5;
+            const hasScore = itemResult?.rubricLevel !== null && itemResult?.rubricLevel !== undefined && !Number.isNaN(Number(itemResult.rubricLevel));
+            
+            const rubricScoreRow = createElement("div", "flex flex-col gap-1 mt-1");
+            rubricScoreRow.append(
+              createElement(
+                "span",
+                "font-semibold text-primary",
+                hasScore ? `Skor Rubrik: ${itemResult.rubricLevel} / ${rubricScaleTotal}` : "Belum dinilai"
+              )
+            );
+
+            if (hasScore) {
+              const matchedLevel = (item.rubricLevels || []).find(
+                (lvl) => Number(lvl.level) === Number(itemResult.rubricLevel)
+              );
+              if (matchedLevel?.desc) {
+                const descP = createElement("p", "text-subtle text-xs pl-2 border-l-2 border-primary", `Deskripsi: ${matchedLevel.desc}`);
+                rubricScoreRow.append(descP);
+              }
+            }
+            itemBox.append(rubricScoreRow);
+
+            if (itemResult?.note && itemResult.note.trim()) {
+              itemBox.append(createElement("p", "text-subtle text-xs mt-1", `Catatan Guru: ${itemResult.note}`));
+            }
+
+            detailContainer.append(itemBox);
+          });
+        }
+
+        card.append(detailContainer);
+        assessList.append(card);
+      });
+      assessSection.append(assessList);
+    }
+    sectionsWrap.append(assessSection);
+
+    // ==========================================
+    // SECTION 2: PERTUMBUHAN
+    // ==========================================
+    const growthSection = createElement("section", "report-source-section");
+    const growthHeader = createElement("div", "report-section-header");
+    growthHeader.append(
+      createElement("h2", "report-section-title", `Pertumbuhan (${studentGrowth.length})`),
+      createElement("span", "text-subtle text-xs", "Pilih data fisik / antropometri yang relevan")
+    );
+    growthSection.append(growthHeader);
+
+    if (studentGrowth.length === 0) {
+      growthSection.append(createElement("p", "empty-copy", "Belum ada data pertumbuhan."));
+    } else {
+      const growthList = createElement("div", "report-source-list space-y-2 mt-3");
+      studentGrowth.forEach((g) => {
+        const isChecked = (classUi.reportSelection.growthRecordIds || []).includes(g.id);
+        const card = createElement("article", `report-source-card ${isChecked ? "is-selected-source" : ""}`);
+
+        const row = createElement("div", "flex items-center justify-between gap-3");
+        const leftBox = createElement("div", "flex items-center gap-3");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "report-source-check";
+        checkbox.checked = isChecked;
+        checkbox.addEventListener("change", (e) => {
+          if (e.target.checked) {
+            if (!classUi.reportSelection.growthRecordIds.includes(g.id)) {
+              classUi.reportSelection.growthRecordIds.push(g.id);
+            }
+          } else {
+            classUi.reportSelection.growthRecordIds = classUi.reportSelection.growthRecordIds.filter(
+              (id) => id !== g.id
+            );
+          }
+          if (e.target.checked) {
+            card.classList.add("is-selected-source");
+          } else {
+            card.classList.remove("is-selected-source");
+          }
+          updateSummaryAndPreview();
+        });
+
+        const textWrap = createElement("div", "report-source-meta");
+        textWrap.append(
+          createElement("strong", "text-sm", `📅 ${g.date || "-"}`),
+          createElement(
+            "p",
+            "text-xs text-subtle mt-0.5",
+            `Tinggi: ${g.heightCm ? `${g.heightCm} cm` : "-"} • Berat: ${g.weightKg ? `${g.weightKg} kg` : "-"}`
+          )
+        );
+
+        leftBox.append(checkbox, textWrap);
+        row.append(leftBox);
+        card.append(row);
+
+        if (g.note) {
+          card.append(createElement("p", "text-xs text-subtle mt-1.5 italic", `Catatan: ${g.note}`));
+        }
+
+        growthList.append(card);
+      });
+      growthSection.append(growthList);
+    }
+    sectionsWrap.append(growthSection);
+
+    // ==========================================
+    // SECTION 3: SIKAP & OBSERVASI
+    // ==========================================
+    const obsSection = createElement("section", "report-source-section");
+    const obsHeader = createElement("div", "report-section-header");
+    obsHeader.append(
+      createElement("h2", "report-section-title", `Sikap & Observasi (${studentObservations.length})`),
+      createElement("span", "text-subtle text-xs", "Pilih catatan perilaku, kerja sama, dan catatan khusus")
+    );
+    obsSection.append(obsHeader);
+
+    if (studentObservations.length === 0) {
+      obsSection.append(createElement("p", "empty-copy", "Belum ada observasi siswa."));
+    } else {
+      const obsList = createElement("div", "report-source-list space-y-2 mt-3");
+      studentObservations.forEach((o) => {
+        const isChecked = (classUi.reportSelection.observationIds || []).includes(o.id);
+        const card = createElement("article", `report-source-card ${isChecked ? "is-selected-source" : ""}`);
+
+        const row = createElement("div", "flex items-start justify-between gap-3");
+        const leftBox = createElement("div", "flex items-start gap-3 flex-1");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "report-source-check mt-1";
+        checkbox.checked = isChecked;
+        checkbox.addEventListener("change", (e) => {
+          if (e.target.checked) {
+            if (!classUi.reportSelection.observationIds.includes(o.id)) {
+              classUi.reportSelection.observationIds.push(o.id);
+            }
+          } else {
+            classUi.reportSelection.observationIds = classUi.reportSelection.observationIds.filter(
+              (id) => id !== o.id
+            );
+          }
+          if (e.target.checked) {
+            card.classList.add("is-selected-source");
+          } else {
+            card.classList.remove("is-selected-source");
+          }
+          updateSummaryAndPreview();
+        });
+
+        const typeLabel = OBS_TYPE_MAP[o.type] || o.type || "Observasi";
+        const contentWrap = createElement("div", "report-source-meta flex-1 text-xs");
+        const metaLine = createElement("div", "flex items-center gap-2 mb-1");
+        metaLine.append(
+          createElement("span", "badge badge-neutral text-xs", typeLabel),
+          createElement("span", "text-subtle", `📅 ${o.date || (o.recordedAt ? o.recordedAt.slice(0, 10) : "-")}`)
+        );
+        const textP = createElement("p", "text-slate-800 dark:text-slate-200 mt-1", o.text || "-");
+
+        contentWrap.append(metaLine, textP);
+        leftBox.append(checkbox, contentWrap);
+        row.append(leftBox);
+        card.append(row);
+
+        obsList.append(card);
+      });
+      obsSection.append(obsList);
+    }
+    sectionsWrap.append(obsSection);
+
+    container.append(sectionsWrap);
+
+    // ==========================================
+    // SECTION 4: REPORT SOURCE SUMMARY & PREVIEW
+    // ==========================================
+    const summaryPanel = createElement("section", "report-summary-panel report-selected-summary mt-8");
+    const summaryHeader = createElement("div", "report-summary-header");
+    summaryHeader.append(
+      createElement("h2", "sub-title font-bold text-sm", "Data Terpilih untuk Laporan"),
+      createElement("span", "text-subtle text-xs", "Rekap sumber data yang telah dicentang")
+    );
+    summaryPanel.append(summaryHeader);
+
+    const summaryCountP = createElement("p", "report-summary-count-text text-sm font-medium mt-2");
+    summaryPanel.append(summaryCountP);
+
+    const btnRow = createElement("div", "report-summary-btn-row flex flex-wrap gap-3 mt-4 items-center");
+    
+    const previewToggleBtn = createElement("button", "btn-tool text-xs", "Lihat Data Terpilih");
+    previewToggleBtn.type = "button";
+
+    const aiReportBtn = createElement("button", "primary-action compact-action opacity-60 cursor-not-allowed", "✨ Buat Laporan AI");
+    aiReportBtn.type = "button";
+    aiReportBtn.disabled = true;
+
+    btnRow.append(previewToggleBtn, aiReportBtn);
+    summaryPanel.append(btnRow);
+
+    const aiHelperText = createElement(
+      "p",
+      "text-subtle text-xs mt-2",
+      "Fitur pembuatan laporan AI akan diaktifkan setelah sumber data laporan diverifikasi."
+    );
+    summaryPanel.append(aiHelperText);
+
+    // Preview Container
+    const previewContainer = createElement("div", "report-preview-container report-preview-panel mt-4 pt-4 border-t border-slate-200 dark:border-slate-800");
+    summaryPanel.append(previewContainer);
+
+    function updateSummaryAndPreview() {
+      const aCount = (classUi.reportSelection.assessmentSessionIds || []).length;
+      const gCount = (classUi.reportSelection.growthRecordIds || []).length;
+      const oCount = (classUi.reportSelection.observationIds || []).length;
+      const totalCount = aCount + gCount + oCount;
+
+      if (totalCount > 0) {
+        const parts = [];
+        if (aCount > 0) parts.push(`${aCount} asesmen`);
+        if (gCount > 0) parts.push(`${gCount} pengukuran pertumbuhan`);
+        if (oCount > 0) parts.push(`${oCount} observasi`);
+        summaryCountP.textContent = parts.join(", ") || `${aCount} asesmen, ${gCount} pengukuran pertumbuhan, ${oCount} observasi`;
+        previewToggleBtn.disabled = false;
+        previewToggleBtn.classList.remove("opacity-50", "cursor-not-allowed");
+      } else {
+        summaryCountP.textContent = "Belum ada data yang dipilih.";
+        previewToggleBtn.disabled = true;
+        previewToggleBtn.classList.add("opacity-50", "cursor-not-allowed");
+        isPreviewOpen = false;
+      }
+
+      previewToggleBtn.textContent = isPreviewOpen ? "Tutup Preview Data Terpilih" : "Lihat Data Terpilih";
+      renderPreviewContent();
+    }
+
+    function renderPreviewContent() {
+      previewContainer.replaceChildren();
+
+      const aCount = (classUi.reportSelection.assessmentSessionIds || []).length;
+      const gCount = (classUi.reportSelection.growthRecordIds || []).length;
+      const oCount = (classUi.reportSelection.observationIds || []).length;
+      const totalCount = aCount + gCount + oCount;
+
+      if (!isPreviewOpen || totalCount === 0) {
+        previewContainer.style.display = "none";
+        return;
+      }
+
+      previewContainer.style.display = "block";
+
+      const previewTitle = createElement("h3", "font-bold text-xs uppercase tracking-wider text-subtle mb-3", `Preview Sumber Data Terpilih (${totalCount} item)`);
+      previewContainer.append(previewTitle);
+
+      const previewList = createElement("div", "space-y-4");
+
+      // 1. Selected Assessments Preview
+      const selectedAssessments = studentAssessments.filter(({ assessmentSession: sess }) =>
+        (classUi.reportSelection.assessmentSessionIds || []).includes(sess.id)
+      );
+      if (selectedAssessments.length > 0) {
+        const box = createElement("div", "preview-block bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg space-y-2");
+        box.append(createElement("h4", "font-semibold text-xs text-primary", `Asesmen (${selectedAssessments.length}):`));
+        const list = createElement("ul", "space-y-1.5 text-xs pl-2");
+        selectedAssessments.forEach(({ result, assessmentSession: sess, definition: def }) => {
+          const li = createElement("li", "border-b border-slate-200 dark:border-slate-700 pb-1 last:border-b-0");
+          const scoreStr = result.numericScore !== null && result.numericScore !== undefined
+            ? `Nilai ${result.numericScore} / 100`
+            : "Progres belum lengkap";
+          const purpose = PURPOSE_MAP[sess.purpose] || sess.purpose || "Asesmen";
+          const mat = Array.isArray(sess.materials) ? sess.materials.join(", ") : (sess.materials || def?.materials || "-");
+          li.append(
+            createElement("strong", "", sess.title),
+            document.createTextNode(` • 📅 ${sess.date || "-"} • ${purpose} • ${scoreStr} • Materi: ${mat}`)
+          );
+          list.append(li);
+        });
+        box.append(list);
+        previewList.append(box);
+      }
+
+      // 2. Selected Growth Preview
+      const selectedGrowth = studentGrowth.filter((g) =>
+        (classUi.reportSelection.growthRecordIds || []).includes(g.id)
+      );
+      if (selectedGrowth.length > 0) {
+        const box = createElement("div", "preview-block bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg space-y-2");
+        box.append(createElement("h4", "font-semibold text-xs text-primary", `Pertumbuhan (${selectedGrowth.length}):`));
+        const list = createElement("ul", "space-y-1 text-xs pl-2");
+        selectedGrowth.forEach((g) => {
+          const li = createElement("li");
+          li.append(
+            createElement("strong", "", `📅 ${g.date || "-"}: `),
+            document.createTextNode(`Tinggi ${g.heightCm || "-"} cm, Berat ${g.weightKg || "-"} kg`)
+          );
+          list.append(li);
+        });
+        box.append(list);
+        previewList.append(box);
+      }
+
+      // 3. Selected Observations Preview
+      const selectedObs = studentObservations.filter((o) =>
+        (classUi.reportSelection.observationIds || []).includes(o.id)
+      );
+      if (selectedObs.length > 0) {
+        const box = createElement("div", "preview-block bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg space-y-2");
+        box.append(createElement("h4", "font-semibold text-xs text-primary", `Observasi & Sikap (${selectedObs.length}):`));
+        const list = createElement("ul", "space-y-1.5 text-xs pl-2");
+        selectedObs.forEach((o) => {
+          const li = createElement("li", "border-b border-slate-200 dark:border-slate-700 pb-1 last:border-b-0");
+          const typeLabel = OBS_TYPE_MAP[o.type] || o.type || "Observasi";
+          const dateStr = o.date || (o.recordedAt ? o.recordedAt.slice(0, 10) : "-");
+          li.append(
+            createElement("strong", "", `[${typeLabel}] 📅 ${dateStr}: `),
+            document.createTextNode(o.text || "-")
+          );
+          list.append(li);
+        });
+        box.append(list);
+        previewList.append(box);
+      }
+
+      previewContainer.append(previewList);
+    }
+
+    previewToggleBtn.addEventListener("click", () => {
+      const aCount = (classUi.reportSelection.assessmentSessionIds || []).length;
+      const gCount = (classUi.reportSelection.growthRecordIds || []).length;
+      const oCount = (classUi.reportSelection.observationIds || []).length;
+      if (aCount + gCount + oCount === 0) return;
+      isPreviewOpen = !isPreviewOpen;
+      updateSummaryAndPreview();
+    });
+
+    updateSummaryAndPreview();
+    container.append(summaryPanel);
   }
 
   function renderAddClassModal() {
