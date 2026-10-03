@@ -15,6 +15,7 @@ function createElement(tagName, className, textContent) {
 const SETTINGS_TABS = [
   { id: "school-teacher", label: "Profil Sekolah & Guru", icon: () => ICONS.home(16) },
   { id: "academic", label: "Tahun & Semester", icon: () => ICONS.calendar(16) },
+  { id: "schedules", label: "Jadwal Mengajar", icon: () => ICONS.calendar(16) },
   { id: "tags", label: "Tag Siswa", icon: () => ICONS.tag(16) },
   { id: "assessments", label: "Definisi Nilai", icon: () => ICONS.chart(16) },
   { id: "backup", label: "Cadangan Data", icon: () => ICONS.database(16) }
@@ -72,6 +73,8 @@ export function renderSettingsScreen(state, actions) {
       renderSchoolAndTeacherSection(contentBox);
     } else if (activeTab === "academic") {
       renderAcademicSection(contentBox);
+    } else if (activeTab === "schedules") {
+      renderSchedulesSection(contentBox);
     } else if (activeTab === "tags") {
       renderTagsSection(contentBox);
     } else if (activeTab === "assessments") {
@@ -216,6 +219,100 @@ export function renderSettingsScreen(state, actions) {
     grid.append(semCard);
 
     target.append(grid);
+  }
+
+  // --- SECTION: TEACHING SCHEDULES ---
+  function renderSchedulesSection(target) {
+    const card = createElement("section", "settings-card");
+    card.append(
+      createElement("h2", "section-title", "Jadwal Rutin Mengajar Mingguan"),
+      createElement(
+        "p",
+        "screen-copy",
+        "Atur jadwal rutin kelas PJOK untuk mempermudah memulai sesi mengajar langsung dari Beranda setiap hari."
+      )
+    );
+
+    const form = createElement("form", "master-form");
+    const activeClasses = (state.classes || []).filter((c) => c.status !== "archived");
+
+    form.append(
+      createSelectField({
+        label: "Hari Mengajar *",
+        name: "dayOfWeek",
+        options: [
+          { value: "1", label: "Senin" },
+          { value: "2", label: "Selasa" },
+          { value: "3", label: "Rabu" },
+          { value: "4", label: "Kamis" },
+          { value: "5", label: "Jumat" },
+          { value: "6", label: "Sabtu" }
+        ],
+        required: true
+      }),
+      createSelectField({
+        label: "Pilih Kelas *",
+        name: "classId",
+        options: activeClasses.map((c) => ({ value: c.id, label: c.name })),
+        required: true
+      }),
+      createField({ label: "Jam Mulai (HH:MM) *", name: "startTime", value: "07:30", required: true }),
+      createField({ label: "Jam Selesai (HH:MM) *", name: "endTime", value: "09:00", required: true }),
+      createField({ label: "Lokasi Pembelajaran", name: "location", value: "Lapangan Utama" }),
+      createField({ label: "Catatan / Materi Rencana", name: "note", placeholder: "Misal: Senam Irama / Atletik" }),
+      createElement("button", "primary-action compact-action", "Tambah Jadwal Mengajar")
+    );
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const payload = formToObject(form);
+      if (actions?.createSchedule) {
+        actions.createSchedule({
+          ...payload,
+          dayOfWeek: Number(payload.dayOfWeek),
+          active: true
+        });
+        render();
+      }
+    });
+    card.append(form);
+
+    const list = createElement("div", "record-list");
+    const dayNames = { 1: "Senin", 2: "Selasa", 3: "Rabu", 4: "Kamis", 5: "Jumat", 6: "Sabtu" };
+    const schedules = [...(state.schedules || [])].sort((a, b) => {
+      if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
+      return (a.startTime || "").localeCompare(b.startTime || "");
+    });
+
+    if (schedules.length === 0) {
+      list.append(createElement("p", "empty-copy", "Belum ada jadwal mengajar rutin. Tambahkan jadwal di atas."));
+    } else {
+      schedules.forEach((s) => {
+        const row = createElement("div", "record-row");
+        const targetClass = (state.classes || []).find((c) => c.id === s.classId);
+        
+        const content = createElement("div");
+        content.append(
+          createElement("strong", "", `[${dayNames[s.dayOfWeek] || `Hari ${s.dayOfWeek}`}] ${s.startTime} - ${s.endTime} • Kelas ${targetClass?.name || "PJOK"}`),
+          createElement("span", "", `📍 ${s.location || "Lapangan"} ${s.note ? `• ${s.note}` : ""}`)
+        );
+
+        const delBtn = createElement("button", "text-button danger-button", "Hapus");
+        delBtn.type = "button";
+        delBtn.addEventListener("click", () => {
+          if (actions?.deleteSchedule) {
+            actions.deleteSchedule(s.id);
+            render();
+          }
+        });
+
+        row.append(content, delBtn);
+        list.append(row);
+      });
+    }
+
+    card.append(list);
+    target.append(card);
   }
 
   // --- SECTION 3: STUDENT TAGS ---

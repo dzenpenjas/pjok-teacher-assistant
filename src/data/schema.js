@@ -1,4 +1,4 @@
-export const APP_SCHEMA_VERSION = 5;
+export const APP_SCHEMA_VERSION = 6;
 
 export const SCREENS = {
   dashboard: "dashboard",

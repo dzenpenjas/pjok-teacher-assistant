@@ -64,6 +64,41 @@ function migrateState(rawState) {
     state.schemaVersion = 5;
   }
 
+  if (currentVersion < 6) {
+    if (Array.isArray(state.assessmentDefinitions)) {
+      state.assessmentDefinitions = state.assessmentDefinitions.map((def) => ({
+        ...def,
+        assessmentType: def.assessmentType || "unspecified"
+      }));
+    }
+
+    if (Array.isArray(state.assessmentResults)) {
+      const assessmentSessions = Array.isArray(state.assessmentSessions) ? state.assessmentSessions : [];
+      const sessionDefMap = new Map();
+      assessmentSessions.forEach((sess) => {
+        if (sess && sess.id && sess.definitionId) {
+          sessionDefMap.set(sess.id, sess.definitionId);
+        }
+      });
+
+      state.assessmentResults = state.assessmentResults.map((res) => {
+        if (res.definitionId) {
+          return res;
+        }
+        let recoveredDefId = "";
+        if (res.assessmentSessionId && sessionDefMap.has(res.assessmentSessionId)) {
+          recoveredDefId = sessionDefMap.get(res.assessmentSessionId);
+        }
+        return {
+          ...res,
+          definitionId: recoveredDefId
+        };
+      });
+    }
+
+    state.schemaVersion = 6;
+  }
+
   return state;
 }
 

@@ -200,6 +200,7 @@ export function createAssessmentDefinition(input = {}) {
     ...withMeta(input, "assess-def"),
     name: input.name || "",
     category: input.category || "Keterampilan", // Keterampilan, Kebugaran Jasmani, Sikap/Perilaku, Pengetahuan
+    assessmentType: input.assessmentType || "unspecified",
     method: input.method || "numeric", // stopwatch, numeric, rubric
     unit: input.unit || "", // detik, cm, kali, poin
     direction: input.direction || "higher_better", // higher_better, lower_better
@@ -232,6 +233,7 @@ export function createAssessmentResult(input = {}) {
   return {
     ...withMeta(input, "result"),
     assessmentSessionId: input.assessmentSessionId || "",
+    definitionId: input.definitionId || "",
     sessionId: input.sessionId || "",
     studentId: input.studentId || "",
     value: input.value !== undefined ? input.value : "",
