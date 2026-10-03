@@ -3568,6 +3568,25 @@ textarea {
   padding-top: 8px;
 }
 
+.ai-rubric-btn {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.ai-rubric-btn.is-ai-pressed {
+  transform: translateY(1px);
+  opacity: 0.85;
+}
+
+.ai-rubric-btn.is-ai-loading {
+  cursor: progress;
+  opacity: 0.75;
+}
+
+
 
 
 

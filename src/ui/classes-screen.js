@@ -1067,15 +1067,38 @@ export function renderClassesScreen(state, actions) {
         itemCard.append(promptLabel);
 
         // AI Generate Rubric button
-        const aiBtn = createElement("button", "btn-tool text-xs mt-1 self-start flex items-center gap-1", "✨ Generate Rubrik AI");
+        const aiBtn = createElement("button", "btn-tool ai-rubric-btn", "✨ Generate Rubrik AI");
         aiBtn.type = "button";
         aiBtn.disabled = false;
         aiBtn.style.cursor = "pointer";
 
-        aiBtn.addEventListener("click", async () => {
-          if (aiBtn.disabled) return;
+        let aiBusy = false;
 
-          aiBtn.disabled = true;
+        aiBtn.addEventListener("pointerdown", () => {
+          aiBtn.classList.add("is-ai-pressed");
+        });
+
+        aiBtn.addEventListener("pointerup", () => {
+          aiBtn.classList.remove("is-ai-pressed");
+        });
+
+        aiBtn.addEventListener("pointercancel", () => {
+          aiBtn.classList.remove("is-ai-pressed");
+        });
+
+        aiBtn.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          if (aiBusy) return;
+
+          aiBusy = true;
+
+          aiBtn.classList.add("is-ai-loading");
+          aiBtn.textContent = "Klik diterima...";
+
+          await Promise.resolve();
+
           aiBtn.textContent = "Memeriksa konteks...";
 
           try {
@@ -1155,10 +1178,12 @@ export function renderClassesScreen(state, actions) {
                 window.sessionStorage.removeItem("pjok_gemini_api_key");
               } catch (_) {}
             }
-            const message = err?.message || "Unknown AI error";
-            window.alert(`Rubrik AI gagal dibuat.\n\nDetail: ${message}`);
+            window.alert(
+              `Rubrik AI gagal dibuat.\n\nDetail: ${err?.message || "Unknown AI error"}`
+            );
           } finally {
-            aiBtn.disabled = false;
+            aiBusy = false;
+            aiBtn.classList.remove("is-ai-loading");
             aiBtn.textContent = "✨ Generate Rubrik AI";
           }
         });
