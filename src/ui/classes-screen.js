@@ -676,6 +676,7 @@ export function renderClassesScreen(state, actions) {
     // Track local expanded states for assessments
     const expandedAssessmentIds = new Set();
     let isPreviewOpen = false;
+    let isRcJsonOpen = false;
 
     // Build Data Sets
     // 1. Assessments
@@ -1166,6 +1167,38 @@ export function renderClassesScreen(state, actions) {
       }
 
       previewContainer.append(previewList);
+
+      // 4. ReportContext JSON Preview Section
+      const reportContext = buildSelectedReportContext({
+        student,
+        classRoom,
+        assessmentSelections: selectedAssessments,
+        growthSelections: selectedGrowth,
+        observationSelections: selectedObs
+      });
+
+      const rcSection = createElement("div", "report-context-section mt-4 pt-3 border-t border-slate-200 dark:border-slate-700");
+      const rcToggleBtn = createElement("button", "btn-tool text-xs flex items-center gap-1", isRcJsonOpen ? "Sembunyikan ReportContext" : "Lihat ReportContext");
+      rcToggleBtn.type = "button";
+
+      const rcJsonBox = createElement("div", "report-context-json-box mt-2 p-3 bg-slate-900 text-slate-100 rounded-lg text-xs font-mono overflow-auto max-h-96");
+      rcJsonBox.style.display = isRcJsonOpen ? "block" : "none";
+      
+      const rcTitle = createElement("h4", "font-bold text-xs uppercase tracking-wider text-slate-400 mb-2", "Preview ReportContext");
+      const pre = document.createElement("pre");
+      const code = document.createElement("code");
+      code.textContent = JSON.stringify(reportContext, null, 2);
+      pre.append(code);
+      rcJsonBox.append(rcTitle, pre);
+
+      rcToggleBtn.addEventListener("click", () => {
+        isRcJsonOpen = !isRcJsonOpen;
+        rcToggleBtn.textContent = isRcJsonOpen ? "Sembunyikan ReportContext" : "Lihat ReportContext";
+        rcJsonBox.style.display = isRcJsonOpen ? "block" : "none";
+      });
+
+      rcSection.append(rcToggleBtn, rcJsonBox);
+      previewContainer.append(rcSection);
     }
 
     previewToggleBtn.addEventListener("click", () => {
@@ -2678,3 +2711,104 @@ function createPillStat(label, value, icon) {
   pill.append(createElement("span", "", label));
   return pill;
 }
+
+export function buildSelectedReportContext({
+  student,
+  classRoom,
+  assessmentSelections = [],
+  growthSelections = [],
+  observationSelections = []
+}) {
+  const studentData = {
+    id: student?.id || "",
+    name: student?.name || "",
+    studentNumber: student?.studentNumber || "",
+    gender: student?.gender || "",
+    birthDate: student?.birthDate || "",
+    gradeLevel:
+      classRoom?.gradeLevel !== undefined && classRoom?.gradeLevel !== null
+        ? Number(classRoom.gradeLevel)
+        : null,
+    className: classRoom?.name || ""
+  };
+
+  const assessments = (assessmentSelections || []).map(({ result, assessmentSession: sess, definition: def }) => {
+    const isComplete = result?.numericScore !== null && result?.numericScore !== undefined;
+    
+    const items = (sess?.itemsSnapshot || []).map((item) => {
+      const itemResult = (result?.itemResults || []).find((ir) => ir.itemId === item.id);
+      const hasRating =
+        itemResult?.rubricLevel !== null &&
+        itemResult?.rubricLevel !== undefined &&
+        !Number.isNaN(Number(itemResult.rubricLevel));
+
+      let rubricLevel = null;
+      let rubricLabel = "";
+      let rubricDescription = "";
+      let teacherNote = "";
+
+      if (hasRating) {
+        rubricLevel = Number(itemResult.rubricLevel);
+        const matchedLevel = (item.rubricLevels || []).find(
+          (lvl) => Number(lvl.level) === rubricLevel
+        );
+        rubricLabel = matchedLevel?.label || `Level ${rubricLevel}`;
+        rubricDescription = matchedLevel?.desc || "";
+        teacherNote = itemResult.note || "";
+      }
+
+      return {
+        itemId: item.id || "",
+        prompt: item.prompt || item.title || item.question || "",
+        rubricScale: Number(item.rubricScale) || 5,
+        rubricLevel,
+        rubricLabel,
+        rubricDescription,
+        teacherNote
+      };
+    });
+
+    return {
+      assessmentSessionId: sess?.id || "",
+      title: sess?.title || "",
+      date: sess?.date || result?.recordedAt || "",
+      purpose: sess?.purpose || "",
+      materials: sess?.materials || def?.materials || [],
+      assessmentType: def?.assessmentType || sess?.assessmentType || "",
+      numericScore: isComplete ? Number(result.numericScore) : null,
+      averageRubricScore:
+        result?.averageRubricScore !== null &&
+        result?.averageRubricScore !== undefined &&
+        !Number.isNaN(Number(result.averageRubricScore))
+          ? Number(result.averageRubricScore)
+          : null,
+      complete: isComplete,
+      items,
+      teacherNote: result?.note || ""
+    };
+  });
+
+  const growth = (growthSelections || []).map((g) => ({
+    id: g.id || "",
+    date: g.date || "",
+    heightCm: g.heightCm ? String(g.heightCm) : "",
+    weightKg: g.weightKg ? String(g.weightKg) : "",
+    bmi: g.bmi !== undefined && g.bmi !== null ? g.bmi : null,
+    note: g.note || ""
+  }));
+
+  const observations = (observationSelections || []).map((o) => ({
+    id: o.id || "",
+    recordedAt: o.recordedAt || o.date || "",
+    type: o.type || "umum",
+    text: o.text || ""
+  }));
+
+  return {
+    student: studentData,
+    assessments,
+    growth,
+    observations
+  };
+}
+

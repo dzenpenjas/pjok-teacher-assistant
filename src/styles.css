@@ -3822,6 +3822,21 @@ textarea {
   border: 1px solid var(--color-border, #dbe3d7);
 }
 
+.report-context-json-box {
+  background: #0f172a;
+  color: #f8fafc;
+  border-radius: var(--radius-lg, 12px);
+  padding: 14px;
+  border: 1px solid #334155;
+}
+
+.report-context-json-box pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 
 
 
