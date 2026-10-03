@@ -533,7 +533,7 @@ export function renderClassesScreen(state, actions) {
         const studentResults = (state.assessmentResults || []).filter((r) => {
           if (r.studentId !== student.id) return false;
           const sess = (state.assessmentSessions || []).find(
-            (as) => as.id === r.assessmentSessionId || as.id === r.sessionId
+            (as) => as.id === r.assessmentSessionId
           );
           return sess && sess.classId === classRoom.id;
         });
@@ -558,7 +558,7 @@ export function renderClassesScreen(state, actions) {
           const sortedCompleted = completedResults
             .map((r) => {
               const sess = (state.assessmentSessions || []).find(
-                (as) => as.id === r.assessmentSessionId || as.id === r.sessionId
+                (as) => as.id === r.assessmentSessionId
               );
               return {
                 result: r,
@@ -683,7 +683,7 @@ export function renderClassesScreen(state, actions) {
       .map((r) => {
         if (r.studentId !== student.id) return null;
         const sess = (state.assessmentSessions || []).find(
-          (as) => as.id === r.assessmentSessionId || as.id === r.sessionId
+          (as) => as.id === r.assessmentSessionId
         );
         if (!sess || sess.classId !== classId) return null;
         const def = (state.assessmentDefinitions || []).find(
