@@ -3880,6 +3880,135 @@ textarea {
   padding: 12px;
 }
 
+/* FINAL A4 REPORT PREVIEW */
+.final-report-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 999;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 20px 12px;
+  overflow-y: auto;
+}
+
+.final-report-modal-card {
+  background: #ffffff;
+  border-radius: var(--radius-xl, 16px);
+  max-width: 860px;
+  width: 100%;
+  padding: 20px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.a4-document-paper {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 24px 28px;
+  max-width: 794px; /* A4 aspect width */
+  margin: 0 auto;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 11px;
+  line-height: 1.35;
+  box-sizing: border-box;
+}
+
+.a4-header-school {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #116149;
+}
+
+.a4-header-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
+
+.a4-meta-row {
+  font-size: 11px;
+  color: #475569;
+  border-bottom: 2px solid #116149;
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+}
+
+.a4-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #116149;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 3px;
+  margin-top: 10px;
+  margin-bottom: 6px;
+}
+
+.a4-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5px;
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+.a4-table th,
+.a4-table td {
+  border: 1px solid #cbd5e1;
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.a4-table th {
+  background: #f1f5f9;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.a4-footer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 16px;
+  padding-top: 10px;
+  border-t: 1px solid #e2e8f0;
+  font-size: 10px;
+  color: #64748b;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .a4-document-paper,
+  .a4-document-paper * {
+    visibility: visible;
+  }
+  .a4-document-paper {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    border: none;
+    box-shadow: none;
+    padding: 10mm;
+  }
+}
+
+
 
 
 

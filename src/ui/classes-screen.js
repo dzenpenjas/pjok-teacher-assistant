@@ -1466,7 +1466,306 @@ export function renderClassesScreen(state, actions) {
       followUpBox.append(followUpLabel, followUpTextarea);
       sectionsList.append(followUpBox);
 
+      // Final Action Bar for 1-Page A4 Preview
+      const finalActionPanel = createElement("div", "mt-6 pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl");
+      const finalNote = createElement("p", "text-xs text-subtle flex-1", "💡 Setelah memeriksa dan mengedit narasi di atas, klik 'Lihat Laporan Akhir' untuk membuka pratinjau dokumen 1 lembar A4 dan mengunduh PDF.");
+      
+      const openFinalReportBtn = createElement("button", "primary-action flex items-center gap-2 text-sm font-bold");
+      openFinalReportBtn.type = "button";
+      openFinalReportBtn.append(ICONS.book(16), document.createTextNode("Lihat Laporan Akhir"));
+
+      openFinalReportBtn.addEventListener("click", () => {
+        openFinalReportPreviewModal();
+      });
+
+      finalActionPanel.append(finalNote, openFinalReportBtn);
+      sectionsList.append(finalActionPanel);
+
       aiDraftContainer.append(sectionsList);
+    }
+
+    function openFinalReportPreviewModal() {
+      const currentSelectedAssessments = studentAssessments.filter(({ assessmentSession: sess }) =>
+        (classUi.reportSelection.assessmentSessionIds || []).includes(sess.id)
+      );
+      const currentSelectedGrowth = studentGrowth.filter((g) =>
+        (classUi.reportSelection.growthRecordIds || []).includes(g.id)
+      );
+      const currentSelectedObs = studentObservations.filter((o) =>
+        (classUi.reportSelection.observationIds || []).includes(o.id)
+      );
+
+      const currentContext = buildSelectedReportContext({
+        student,
+        classRoom,
+        assessmentSelections: currentSelectedAssessments,
+        growthSelections: currentSelectedGrowth,
+        observationSelections: currentSelectedObs
+      });
+
+      const validLearningItems = (reportAiDraft?.learning || [])
+        .map((item) => {
+          const matchSource = (currentContext.assessments || []).find(
+            (a) => a.assessmentSessionId === item.assessmentSessionId
+          );
+          if (!matchSource) return null;
+          return {
+            assessmentSessionId: matchSource.assessmentSessionId,
+            title: matchSource.title,
+            numericScore: matchSource.numericScore,
+            description: item.description || ""
+          };
+        })
+        .filter(Boolean);
+
+      const scoresWithVal = (currentContext.assessments || [])
+        .map((a) => a.numericScore)
+        .filter((s) => s !== null && s !== undefined && !isNaN(Number(s)));
+
+      const overallScore =
+        scoresWithVal.length > 0
+          ? Math.round(scoresWithVal.reduce((acc, curr) => acc + curr, 0) / scoresWithVal.length)
+          : null;
+
+      const latestGrowthRecord = currentContext.growth?.[0] || null;
+
+      let studentAgeText = "";
+      if (student.birthDate) {
+        const birthYear = new Date(student.birthDate).getFullYear();
+        const currentYear = new Date().getFullYear();
+        if (!isNaN(birthYear) && birthYear > 1990) {
+          studentAgeText = `${currentYear - birthYear} Tahun`;
+        }
+      }
+      if (!studentAgeText) {
+        const gradeNum = Number(classRoom.grade || 1);
+        studentAgeText = `${6 + (Number.isFinite(gradeNum) ? gradeNum : 1)} Tahun`;
+      }
+
+      const schoolName = state.school?.name || state.schoolName || "SD NEGERI PJOK";
+      const formattedToday = new Date().toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      });
+
+      const finalReportData = {
+        schoolName,
+        studentName: student.name,
+        studentNumber: student.studentNumber || "-",
+        className: classRoom.name,
+        studentAge: studentAgeText,
+        genderText: student.gender === "female" ? "Perempuan" : "Laki-laki",
+        reportDate: formattedToday,
+        overallScore,
+
+        learning: validLearningItems,
+        summary: reportAiDraft?.summary || "",
+        understanding: reportAiDraft?.understanding || "",
+        attitude: reportAiDraft?.attitude || "",
+
+        growth: {
+          date: latestGrowthRecord?.date || formattedToday,
+          heightCm: latestGrowthRecord?.heightCm || "-",
+          weightKg: latestGrowthRecord?.weightKg || "-",
+          interpretation: reportAiDraft?.growth || "",
+          nutritionAdvice: reportAiDraft?.nutritionAdvice || "",
+          followUp: reportAiDraft?.followUp || ""
+        },
+
+        homeActivity: reportAiDraft?.homeActivity || ""
+      };
+
+      const modalBackdrop = createElement("div", "final-report-modal-backdrop");
+      const modalCard = createElement("div", "final-report-modal-card");
+
+      // Modal Header Toolbar
+      const modalToolbar = createElement("div", "modal-header-row mb-3 border-b pb-3 flex items-center justify-between gap-3");
+      const toolbarLeft = createElement("div", "flex items-center gap-2");
+      toolbarLeft.append(
+        createElement("h2", "modal-title text-base font-bold", "Preview Laporan Final (1 Halaman A4)"),
+        createElement("span", "report-ai-badge text-xs", "SIAP CETAK")
+      );
+
+      const toolbarRight = createElement("div", "flex items-center gap-2");
+      
+      const downloadPdfBtn = createElement("button", "primary-action compact-action font-bold text-xs flex items-center gap-1.5");
+      downloadPdfBtn.type = "button";
+      downloadPdfBtn.append(document.createTextNode("📥 Unduh PDF"));
+
+      const closeBtn = createElement("button", "modal-close-btn text-base", "✕");
+      closeBtn.type = "button";
+      closeBtn.addEventListener("click", () => {
+        modalBackdrop.remove();
+      });
+
+      toolbarRight.append(downloadPdfBtn, closeBtn);
+      modalToolbar.append(toolbarLeft, toolbarRight);
+      modalCard.append(modalToolbar);
+
+      // A4 Document Paper Container
+      const a4Paper = createElement("article", "a4-document-paper");
+      a4Paper.id = "a4-report-preview-document";
+
+      // HEADER
+      const headerSection = createElement("header", "text-center mb-3 pb-2 border-b border-emerald-800");
+      headerSection.append(
+        createElement("p", "a4-header-school", finalReportData.schoolName),
+        createElement("h1", "a4-header-title text-slate-900 font-extrabold text-base", `Laporan Belajar dan Pertumbuhan ${finalReportData.studentName}`),
+        createElement("p", "a4-meta-row text-xs mt-1", `${finalReportData.schoolName} | Kelas ${finalReportData.className} | Usia: ${finalReportData.studentAge} | ${finalReportData.genderText} | Tanggal: ${finalReportData.reportDate}`)
+      );
+      a4Paper.append(headerSection);
+
+      // NILAI AGREGAT (JIKA ADA)
+      if (finalReportData.overallScore !== null && finalReportData.overallScore !== undefined) {
+        const scoreSection = createElement("section", "mb-2.5 p-2 bg-emerald-50 rounded border border-emerald-200 text-xs");
+        scoreSection.append(
+          createElement("div", "font-bold text-emerald-900", `Rata-rata Nilai PJOK Tengah Semester: ${finalReportData.overallScore} / 100`),
+          createElement("p", "text-slate-600 text-xs mt-0.5", "Nilai dari seluruh tes lisan dan praktik sampai tengah semester.")
+        );
+        a4Paper.append(scoreSection);
+      }
+
+      // TABEL "APA YANG SUDAH DIPELAJARI"
+      const learningSection = createElement("section", "mb-2.5");
+      learningSection.append(
+        createElement("h2", "a4-section-title", `Apa Yang Sudah Dikuasai ${finalReportData.studentName}`)
+      );
+
+      if (finalReportData.learning.length === 0) {
+        learningSection.append(createElement("p", "text-xs text-slate-500 italic", "Belum ada materi asesmen terpilih."));
+      } else {
+        const table = createElement("table", "a4-table");
+        const thead = document.createElement("thead");
+        thead.innerHTML = `
+          <tr>
+            <th style="width: 28%;">Yang Dipelajari</th>
+            <th style="width: 14%; text-align: center;">Nilai</th>
+            <th style="width: 58%;">Hasil Belajar</th>
+          </tr>
+        `;
+        const tbody = document.createElement("tbody");
+        finalReportData.learning.forEach((item) => {
+          const tr = document.createElement("tr");
+          const scoreDisplay = item.numericScore !== null && item.numericScore !== undefined ? String(item.numericScore) : "-";
+          tr.innerHTML = `
+            <td style="font-weight: 600;">${item.title || "Asesmen PJOK"}</td>
+            <td style="text-align: center; font-weight: 700;">${scoreDisplay}</td>
+            <td style="line-height: 1.3;">${item.description || "-"}</td>
+          `;
+          tbody.append(tr);
+        });
+        table.append(thead, tbody);
+        learningSection.append(table);
+      }
+      a4Paper.append(learningSection);
+
+      // PEMAHAMAN DAN SIKAP
+      if (finalReportData.understanding || finalReportData.attitude) {
+        const understandSection = createElement("section", "mb-2.5 text-xs space-y-1");
+        understandSection.append(createElement("h2", "a4-section-title", "Pemahaman Konsep & Sikap"));
+        if (finalReportData.understanding) {
+          const p1 = createElement("p", "leading-tight text-slate-800");
+          p1.append(createElement("strong", "", "Pemahaman Konsep: "), document.createTextNode(finalReportData.understanding));
+          understandSection.append(p1);
+        }
+        if (finalReportData.attitude) {
+          const p2 = createElement("p", "leading-tight text-slate-800");
+          p2.append(createElement("strong", "", "Sikap & Sportivitas: "), document.createTextNode(finalReportData.attitude));
+          understandSection.append(p2);
+        }
+        a4Paper.append(understandSection);
+      }
+
+      // PERTUMBUHAN & GROWTH INTERPRETATION
+      const growthSection = createElement("section", "mb-2.5 text-xs space-y-1");
+      growthSection.append(
+        createElement("h2", "a4-section-title", `Bagaimana Pertumbuhan ${finalReportData.studentName}`)
+      );
+      
+      const growthMetaP = createElement("p", "font-bold text-slate-900", `Tinggi badan: ${finalReportData.growth.heightCm} cm | Berat badan: ${finalReportData.growth.weightKg} kg (Pengukuran: ${finalReportData.growth.date})`);
+      growthSection.append(growthMetaP);
+
+      if (finalReportData.growth.interpretation) {
+        const growthNarrativeP = createElement("p", "leading-tight text-slate-800", finalReportData.growth.interpretation);
+        growthSection.append(growthNarrativeP);
+      }
+
+      if (finalReportData.growth.nutritionAdvice) {
+        const nutritionP = createElement("p", "leading-tight text-slate-800");
+        nutritionP.append(createElement("strong", "", "Saran Pola Makan & Kebiasaan Sehat: "), document.createTextNode(finalReportData.growth.nutritionAdvice));
+        growthSection.append(nutritionP);
+      }
+      a4Paper.append(growthSection);
+
+      // AYO BERMAIN BERSAMA DI RUMAH (HOME ACTIVITY)
+      if (finalReportData.homeActivity) {
+        const homeSection = createElement("section", "mb-2.5 text-xs space-y-1");
+        homeSection.append(createElement("h2", "a4-section-title", "Ayo Bermain Bersama di Rumah"));
+        homeSection.append(createElement("p", "leading-tight text-slate-800", finalReportData.homeActivity));
+        a4Paper.append(homeSection);
+      }
+
+      // TINDAK LANJUT
+      if (finalReportData.growth.followUp) {
+        const followSection = createElement("section", "mb-2.5 text-xs space-y-1");
+        followSection.append(createElement("h2", "a4-section-title", "Tindak Lanjut Pembelajaran"));
+        followSection.append(createElement("p", "leading-tight text-slate-800", finalReportData.growth.followUp));
+        a4Paper.append(followSection);
+      }
+
+      // FOOTER
+      const footerSection = createElement("footer", "a4-footer-row border-t pt-2 mt-3 text-xs");
+      const leftFooter = createElement("div", "space-y-0.5");
+      leftFooter.append(
+        createElement("p", "italic text-slate-500", "* Pengukuran ini membantu pemantauan awal dan bukan diagnosis medis."),
+        createElement("p", "text-slate-400 font-medium", "Acuan pertumbuhan: WHO / Kemenkes")
+      );
+
+      const rightFooter = createElement("div", "text-right font-medium text-slate-700");
+      rightFooter.append(
+        createElement("p", "", "Guru PJOK:"),
+        createElement("p", "mt-6 border-b border-slate-400 w-36 inline-block", "")
+      );
+
+      footerSection.append(leftFooter, rightFooter);
+      a4Paper.append(footerSection);
+
+      modalCard.append(a4Paper);
+      modalBackdrop.append(modalCard);
+      document.body.append(modalBackdrop);
+
+      // Download PDF Handler
+      downloadPdfBtn.addEventListener("click", () => {
+        const cleanStudentName = (finalReportData.studentName || "Siswa").replace(/[^a-zA-Z0-9]/g, "_");
+        const formattedDateKey = new Date().toISOString().slice(0, 10);
+        const pdfFilename = `Laporan_PJOK_${cleanStudentName}_${formattedDateKey}.pdf`;
+
+        if (window.html2pdf) {
+          downloadPdfBtn.disabled = true;
+          downloadPdfBtn.textContent = "⏳ Memproses PDF...";
+
+          const opt = {
+            margin: [6, 6, 6, 6],
+            filename: pdfFilename,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+          };
+
+          window.html2pdf().set(opt).from(a4Paper).save().then(() => {
+            downloadPdfBtn.disabled = false;
+            downloadPdfBtn.textContent = "📥 Unduh PDF";
+          }).catch((pdfErr) => {
+            console.error("[PDF GENERATION ERROR]", pdfErr);
+            downloadPdfBtn.disabled = false;
+            downloadPdfBtn.textContent = "📥 Unduh PDF";
+            window.print();
+          });
+        } else {
+          window.print();
+        }
+      });
     }
 
     aiReportBtn.addEventListener("click", async () => {

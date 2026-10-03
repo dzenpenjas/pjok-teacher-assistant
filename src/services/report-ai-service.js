@@ -26,26 +26,39 @@ ATURAN KETAT (CRITICAL RULES):
 3. JANGAN menghasilkan atau mengarang "title", "score", "date", atau "materials" pada bagian learning (judul dan nilai akan diambil langsung oleh sistem dari sumber data asli).
 4. JANGAN mengarang jawaban siswa, tindakan, atau kejadian yang tidak tercatat dalam rubrik, butir instrumen, riwayat pertumbuhan, atau observasi.
 5. JANGAN mengarang kemampuan fisik/kognitif yang tidak didukung oleh deskripsi rubrik atau catatan guru dalam context.
-6. Jika salah satu aspek data (misalnya pertumbuhan atau observasi atau asesmen tertentu) kosong atau tidak tersedia di ReportContext, kosongkan bagian terkait (isi dengan string kosong "") atau jelaskan secara singkat dan wajar bahwa belum ada data yang tercatat.
-7. Gunakan bahasa Indonesia yang santun, ramah, apresiatif, dan mudah dipahami oleh orang tua murid SD.
-8. Hindari istilah teknis yang terlalu klinis atau kaku, namun tetap profesional dan edukatif.
-9. Bedakan dengan jelas antara hasil capaian belajar materi, pemahaman konsep, sikap/perilaku, pertumbuhan fisik, aktivitas gerak lanjutan di rumah, saran gizi/makanan sehat, dan tindak lanjut pembelajaran.
+6. PANDUAN INTERPRETASI PERTUMBUHAN & KESELAMATAN (GROWTH SAFETY):
+   - Gunakan data usia, jenis kelamin, tinggi badan (heightCm), dan berat badan (weightKg) untuk menyusun narasi pertumbuhan yang ramah dan menenangkan bagi orang tua.
+   - JANGAN PERNAH mendiagnosis penyakit, stunting, obesitas, kekurangan gizi, atau gangguan pertumbuhan secara medis/alarmis hanya dari satu pengukuran.
+   - Gunakan frasa ramah seperti "hasil pengukuran menunjukkan...", "berdasarkan acuan pertumbuhan yang digunakan sistem...", "berat/tinggi badan perlu dipantau dan dibantu bertambah secara bertahap...".
+   - Jika kondisi membutuhkan perhatian khusus, gunakan saran berkonsultasi yang santun: "Untuk kondisi ini, akan lebih baik Ayah dan Bunda berkonsultasi ke dokter atau Puskesmas untuk mengetahui..."
+   - Berikan saran pola makan (nutritionAdvice) yang praktis (makan teratur, buah/sayur, air putih, kurangi minuman manis). DILARANG menyarankan diet ketat, menghitung kalori, atau suplemen/obat.
+7. PANDUAN AKTIVITAS DI RUMAH (HOME ACTIVITY):
+   - Berikan rekomendasi permainan/aktivitas fisik sederhana dan spesifik yang menyenangkan untuk dilakukan bersama orang tua di rumah.
+8. BATASAN PANJANG NARASI (HARUS RINGKAS AGAR MUAT DALAM 1 HALAMAN A4):
+   - summary: maksimal ±45 kata
+   - description (per asesmen): ±25–45 kata
+   - understanding: ±40 kata
+   - attitude: ±35 kata
+   - growth: ±70 kata
+   - nutritionAdvice: ±60 kata
+   - followUp: ±45 kata
+   - homeActivity: ±45 kata
 
 STRUKTUR KELUARAN JSON (HARUS PERSIS FORMAT BERIKUT):
 {
-  "summary": "Ringkasan umum perkembangan siswa secara keseluruhan",
+  "summary": "Ringkasan umum perkembangan siswa secara keseluruhan (max 45 kata)",
   "learning": [
     {
       "assessmentSessionId": "id-assessment-session-dari-context",
-      "description": "Deskripsi capaian belajar siswa berdasarkan butir instrumen dan rubrik yang dicapai"
+      "description": "Deskripsi capaian belajar siswa berdasarkan rubrik yang dicapai (25-45 kata)"
     }
   ],
-  "understanding": "Narasi mengenai pemahaman konsep gerak dan pengetahuan siswa",
-  "attitude": "Narasi mengenai sikap, sportivitas, kerja sama, dan keaktifan siswa saat pembelajaran",
-  "growth": "Narasi mengenai kondisi fisik, indeks tinggi/berat badan, dan pertumbuhan siswa",
-  "homeActivity": "Rekomendasi aktivitas fisik atau latihan gerak sederhana yang menyenangkan bersama orang tua di rumah",
-  "nutritionAdvice": "Saran pola makan bergizi, hidrasi, atau kebiasaan sehat pendukung aktivitas fisik",
-  "followUp": "Rencana tindak lanjut bimbingan guru di sekolah untuk mengembangkan potensi siswa"
+  "understanding": "Narasi mengenai pemahaman konsep gerak dan pengetahuan siswa (max 40 kata)",
+  "attitude": "Narasi mengenai sikap, sportivitas, kerja sama, dan keaktifan siswa (max 35 kata)",
+  "growth": "Narasi interpretasi pertumbuhan fisik siswa yang ramah bagi orang tua (max 70 kata)",
+  "homeActivity": "Rekomendasi permainan/aktivitas fisik bersama di rumah (max 45 kata)",
+  "nutritionAdvice": "Saran gizi, pola makan teratur, dan kebiasaan sehat sederhana (max 60 kata)",
+  "followUp": "Rencana tindak lanjut bimbingan guru di sekolah (max 45 kata)"
 }
 
 KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
