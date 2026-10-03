@@ -23,7 +23,18 @@ const SETTINGS_TABS = [
 export function renderSettingsScreen(state, actions, options = {}) {
   const screen = createElement("main", "screen wide-screen settings-hub-screen");
 
-  let activeTab = options.activeTab || "school-teacher";
+  const allowedTabs = [
+    "school-teacher",
+    "academic",
+    "tags",
+    "assessments",
+    "backup"
+  ];
+
+  let activeTab =
+    allowedTabs.includes(options.activeTab)
+      ? options.activeTab
+      : "school-teacher";
 
   const container = createElement("div", "settings-hub-container");
   screen.append(container);
