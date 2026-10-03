@@ -232,6 +232,35 @@ export function createAssessmentDefinition(input = {}) {
     ? input.rubricLevels
     : (rubricScale === 0 ? [] : defaultRubricLevels.slice(0, rubricScale));
 
+  let items = [];
+  if (Array.isArray(input.items) && input.items.length > 0) {
+    items = input.items.map((item) => ({
+      id: item.id || createId("assess-item"),
+      prompt: item.prompt || "",
+      rubricScale: Number(item.rubricScale) || 5,
+      rubricLevels: Array.isArray(item.rubricLevels)
+        ? item.rubricLevels.map((level) => ({
+            level: Number(level.level),
+            label: level.label || "",
+            desc: level.desc || ""
+          }))
+        : []
+    }));
+  } else if (Array.isArray(input.questions) && input.questions.length > 0) {
+    items = input.questions.map((question) => ({
+      id: createId("assess-item"),
+      prompt: question,
+      rubricScale: Number(input.rubricScale) || 5,
+      rubricLevels: Array.isArray(input.rubricLevels)
+        ? input.rubricLevels.map((level) => ({
+            level: Number(level.level),
+            label: level.label || "",
+            desc: level.desc || ""
+          }))
+        : []
+    }));
+  }
+
   return {
     ...withMeta(input, "assess-def"),
     name: input.name || "",
@@ -243,6 +272,7 @@ export function createAssessmentDefinition(input = {}) {
     direction: input.direction || "higher_better", // higher_better, lower_better
     rubricScale,
     rubricLevels,
+    items,
     materials: Array.isArray(input.materials) ? input.materials : [],
     questions: Array.isArray(input.questions) ? input.questions : [],
     instructions: input.instructions || "",
@@ -267,6 +297,23 @@ export function createAssessmentSession(input = {}) {
         levels: []
       };
 
+  const rawItems = Array.isArray(input.itemsSnapshot)
+    ? input.itemsSnapshot
+    : (Array.isArray(input.items) ? input.items : []);
+
+  const itemsSnapshot = rawItems.map((item) => ({
+    id: item.id || "",
+    prompt: item.prompt || "",
+    rubricScale: Number(item.rubricScale) || 5,
+    rubricLevels: Array.isArray(item.rubricLevels)
+      ? item.rubricLevels.map((level) => ({
+          level: Number(level.level),
+          label: level.label || "",
+          desc: level.desc || ""
+        }))
+      : []
+  }));
+
   return {
     ...withMeta(input, "assess-sess"),
     sessionId: input.sessionId || "",
@@ -279,7 +326,8 @@ export function createAssessmentSession(input = {}) {
     materials: Array.isArray(input.materials) ? input.materials : [],
     questions: Array.isArray(input.questions) ? input.questions : [],
     instructions: input.instructions || "",
-    rubricSnapshot
+    rubricSnapshot,
+    itemsSnapshot
   };
 }
 
@@ -294,6 +342,30 @@ export function createAssessmentResult(input = {}) {
     numericValue: input.numericValue !== undefined && input.numericValue !== null ? Number(input.numericValue) : null,
     formattedValue: input.formattedValue || (input.value ? String(input.value) : "-"),
     rubricLevel: input.rubricLevel ? Number(input.rubricLevel) : null,
+    itemResults: Array.isArray(input.itemResults)
+      ? input.itemResults.map((item) => ({
+          itemId: item.itemId || "",
+          rubricLevel:
+            item.rubricLevel !== undefined &&
+            item.rubricLevel !== null &&
+            !Number.isNaN(Number(item.rubricLevel))
+              ? Number(item.rubricLevel)
+              : null,
+          note: item.note || ""
+        }))
+      : [],
+    averageRubricScore:
+      input.averageRubricScore !== undefined &&
+      input.averageRubricScore !== null &&
+      !Number.isNaN(Number(input.averageRubricScore))
+        ? Number(input.averageRubricScore)
+        : null,
+    numericScore:
+      input.numericScore !== undefined &&
+      input.numericScore !== null &&
+      !Number.isNaN(Number(input.numericScore))
+        ? Number(input.numericScore)
+        : null,
     note: input.note || "",
     recordedAt: input.recordedAt || nowIso()
   };

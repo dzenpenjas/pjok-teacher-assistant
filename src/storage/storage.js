@@ -99,6 +99,120 @@ function migrateState(rawState) {
     state.schemaVersion = 6;
   }
 
+  if (currentVersion < 7) {
+    if (Array.isArray(state.assessmentDefinitions)) {
+      state.assessmentDefinitions = state.assessmentDefinitions.map((def) => {
+        if (Array.isArray(def.items) && def.items.length > 0) {
+          return def;
+        }
+
+        const items = Array.isArray(def.questions)
+          ? def.questions.map((question, index) => ({
+              id: `${def.id}-item-${index + 1}`,
+              prompt: question,
+              rubricScale: Number(def.rubricScale) || 5,
+              rubricLevels: Array.isArray(def.rubricLevels)
+                ? def.rubricLevels.map((level) => ({
+                    level: Number(level.level),
+                    label: level.label || "",
+                    desc: level.desc || ""
+                  }))
+                : []
+            }))
+          : [];
+
+        return {
+          ...def,
+          items
+        };
+      });
+    }
+
+    const defMap = new Map();
+    if (Array.isArray(state.assessmentDefinitions)) {
+      state.assessmentDefinitions.forEach((def) => {
+        if (def && def.id) {
+          defMap.set(def.id, def);
+        }
+      });
+    }
+
+    if (Array.isArray(state.assessmentSessions)) {
+      state.assessmentSessions = state.assessmentSessions.map((session) => {
+        if (Array.isArray(session.itemsSnapshot) && session.itemsSnapshot.length > 0) {
+          return session;
+        }
+
+        const parentDef = session.definitionId ? defMap.get(session.definitionId) : null;
+        if (parentDef && Array.isArray(parentDef.items) && parentDef.items.length > 0) {
+          return {
+            ...session,
+            itemsSnapshot: parentDef.items.map((item) => ({
+              id: item.id || "",
+              prompt: item.prompt || "",
+              rubricScale: Number(item.rubricScale) || 5,
+              rubricLevels: Array.isArray(item.rubricLevels)
+                ? item.rubricLevels.map((level) => ({
+                    level: Number(level.level),
+                    label: level.label || "",
+                    desc: level.desc || ""
+                  }))
+                : []
+            }))
+          };
+        }
+
+        if (Array.isArray(session.questions)) {
+          return {
+            ...session,
+            itemsSnapshot: session.questions.map((question, index) => ({
+              id: `${session.id}-item-${index + 1}`,
+              prompt: question,
+              rubricScale: Number(session.rubricSnapshot?.scale) || 5,
+              rubricLevels: Array.isArray(session.rubricSnapshot?.levels)
+                ? session.rubricSnapshot.levels.map((level) => ({
+                    level: Number(level.level),
+                    label: level.label || "",
+                    desc: level.desc || ""
+                  }))
+                : []
+            }))
+          };
+        }
+
+        return {
+          ...session,
+          itemsSnapshot: []
+        };
+      });
+    }
+
+    if (Array.isArray(state.assessmentResults)) {
+      state.assessmentResults = state.assessmentResults.map((res) => {
+        const numericScore =
+          res.numericScore !== undefined &&
+          res.numericScore !== null &&
+          !Number.isNaN(Number(res.numericScore))
+            ? Number(res.numericScore)
+            : null;
+
+        return {
+          ...res,
+          itemResults: Array.isArray(res.itemResults) ? res.itemResults : [],
+          averageRubricScore:
+            res.averageRubricScore !== undefined &&
+            res.averageRubricScore !== null &&
+            !Number.isNaN(Number(res.averageRubricScore))
+              ? Number(res.averageRubricScore)
+              : null,
+          numericScore
+        };
+      });
+    }
+
+    state.schemaVersion = 7;
+  }
+
   return state;
 }
 
