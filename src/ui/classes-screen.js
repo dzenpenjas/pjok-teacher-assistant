@@ -2719,7 +2719,13 @@ export function buildSelectedReportContext({
   growthSelections = [],
   observationSelections = []
 }) {
-  const gradeNumber = Number(classRoom?.grade);
+  const rawGrade = classRoom?.grade;
+  const gradeNumber =
+    rawGrade !== "" &&
+    rawGrade !== null &&
+    rawGrade !== undefined
+      ? Number(rawGrade)
+      : null;
 
   const studentData = {
     id: student?.id || "",
@@ -2727,7 +2733,10 @@ export function buildSelectedReportContext({
     studentNumber: student?.studentNumber || "",
     gender: student?.gender || "",
     birthDate: student?.birthDate || "",
-    gradeLevel: Number.isFinite(gradeNumber) ? gradeNumber : null,
+    gradeLevel:
+      gradeNumber !== null && Number.isFinite(gradeNumber)
+        ? gradeNumber
+        : null,
     className: classRoom?.name || ""
   };
 
