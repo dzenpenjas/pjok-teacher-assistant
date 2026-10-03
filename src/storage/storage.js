@@ -143,6 +143,24 @@ function migrateState(rawState) {
           return session;
         }
 
+        if (Array.isArray(session.questions) && session.questions.length > 0) {
+          return {
+            ...session,
+            itemsSnapshot: session.questions.map((question, index) => ({
+              id: `${session.id}-item-${index + 1}`,
+              prompt: question,
+              rubricScale: Number(session.rubricSnapshot?.scale) || 5,
+              rubricLevels: Array.isArray(session.rubricSnapshot?.levels)
+                ? session.rubricSnapshot.levels.map((level) => ({
+                    level: Number(level.level),
+                    label: level.label || "",
+                    desc: level.desc || ""
+                  }))
+                : []
+            }))
+          };
+        }
+
         const parentDef = session.definitionId ? defMap.get(session.definitionId) : null;
         if (parentDef && Array.isArray(parentDef.items) && parentDef.items.length > 0) {
           return {
@@ -153,24 +171,6 @@ function migrateState(rawState) {
               rubricScale: Number(item.rubricScale) || 5,
               rubricLevels: Array.isArray(item.rubricLevels)
                 ? item.rubricLevels.map((level) => ({
-                    level: Number(level.level),
-                    label: level.label || "",
-                    desc: level.desc || ""
-                  }))
-                : []
-            }))
-          };
-        }
-
-        if (Array.isArray(session.questions)) {
-          return {
-            ...session,
-            itemsSnapshot: session.questions.map((question, index) => ({
-              id: `${session.id}-item-${index + 1}`,
-              prompt: question,
-              rubricScale: Number(session.rubricSnapshot?.scale) || 5,
-              rubricLevels: Array.isArray(session.rubricSnapshot?.levels)
-                ? session.rubricSnapshot.levels.map((level) => ({
                     level: Number(level.level),
                     label: level.label || "",
                     desc: level.desc || ""
