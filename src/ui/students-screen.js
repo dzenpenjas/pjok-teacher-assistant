@@ -273,8 +273,6 @@ export function renderStudentsScreen(state, actions) {
           ...(state.studentTags || []).map((t) => ({ value: t.id, label: t.name }))
         ]
       }),
-      createField({ label: "Tinggi Badan Awal (cm)", name: "heightCm", type: "number" }),
-      createField({ label: "Berat Badan Awal (kg)", name: "weightKg", type: "number" }),
       createField({ label: "Catatan Guru (Kesehatan/Karakter)", name: "noteText" })
     );
 
