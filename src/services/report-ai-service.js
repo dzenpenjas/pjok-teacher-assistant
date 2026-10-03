@@ -62,97 +62,44 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
       }
     ],
     generationConfig: {
-      responseFormat: {
-        text: {
-          mimeType: "application/json",
-          schema: {
-            type: "object",
-            properties: {
-              summary: { type: "string" },
-              learning: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    assessmentSessionId: { type: "string" },
-                    description: { type: "string" }
-                  },
-                  required: ["assessmentSessionId", "description"]
-                }
-              },
-              understanding: { type: "string" },
-              attitude: { type: "string" },
-              growth: { type: "string" },
-              homeActivity: { type: "string" },
-              nutritionAdvice: { type: "string" },
-              followUp: { type: "string" }
-            },
-            required: [
-              "summary",
-              "learning",
-              "understanding",
-              "attitude",
-              "growth",
-              "homeActivity",
-              "nutritionAdvice",
-              "followUp"
-            ]
-          }
-        }
-      }
+      responseMimeType: "application/json"
     }
   };
 
-  const models = ["gemini-2.5-flash", "gemini-3.8-flash"];
-  let response = null;
-  let lastError = null;
+  const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent";
 
-  for (const model of models) {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-    try {
-      response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey.trim()
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (response.ok) {
-        break;
-      }
-
-      const errorBody = await response.text().catch(() => "");
-      const isAuthError =
-        response.status === 401 ||
-        response.status === 403 ||
-        errorBody.includes("API_KEY_INVALID") ||
-        errorBody.includes("API key not valid") ||
-        errorBody.includes("INVALID_API_KEY");
-
-      if (isAuthError) {
-        const err = new Error(`API key ditolak (${response.status}): ${errorBody}`);
-        err.isApiKeyError = true;
-        throw err;
-      }
-
-      if (response.status === 404) {
-        lastError = new Error(`Model ${model} tidak ditemukan: ${errorBody}`);
-        continue;
-      }
-
-      throw new Error(`API error (${response.status}): ${errorBody}`);
-    } catch (err) {
-      if (err.isApiKeyError) {
-        throw err;
-      }
-      lastError = err;
-    }
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey.trim()
+      },
+      body: JSON.stringify(requestBody)
+    });
+  } catch (networkErr) {
+    throw new Error(`Network error: ${networkErr.message}`);
   }
 
-  if (!response || !response.ok) {
-    throw lastError || new Error("Gagal menghubungi layanan AI Gemini");
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    if (response.status === 404) {
+      throw new Error(
+        `Model Gemini tidak tersedia untuk API key/project ini. API error (404): ${errorBody}`
+      );
+    }
+    const error = new Error(`API error (${response.status}): ${errorBody}`);
+    if (
+      response.status === 401 ||
+      response.status === 403 ||
+      errorBody.includes("API_KEY_INVALID") ||
+      errorBody.includes("API key not valid") ||
+      errorBody.includes("INVALID_API_KEY")
+    ) {
+      error.isApiKeyError = true;
+    }
+    throw error;
   }
 
   const data = await response.json();
