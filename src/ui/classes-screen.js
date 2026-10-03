@@ -1730,9 +1730,6 @@ export function renderClassesScreen(state, actions) {
     container.append(focusCard);
   }
 
-    container.append(focusCard);
-  }
-
   render();
   return screen;
 }
