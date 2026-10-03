@@ -218,6 +218,22 @@ export function createAssessmentDefinition(input = {}) {
 }
 
 export function createAssessmentSession(input = {}) {
+  const rubricSnapshot = input.rubricSnapshot && typeof input.rubricSnapshot === "object"
+    ? {
+        scale: Number(input.rubricSnapshot.scale) || 0,
+        levels: Array.isArray(input.rubricSnapshot.levels)
+          ? input.rubricSnapshot.levels.map((lvl) => ({
+              level: lvl.level,
+              label: lvl.label,
+              desc: lvl.desc
+            }))
+          : []
+      }
+    : {
+        scale: 0,
+        levels: []
+      };
+
   return {
     ...withMeta(input, "assess-sess"),
     sessionId: input.sessionId || "",
@@ -225,7 +241,8 @@ export function createAssessmentSession(input = {}) {
     classId: input.classId || "",
     date: input.date || nowIso().slice(0, 10),
     title: input.title || "",
-    notes: input.notes || ""
+    notes: input.notes || "",
+    rubricSnapshot
   };
 }
 

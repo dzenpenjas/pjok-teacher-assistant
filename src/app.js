@@ -376,7 +376,31 @@ function createCrudActions() {
       }
     },
     createAssessmentSession: (input) => {
-      const res = repositories.assessmentSessions.create(input);
+      let rubricSnapshot = {
+        scale: 0,
+        levels: []
+      };
+
+      if (input && input.definitionId) {
+        const definition = repositories.assessmentDefinitions.findById(input.definitionId) || (appState.assessmentDefinitions || []).find((d) => d.id === input.definitionId);
+        if (definition && definition.method === "rubric") {
+          rubricSnapshot = {
+            scale: Number(definition.rubricScale) || 0,
+            levels: Array.isArray(definition.rubricLevels)
+              ? definition.rubricLevels.map((level) => ({
+                  level: level.level,
+                  label: level.label,
+                  desc: level.desc
+                }))
+              : []
+          };
+        }
+      }
+
+      const res = repositories.assessmentSessions.create({
+        ...input,
+        rubricSnapshot: input.rubricSnapshot || rubricSnapshot
+      });
       refreshState();
       return res.at(-1);
     },
