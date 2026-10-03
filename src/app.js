@@ -87,13 +87,83 @@ function createCrudActions() {
       renderApp();
     },
 
+    // FIRST RUN & SETUP ACTIONS
+    completeFirstRunSetup: (vals = {}) => {
+      if (vals.schoolName && vals.schoolName.trim()) {
+        repositories.schools.save({
+          name: vals.schoolName.trim(),
+          address: (vals.schoolAddress || "").trim(),
+          phone: (vals.schoolPhone || "").trim()
+        });
+      }
+      if (vals.teacherName && vals.teacherName.trim()) {
+        repositories.teachers.save({
+          name: vals.teacherName.trim(),
+          employeeNumber: (vals.employeeNumber || "").trim(),
+          phone: (vals.teacherPhone || "").trim()
+        });
+      }
+
+      let activeYear = repositories.academicYears.findAll()[0];
+      if (!activeYear) {
+        const res = repositories.academicYears.create({
+          name: (vals.academicYearName || "2026/2027").trim(),
+          isActive: true
+        });
+        activeYear = Array.isArray(res) ? res.at(-1) : res;
+      } else if (vals.academicYearName && vals.academicYearName.trim()) {
+        repositories.academicYears.update(activeYear.id, {
+          ...activeYear,
+          name: vals.academicYearName.trim(),
+          isActive: true
+        });
+      }
+
+      let activeSemester = repositories.semesters.findAll()[0];
+      if (!activeSemester) {
+        const res = repositories.semesters.create({
+          name: (vals.semesterName || "Semester 1").trim(),
+          academicYearId: activeYear ? activeYear.id : "",
+          isActive: true
+        });
+        activeSemester = Array.isArray(res) ? res.at(-1) : res;
+      } else {
+        repositories.semesters.update(activeSemester.id, {
+          ...activeSemester,
+          name: (vals.semesterName && vals.semesterName.trim()) ? vals.semesterName.trim() : activeSemester.name,
+          academicYearId: activeYear ? activeYear.id : activeSemester.academicYearId,
+          isActive: true
+        });
+      }
+
+      appState = saveState({
+        ...appState,
+        activeAcademicYearId: activeYear ? activeYear.id : null,
+        activeSemesterId: activeSemester ? activeSemester.id : null,
+        currentScreen: SCREENS.dashboard
+      });
+      refreshState();
+    },
+
+    loadDemoData: () => {
+      const seed = createSeedData();
+      appState = saveState({
+        ...appState,
+        ...seed,
+        activeAcademicYearId: seed.academicYears[0]?.id || null,
+        activeSemesterId: seed.semesters[0]?.id || null,
+        currentScreen: SCREENS.dashboard
+      });
+      refreshState();
+    },
+
     // SESSION SELECTION & LAUNCHER
     selectSession: (sessionId) => {
       explicitSessionId = sessionId;
       setScreen(SCREENS.session);
     },
 
-    quickStartClassSession: (classId) => {
+    startSessionForClass: (classId, overrides = {}) => {
       // 1. If this class already has an active or paused session, resume it directly
       const existingActiveForClass = repositories.sessions.findByClass(classId).find((s) => s.status === "active" || s.status === "paused");
       if (existingActiveForClass) {
@@ -126,8 +196,8 @@ function createCrudActions() {
       const today = new Date().toISOString().slice(0, 10);
       const school = repositories.schools.get();
       const teacher = repositories.teachers.get();
-      const academicYear = appState.academicYears[0];
-      const semester = appState.semesters[0];
+      const academicYear = appState.academicYears.find((y) => y.id === appState.activeAcademicYearId) || appState.academicYears[0];
+      const semester = appState.semesters.find((s) => s.id === appState.activeSemesterId) || appState.semesters[0];
 
       const newSession = sessionManager.createSession(
         {
@@ -138,11 +208,11 @@ function createCrudActions() {
           classId,
           sessionNumber: nextNum,
           date: today,
-          startTime: "07:30",
-          topic: `Pertemuan PJOK Ke-${nextNum}`,
-          material: "Praktik Kebugaran & Gerak Dasar",
-          location: "Lapangan Utama",
-          weather: "Cerah"
+          startTime: overrides.startTime || "07:30",
+          topic: overrides.topic || `Pertemuan PJOK Ke-${nextNum}`,
+          material: overrides.material || "Praktik Kebugaran & Gerak Dasar",
+          location: overrides.location || "Lapangan Utama",
+          weather: overrides.weather || "Cerah"
         },
         { startImmediately: true, autoPauseOther: true }
       );
@@ -153,6 +223,10 @@ function createCrudActions() {
       }
       refreshState();
       setScreen(SCREENS.session);
+    },
+
+    quickStartClassSession: (classId, overrides = {}) => {
+      actions.startSessionForClass(classId, overrides);
     },
 
     // SINGLETON PROFILES
@@ -399,7 +473,7 @@ function createCrudActions() {
 
       const res = repositories.assessmentSessions.create({
         ...input,
-        rubricSnapshot: input.rubricSnapshot || rubricSnapshot
+        rubricSnapshot
       });
       refreshState();
       return res.at(-1);
