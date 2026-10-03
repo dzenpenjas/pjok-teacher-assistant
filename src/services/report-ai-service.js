@@ -22,21 +22,21 @@ ${JSON.stringify(reportContext, null, 2)}
 
 ATURAN KETAT (CRITICAL RULES):
 1. Gunakan HANYA fakta dan data yang terdapat dalam ReportContext di atas.
-2. JANGAN PERNAH mengubah nilai numericScore dari asesmen. Nilai pada bagian learning harus sama persis dengan yang ada pada ReportContext (atau null jika tidak ada nilai numerik).
-3. JANGAN mengarang jawaban siswa, tindakan, atau kejadian yang tidak tercatat dalam rubrik, butir instrumen, riwayat pertumbuhan, atau observasi.
-4. JANGAN mengarang kemampuan fisik/kognitif yang tidak didukung oleh deskripsi rubrik atau catatan guru dalam context.
-5. Jika salah satu aspek data (misalnya pertumbuhan atau observasi atau asesmen tertentu) kosong atau tidak tersedia di ReportContext, kosongkan bagian terkait (isi dengan string kosong "") atau jelaskan secara singkat dan wajar bahwa belum ada data yang tercatat.
-6. Gunakan bahasa Indonesia yang santun, ramah, apresiatif, dan mudah dipahami oleh orang tua murid SD.
-7. Hindari istilah teknis yang terlalu klinis atau kaku, namun tetap profesional dan edukatif.
-8. Bedakan dengan jelas antara hasil capaian belajar materi, pemahaman konsep, sikap/perilaku, pertumbuhan fisik, aktivitas gerak lanjutan di rumah, saran gizi/makanan sehat, dan tindak lanjut pembelajaran.
+2. Untuk setiap asesmen yang ada di dalam ReportContext (bagian assessments), kembalikan persis "assessmentSessionId" terkait beserta narasi "description" capaian belajarnya saja.
+3. JANGAN menghasilkan atau mengarang "title", "score", "date", atau "materials" pada bagian learning (judul dan nilai akan diambil langsung oleh sistem dari sumber data asli).
+4. JANGAN mengarang jawaban siswa, tindakan, atau kejadian yang tidak tercatat dalam rubrik, butir instrumen, riwayat pertumbuhan, atau observasi.
+5. JANGAN mengarang kemampuan fisik/kognitif yang tidak didukung oleh deskripsi rubrik atau catatan guru dalam context.
+6. Jika salah satu aspek data (misalnya pertumbuhan atau observasi atau asesmen tertentu) kosong atau tidak tersedia di ReportContext, kosongkan bagian terkait (isi dengan string kosong "") atau jelaskan secara singkat dan wajar bahwa belum ada data yang tercatat.
+7. Gunakan bahasa Indonesia yang santun, ramah, apresiatif, dan mudah dipahami oleh orang tua murid SD.
+8. Hindari istilah teknis yang terlalu klinis atau kaku, namun tetap profesional dan edukatif.
+9. Bedakan dengan jelas antara hasil capaian belajar materi, pemahaman konsep, sikap/perilaku, pertumbuhan fisik, aktivitas gerak lanjutan di rumah, saran gizi/makanan sehat, dan tindak lanjut pembelajaran.
 
 STRUKTUR KELUARAN JSON (HARUS PERSIS FORMAT BERIKUT):
 {
   "summary": "Ringkasan umum perkembangan siswa secara keseluruhan",
   "learning": [
     {
-      "title": "Nama Asesmen / Materi Pembelajaran",
-      "score": 85,
+      "assessmentSessionId": "id-assessment-session-dari-context",
       "description": "Deskripsi capaian belajar siswa berdasarkan butir instrumen dan rubrik yang dicapai"
     }
   ],
@@ -74,11 +74,10 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
                 items: {
                   type: "object",
                   properties: {
-                    title: { type: "string" },
-                    score: { type: "number", nullable: true },
+                    assessmentSessionId: { type: "string" },
                     description: { type: "string" }
                   },
-                  required: ["title", "description"]
+                  required: ["assessmentSessionId", "description"]
                 }
               },
               understanding: { type: "string" },
@@ -182,12 +181,14 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
 
   const sanitizedLearning = Array.isArray(parsed.learning)
     ? parsed.learning.map((item) => ({
-        title: typeof item?.title === "string" ? item.title.trim() : "",
-        score:
-          item?.score !== null && item?.score !== undefined && !Number.isNaN(Number(item.score))
-            ? Number(item.score)
-            : null,
-        description: typeof item?.description === "string" ? item.description.trim() : ""
+        assessmentSessionId:
+          typeof item?.assessmentSessionId === "string"
+            ? item.assessmentSessionId.trim()
+            : "",
+        description:
+          typeof item?.description === "string"
+            ? item.description.trim()
+            : ""
       }))
     : [];
 

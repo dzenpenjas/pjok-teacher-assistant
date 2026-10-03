@@ -1049,6 +1049,30 @@ export function renderClassesScreen(state, actions) {
     const aiHelperText = createElement("p", "text-subtle text-xs mt-2");
     summaryPanel.append(aiHelperText);
 
+    // API Key Box inside report page
+    const apiKeyBox = createElement("div", "report-api-key-box mt-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700");
+    const apiKeyLabel = createElement("label", "block font-semibold text-xs text-slate-700 dark:text-slate-300 mb-1", "API Key Gemini");
+    const apiKeyRow = createElement("div", "flex items-center gap-2");
+    const apiKeyInput = document.createElement("input");
+    apiKeyInput.type = "password";
+    apiKeyInput.className = "input-text text-xs flex-1";
+    apiKeyInput.placeholder = "Masukkan Gemini API Key...";
+    const apiKeySaveBtn = createElement("button", "btn-tool btn-tool-primary text-xs whitespace-nowrap", "Simpan untuk Sesi Ini");
+    apiKeySaveBtn.type = "button";
+    apiKeySaveBtn.addEventListener("click", () => {
+      const val = apiKeyInput.value.trim();
+      if (val) {
+        try {
+          window.sessionStorage.setItem("pjok_gemini_api_key", val);
+        } catch (_) {}
+        apiKeyInput.value = "";
+        updateSummaryAndPreview();
+      }
+    });
+    apiKeyRow.append(apiKeyInput, apiKeySaveBtn);
+    apiKeyBox.append(apiKeyLabel, apiKeyRow);
+    summaryPanel.append(apiKeyBox);
+
     // Preview Container
     const previewContainer = createElement("div", "report-preview-container report-preview-panel mt-4 pt-4 border-t border-slate-200 dark:border-slate-800");
     summaryPanel.append(previewContainer);
@@ -1087,6 +1111,8 @@ export function renderClassesScreen(state, actions) {
       renderPreviewContent();
 
       const hasApiKey = Boolean(storedApiKey && storedApiKey.trim());
+      apiKeyBox.style.display = hasApiKey ? "none" : "block";
+
       const canGenerate = totalCount > 0 && hasApiKey && !isAiDraftLoading;
 
       aiReportBtn.disabled = !canGenerate;
@@ -1100,7 +1126,7 @@ export function renderClassesScreen(state, actions) {
         aiHelperText.textContent = "✨ AI sedang menyusun draf narasi laporan...";
         aiHelperText.className = "text-primary text-xs mt-2 font-medium";
       } else if (!hasApiKey) {
-        aiHelperText.textContent = "Masukkan API key terlebih dahulu di pembuat rubrik AI.";
+        aiHelperText.textContent = "Masukkan API key terlebih dahulu di pembuat rubrik AI atau pada formulir di bawah ini.";
         aiHelperText.className = "text-amber-600 dark:text-amber-400 text-xs mt-2";
       } else if (totalCount === 0) {
         aiHelperText.textContent = "Pilih minimal satu sumber data untuk membuat laporan AI.";
@@ -1286,33 +1312,60 @@ export function renderClassesScreen(state, actions) {
       sectionsList.append(summaryBox);
 
       // 2. Hasil Belajar
+      const currentSelectedAssessments = studentAssessments.filter(({ assessmentSession: sess }) =>
+        (classUi.reportSelection.assessmentSessionIds || []).includes(sess.id)
+      );
+      const currentSelectedGrowth = studentGrowth.filter((g) =>
+        (classUi.reportSelection.growthRecordIds || []).includes(g.id)
+      );
+      const currentSelectedObs = studentObservations.filter((o) =>
+        (classUi.reportSelection.observationIds || []).includes(o.id)
+      );
+
+      const currentContext = buildSelectedReportContext({
+        student,
+        classRoom,
+        assessmentSelections: currentSelectedAssessments,
+        growthSelections: currentSelectedGrowth,
+        observationSelections: currentSelectedObs
+      });
+
+      const validLearningItems = (reportAiDraft.learning || [])
+        .map((item) => {
+          const matchSource = (currentContext.assessments || []).find(
+            (a) => a.assessmentSessionId === item.assessmentSessionId
+          );
+          if (!matchSource) return null;
+          return { item, matchSource };
+        })
+        .filter(Boolean);
+
       const learningBox = createElement("div", "report-ai-draft-section space-y-3");
       learningBox.append(
-        createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", `2. Hasil Belajar (${(reportAiDraft.learning || []).length})`)
+        createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", `2. Hasil Belajar (${validLearningItems.length})`)
       );
-      if (!reportAiDraft.learning || reportAiDraft.learning.length === 0) {
-        learningBox.append(createElement("p", "empty-copy text-xs", "Belum ada capaian hasil belajar."));
+
+      if (validLearningItems.length === 0) {
+        learningBox.append(createElement("p", "empty-copy text-xs", "Belum ada capaian hasil belajar dari asesmen terpilih."));
       } else {
-        reportAiDraft.learning.forEach((item) => {
+        validLearningItems.forEach(({ item, matchSource }) => {
           const itemCard = createElement("div", "report-ai-learning-card space-y-2");
           
           const itemHeader = createElement("div", "flex items-center justify-between gap-2");
-          const titleInput = document.createElement("input");
-          titleInput.type = "text";
-          titleInput.className = "input-text text-xs font-semibold flex-1";
-          titleInput.value = item.title || "";
-          titleInput.placeholder = "Nama Asesmen / Materi...";
-          titleInput.addEventListener("input", (e) => {
-            item.title = e.target.value;
-          });
+          const titleEl = createElement("strong", "text-xs text-slate-900 dark:text-slate-100 flex-1", matchSource.title || "Asesmen PJOK");
+
+          const scoreText =
+            matchSource.numericScore !== null && matchSource.numericScore !== undefined
+              ? `Nilai: ${matchSource.numericScore}`
+              : "Belum ada nilai final";
 
           const scoreBadge = createElement(
             "span",
             "badge badge-success text-xs font-bold whitespace-nowrap",
-            item.score !== null && item.score !== undefined ? `Nilai: ${item.score}` : "Tanpa Nilai"
+            scoreText
           );
 
-          itemHeader.append(titleInput, scoreBadge);
+          itemHeader.append(titleEl, scoreBadge);
 
           const descTextarea = document.createElement("textarea");
           descTextarea.className = "input-text text-xs w-full";
@@ -1486,7 +1539,6 @@ export function renderClassesScreen(state, actions) {
     updateSummaryAndPreview();
     renderAiDraftContent();
     container.append(summaryPanel, aiDraftContainer);
-  }
   }
 
   function renderAddClassModal() {
