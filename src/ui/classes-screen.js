@@ -2,6 +2,7 @@ import { createField, createSelectField, formToObject } from "./form-controls.js
 import { createPhotoPickerField } from "./student-photo-field.js";
 import { createStudentAvatar } from "./student-avatar.js";
 import { ICONS } from "./icons.js";
+import { generateRubricWithAI } from "../services/rubric-ai-service.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -1064,6 +1065,82 @@ export function renderClassesScreen(state, actions) {
         });
         promptLabel.append(promptTextarea);
         itemCard.append(promptLabel);
+
+        // AI Generate Rubric button
+        const aiBtn = createElement("button", "btn-tool text-xs mt-1 self-start flex items-center gap-1", "✨ Generate Rubrik AI");
+        aiBtn.type = "button";
+        aiBtn.addEventListener("click", async () => {
+          const material = (materialField.querySelector("input")?.value || "").trim();
+          const purpose = purposeField.querySelector("select")?.value;
+          const assessmentType = typeField.querySelector("select")?.value;
+          const question = (item.prompt || "").trim();
+          const rubricScale = currentScale;
+          const gradeLevel = Number(classRoom.gradeLevel);
+
+          let phase = "Fase tidak diketahui";
+          if (gradeLevel === 1 || gradeLevel === 2) {
+            phase = "Fase A";
+          } else if (gradeLevel === 3 || gradeLevel === 4) {
+            phase = "Fase B";
+          } else if (gradeLevel === 5 || gradeLevel === 6) {
+            phase = "Fase C";
+          }
+
+          if (!material) {
+            window.alert("Isi materi terlebih dahulu agar AI dapat membuat rubrik yang sesuai.");
+            return;
+          }
+
+          if (!question) {
+            window.alert("Tulis pertanyaan atau instrumen terlebih dahulu.");
+            return;
+          }
+
+          let apiKey = sessionStorage.getItem("pjok_gemini_api_key");
+          if (!apiKey) {
+            const key = window.prompt(
+              "Masukkan Gemini API Key untuk sesi ini. Key hanya disimpan sampai tab/browser ditutup."
+            );
+            if (!key || !key.trim()) {
+              return;
+            }
+            apiKey = key.trim();
+            sessionStorage.setItem("pjok_gemini_api_key", apiKey);
+          }
+
+          aiBtn.disabled = true;
+          aiBtn.textContent = "Membuat Rubrik...";
+
+          try {
+            const result = await generateRubricWithAI({
+              apiKey,
+              gradeLevel,
+              phase,
+              material,
+              purpose,
+              assessmentType,
+              question,
+              rubricScale
+            });
+
+            if (result && Array.isArray(result.rubricLevels)) {
+              item.rubricLevels = result.rubricLevels.map((level) => ({
+                level: Number(level.level),
+                label: level.label || `Level ${level.level}`,
+                desc: level.desc
+              }));
+              renderItems();
+            }
+          } catch (err) {
+            if (err?.isApiKeyError) {
+              sessionStorage.removeItem("pjok_gemini_api_key");
+            }
+            window.alert("Rubrik AI belum dapat dibuat. Periksa koneksi atau API key lalu coba lagi.");
+            aiBtn.disabled = false;
+            aiBtn.textContent = "✨ Generate Rubrik AI";
+          }
+        });
+        itemCard.append(aiBtn);
 
         // Rubric fields
         const rubricHeader = createElement("div", "mt-2 pt-2 border-t border-slate-100 dark:border-slate-800");
