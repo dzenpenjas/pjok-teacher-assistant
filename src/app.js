@@ -369,6 +369,16 @@ function createCrudActions() {
         });
       }
 
+      if (student && (input.heightCm || input.weightKg)) {
+        repositories.growthRecords.create({
+          studentId: student.id,
+          date: new Date().toISOString().slice(0, 10),
+          heightCm: input.heightCm || "",
+          weightKg: input.weightKg || "",
+          note: "Pengukuran awal siswa"
+        });
+      }
+
       refreshState();
     },
     updateStudent: (id, input) => {

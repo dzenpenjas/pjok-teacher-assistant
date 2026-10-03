@@ -264,6 +264,7 @@ export function renderStudentsScreen(state, actions) {
           { value: "female", label: "Perempuan" }
         ]
       }),
+      createField({ label: "Tanggal Lahir", name: "birthDate", type: "date" }),
       createSelectField({
         label: "Tag Kondisi / Kebugaran",
         name: "tagId",
