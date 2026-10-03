@@ -52,9 +52,9 @@ export function renderFirstRunSetup(state, actions) {
   schoolSec.append(sLegend);
   const school = (state.schools || [])[0] || {};
   schoolSec.append(
-    createField({ label: "Nama Sekolah / SD *", name: "schoolName", value: school.name || "", required: true, placeholder: "Misal: SD Negeri 1 Kota" }),
-    createField({ label: "Alamat Sekolah", name: "schoolAddress", value: school.address || "", placeholder: "Misal: Jl. Lapangan No. 1" }),
-    createField({ label: "Nomor Telepon", name: "schoolPhone", value: school.phone || "", placeholder: "Misal: 021-123456" })
+    createField({ label: "Nama Sekolah / SD *", name: "schoolName", value: school?.name || "", required: true, placeholder: "Misal: SD Negeri 1 Kota" }),
+    createField({ label: "Alamat Sekolah", name: "schoolAddress", value: school?.address || "", placeholder: "Misal: Jl. Lapangan No. 1" }),
+    createField({ label: "Nomor Telepon", name: "schoolPhone", value: school?.phone || "", placeholder: "Misal: 021-123456" })
   );
   form.append(schoolSec);
 
@@ -65,9 +65,9 @@ export function renderFirstRunSetup(state, actions) {
   teacherSec.append(tLegend);
   const teacher = (state.teachers || [])[0] || {};
   teacherSec.append(
-    createField({ label: "Nama Lengkap Guru PJOK *", name: "teacherName", value: teacher.name || "", required: true, placeholder: "Misal: Bapak Dzen S.Pd" }),
-    createField({ label: "NIP / NUPTK", name: "employeeNumber", value: teacher.employeeNumber || "", placeholder: "Misal: 198501012010011001" }),
-    createField({ label: "Nomor WhatsApp / HP", name: "teacherPhone", value: teacher.phone || "", placeholder: "Misal: 081234567890" })
+    createField({ label: "Nama Lengkap Guru PJOK *", name: "teacherName", value: teacher?.name || "", required: true, placeholder: "Misal: Bapak Dzen S.Pd" }),
+    createField({ label: "NIP / NUPTK", name: "employeeNumber", value: teacher?.employeeNumber || "", placeholder: "Misal: 198501012010011001" }),
+    createField({ label: "Nomor WhatsApp / HP", name: "teacherPhone", value: teacher?.phone || "", placeholder: "Misal: 081234567890" })
   );
   form.append(teacherSec);
 
@@ -77,17 +77,17 @@ export function renderFirstRunSetup(state, actions) {
   aLegend.append(ICONS.calendar(16), document.createTextNode(" 3. Tahun Pelajaran & Semester Aktif"));
   academicSec.append(aLegend);
 
-  const activeYear = state.activeAcademicYearId
+  const activeYear = (state.activeAcademicYearId
     ? (state.academicYears || []).find((y) => y.id === state.activeAcademicYearId)
-    : (state.academicYears || [])[0] || {};
+    : null) || (state.academicYears || [])[0] || {};
   
-  const activeSemester = state.activeSemesterId
+  const activeSemester = (state.activeSemesterId
     ? (state.semesters || []).find((s) => s.id === state.activeSemesterId)
-    : (state.semesters || [])[0] || {};
+    : null) || (state.semesters || [])[0] || {};
 
   academicSec.append(
-    createField({ label: "Tahun Pelajaran *", name: "academicYearName", value: activeYear.name || "2026/2027", required: true }),
-    createField({ label: "Semester Aktif *", name: "semesterName", value: activeSemester.name || "Semester 1", required: true })
+    createField({ label: "Tahun Pelajaran *", name: "academicYearName", value: activeYear?.name || "2026/2027", required: true }),
+    createField({ label: "Semester Aktif *", name: "semesterName", value: activeSemester?.name || "Semester 1", required: true })
   );
   form.append(academicSec);
 

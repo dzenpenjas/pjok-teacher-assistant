@@ -136,10 +136,11 @@ function createCrudActions() {
         });
       }
 
+      const latestState = loadState();
       appState = saveState({
-        ...appState,
-        activeAcademicYearId: activeYear ? activeYear.id : null,
-        activeSemesterId: activeSemester ? activeSemester.id : null,
+        ...latestState,
+        activeAcademicYearId: activeYear?.id || null,
+        activeSemesterId: activeSemester?.id || null,
         currentScreen: SCREENS.dashboard
       });
       refreshState();
@@ -271,7 +272,11 @@ function createCrudActions() {
       window.alert("Data guru merupakan profil utama dan tidak dapat dihapus.");
     },
     createAcademicYear: (input) => {
-      repositories.academicYears.create(input);
+      const res = repositories.academicYears.create(input);
+      const newYear = Array.isArray(res) ? res.at(-1) : res;
+      if (newYear && !appState.activeAcademicYearId) {
+        repositories.academicYears.setActive(newYear.id);
+      }
       refreshState();
     },
     updateAcademicYear: (id, input) => {
@@ -285,7 +290,23 @@ function createCrudActions() {
       }
     },
     createSemester: (input) => {
-      repositories.semesters.create(input);
+      const activeYear = repositories.academicYears.getActive();
+      if (!activeYear) {
+        window.alert("Tambahkan Tahun Ajaran terlebih dahulu.");
+        return;
+      }
+
+      const res = repositories.semesters.create({
+        ...input,
+        academicYearId: activeYear.id,
+        isActive: !appState.activeSemesterId
+      });
+      const newSemester = Array.isArray(res) ? res.at(-1) : res;
+
+      if (newSemester && !appState.activeSemesterId) {
+        repositories.semesters.setActive(newSemester.id);
+      }
+
       refreshState();
     },
     updateSemester: (id, input) => {

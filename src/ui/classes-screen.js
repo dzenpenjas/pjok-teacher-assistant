@@ -491,7 +491,7 @@ export function renderClassesScreen(state, actions) {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const payload = formToObject(form);
-      const photo = photoPicker.getPhotoValue();
+      const photo = photoPicker.getPhoto();
       if (actions?.createStudent) {
         actions.createStudent({
           ...payload,
