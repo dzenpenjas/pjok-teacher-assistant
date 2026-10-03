@@ -10,6 +10,10 @@ export class BaseRepository {
     return [...this.loadState()[this.collectionName]];
   }
 
+  findAll() {
+    return this.list();
+  }
+
   findById(id) {
     return this.list().find((item) => item.id === id) || null;
   }
