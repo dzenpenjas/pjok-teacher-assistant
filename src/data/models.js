@@ -200,6 +200,7 @@ export function createAssessmentDefinition(input = {}) {
     ...withMeta(input, "assess-def"),
     name: input.name || "",
     category: input.category || "keterampilan", // keterampilan, kebugaran, sikap, pengetahuan
+    purpose: input.purpose || "formative", // pretest, formative, posttest, midterm, final
     assessmentType: input.assessmentType || "unspecified", // written, oral, practice, observation, unspecified
     method: input.method || "rubric", // rubric, numeric, stopwatch
     unit: input.unit || "", // detik, cm, kali, poin
@@ -234,6 +235,9 @@ export function createAssessmentDefinition(input = {}) {
             desc: "Mampu menunjukkan kemampuan dengan sangat baik, mandiri, dan konsisten."
           }
         ],
+    materials: Array.isArray(input.materials) ? input.materials : [],
+    questions: Array.isArray(input.questions) ? input.questions : [],
+    instructions: input.instructions || "",
     description: input.description || ""
   };
 }

@@ -212,7 +212,7 @@ export function renderClassesScreen(state, actions) {
     const adminCluster = createElement("div", "class-admin-cluster");
     const createAssessBtn = createElement("button", "btn-tool btn-tool-primary");
     createAssessBtn.type = "button";
-    createAssessBtn.append(ICONS.target(15), document.createTextNode(" Buat Asesmen"));
+    createAssessBtn.append(ICONS.target(15), document.createTextNode(" Terapkan Rencana Asesmen"));
     createAssessBtn.addEventListener("click", () => {
       isCreatingAssessment = true;
       render();
@@ -763,9 +763,23 @@ export function renderClassesScreen(state, actions) {
     if (assessments.length === 0) {
       const emptyCard = createElement("div", "empty-state-card");
       emptyCard.append(
-        createElement("p", "empty-copy", `Belum ada asesmen tersimpan untuk ${classRoom.name}.`),
-        createElement("p", "screen-copy", "Klik tombol 'Buat Asesmen' di atas untuk merancang instrumen penilaian baru.")
+        createElement("p", "empty-copy", `Belum ada asesmen yang dijadwalkan untuk ${classRoom.name}.`),
+        createElement(
+          "p",
+          "screen-copy",
+          "Pilih rencana asesmen dari menu Perencanaan Asesmen untuk mulai menilai siswa di kelas ini."
+        )
       );
+
+      const addBtn = createElement("button", "primary-action compact-action");
+      addBtn.type = "button";
+      addBtn.append(ICONS.target(15), document.createTextNode(" Terapkan Rencana Asesmen"));
+      addBtn.addEventListener("click", () => {
+        isCreatingAssessment = true;
+        render();
+      });
+      emptyCard.append(addBtn);
+
       container.append(emptyCard);
       return;
     }
@@ -872,119 +886,152 @@ export function renderClassesScreen(state, actions) {
     const header = createElement("header", "screen-header-row");
     const titleGroup = createElement("div");
     const eyebrow = createElement("p", "eyebrow");
-    eyebrow.append(ICONS.target(15), document.createTextNode(" Perancangan Asesmen"));
+    eyebrow.append(ICONS.target(15), document.createTextNode(" Pelaksanaan Asesmen Kelas"));
     titleGroup.append(
       eyebrow,
-      createElement("h1", "screen-title", `Buat Asesmen: ${classRoom.name}`),
+      createElement("h1", "screen-title", `Terapkan Asesmen: ${classRoom.name}`),
       createElement(
         "p",
         "screen-copy",
-        `Rancang instrumen penilaian PJOK untuk ${classRoom.name}. Setiap asesmen disimpan sebagai entitas terpisah agar hasil penilaian siswa tercatat aman.`
+        `Pilih rencana asesmen yang telah dirancang untuk dilaksanakan dan dinilai pada siswa kelas ${classRoom.name}.`
       )
     );
     header.append(titleGroup);
     container.append(header);
 
+    const plans = state.assessmentDefinitions || [];
+    if (plans.length === 0) {
+      const emptyCard = createElement("div", "empty-state-card");
+      emptyCard.append(
+        createElement("p", "empty-copy", "Belum ada Rencana Asesmen yang tersedia."),
+        createElement(
+          "p",
+          "screen-copy",
+          "Silakan buat rencana asesmen terlebih dahulu di menu Pengaturan → Perencanaan Asesmen untuk menentukan materi, bentuk tes, dan rubrik penilaian."
+        )
+      );
+      container.append(emptyCard);
+      return;
+    }
+
+    const purposeMap = {
+      pretest: "Pretest",
+      formative: "Formatif",
+      posttest: "Posttest",
+      midterm: "UTS",
+      final: "UAS"
+    };
+
+    const typeMap = {
+      written: "Tertulis",
+      oral: "Lisan",
+      practice: "Praktik",
+      observation: "Observasi"
+    };
+
     const form = createElement("form", "master-form");
 
-    form.append(
-      createField({
-        label: "Judul Asesmen *",
-        name: "title",
-        required: true,
-        placeholder: "Contoh: UTS Gerak Dasar / Posttest Kebugaran"
-      }),
-      createField({
-        label: "Tanggal Pelaksanaan *",
-        name: "date",
-        type: "date",
-        value: new Date().toISOString().slice(0, 10),
-        required: true
-      }),
-      createSelectField({
-        label: "Jenis Asesmen *",
-        name: "purpose",
-        value: "formative",
-        options: [
-          { value: "pretest", label: "Pretest / Asesmen Awal" },
-          { value: "formative", label: "Harian / Formatif" },
-          { value: "posttest", label: "Posttest" },
-          { value: "summative", label: "Sumatif Materi" },
-          { value: "midterm", label: "UTS / STS" },
-          { value: "final", label: "UAS / SAS" }
-        ]
-      })
-    );
+    // Plan selector
+    const planOptions = plans.map((p) => {
+      const pLabel = purposeMap[p.purpose] || p.purpose || "Formatif";
+      const tLabel = typeMap[p.assessmentType] || (p.assessmentType !== "unspecified" ? p.assessmentType : "Praktik");
+      const mLabel = p.method === "numeric" ? "Nilai Angka" : p.method === "stopwatch" ? "Stopwatch" : `Rubrik 1–${p.rubricScale || 5}`;
+      return {
+        value: p.id,
+        label: `${p.name} [${pLabel} • ${tLabel} • ${mLabel}]`
+      };
+    });
 
-    // Textarea Materials
-    const matLabel = createElement("label", "field");
-    matLabel.append(
-      createElement("span", "", "Materi Pokok (Satu materi per baris)"),
-      createElement("span", "text-subtle text-xs", "Ketik tiap topik materi di baris baru")
-    );
-    const matTextarea = document.createElement("textarea");
-    matTextarea.name = "materials";
-    matTextarea.rows = 3;
-    matTextarea.className = "input-text";
-    matTextarea.placeholder = "Contoh:\nLokomotor\nNon Lokomotor\nManipulatif";
-    matLabel.append(matTextarea);
-    form.append(matLabel);
+    let selectedPlanId = plans[0].id;
+    let selectedPlan = plans[0];
 
-    form.append(
-      createSelectField({
-        label: "Bentuk Asesmen",
-        name: "assessmentType",
-        value: "practice",
-        options: [
-          { value: "practice", label: "Praktik" },
-          { value: "oral", label: "Tes Lisan" },
-          { value: "written", label: "Tes Tertulis" },
-          { value: "observation", label: "Observasi" }
-        ]
-      }),
-      createSelectField({
-        label: "Metode Skoring",
-        name: "method",
-        value: "rubric",
-        options: [
-          { value: "rubric", label: "Rubrik 1–5" },
-          { value: "numeric", label: "Nilai Angka" },
-          { value: "stopwatch", label: "Stopwatch" }
-        ]
-      })
-    );
+    const planField = createSelectField({
+      label: "Pilih Rencana Asesmen *",
+      name: "definitionId",
+      value: selectedPlanId,
+      options: planOptions,
+      required: true
+    });
 
-    // Textarea Questions
-    const qLabel = createElement("label", "field");
-    qLabel.append(
-      createElement("span", "", "Pertanyaan / Butir Instrumen (Opsional)"),
-      createElement("span", "text-subtle text-xs", "Satu pertanyaan per baris")
-    );
-    const qTextarea = document.createElement("textarea");
-    qTextarea.name = "questions";
-    qTextarea.rows = 4;
-    qTextarea.className = "input-text";
-    qTextarea.placeholder = "Contoh:\nApa yang dimaksud gerak lokomotor?\nSebutkan dua contoh gerak lokomotor.\nApa perbedaan lokomotor dan non lokomotor?";
-    qLabel.append(qTextarea);
-    form.append(qLabel);
+    const titleField = createField({
+      label: "Judul Pelaksanaan di Kelas *",
+      name: "title",
+      value: selectedPlan.name,
+      required: true
+    });
 
-    // Textarea Instructions
-    const instLabel = createElement("label", "field");
-    instLabel.append(
-      createElement("span", "", "Instruksi Praktik / Observasi (Opsional)"),
-      createElement("span", "text-subtle text-xs", "Panduan pelaksanaan gerakan bagi guru & siswa")
-    );
-    const instTextarea = document.createElement("textarea");
-    instTextarea.name = "instructions";
-    instTextarea.rows = 3;
-    instTextarea.className = "input-text";
-    instTextarea.placeholder = "Contoh:\nLakukan berjalan, berlari, dan melompat sesuai instruksi guru.";
-    instLabel.append(instTextarea);
-    form.append(instLabel);
+    const dateField = createField({
+      label: "Tanggal Pelaksanaan *",
+      name: "date",
+      type: "date",
+      value: new Date().toISOString().slice(0, 10),
+      required: true
+    });
+
+    form.append(planField, titleField, dateField);
+
+    // Plan Details Preview Box
+    const previewBox = createElement("div", "activity-template-preview");
+    
+    function updatePreview(plan) {
+      previewBox.replaceChildren();
+      if (!plan) return;
+
+      const pLabel = purposeMap[plan.purpose] || plan.purpose || "Formatif";
+      const tLabel = typeMap[plan.assessmentType] || plan.assessmentType || "Praktik";
+      const mLabel = plan.method === "numeric" ? "Nilai Angka" : plan.method === "stopwatch" ? "Stopwatch" : `Rubrik Skala 1–${plan.rubricScale || 5}`;
+
+      previewBox.append(
+        createElement("h4", "sub-title text-sm font-semibold", "Rincian Rencana Terpilih:"),
+        createElement("p", "screen-copy text-xs", `📋 Jenis & Bentuk: ${pLabel} • ${tLabel} • ${mLabel}`)
+      );
+
+      if (plan.materials && plan.materials.length > 0) {
+        previewBox.append(
+          createElement("p", "screen-copy text-xs", `🎯 Materi Pokok: ${plan.materials.join(", ")}`)
+        );
+      }
+
+      if (plan.instructions) {
+        previewBox.append(
+          createElement("p", "screen-copy text-xs", `💡 Panduan: ${plan.instructions}`)
+        );
+      }
+
+      if (plan.questions && plan.questions.length > 0) {
+        const qList = createElement("div", "screen-copy text-xs");
+        qList.append(createElement("strong", "", `📝 Butir Soal / Instrumen (${plan.questions.length}):`));
+        const ul = document.createElement("ul");
+        ul.className = "list-disc pl-5 mt-1 space-y-0.5";
+        plan.questions.forEach((q) => {
+          const li = document.createElement("li");
+          li.textContent = q;
+          ul.append(li);
+        });
+        qList.append(ul);
+        previewBox.append(qList);
+      }
+    }
+
+    updatePreview(selectedPlan);
+    form.append(previewBox);
+
+    const planSelectEl = planField.querySelector("select");
+    if (planSelectEl) {
+      planSelectEl.addEventListener("change", (e) => {
+        selectedPlanId = e.target.value;
+        selectedPlan = plans.find((p) => p.id === selectedPlanId) || plans[0];
+        const titleInput = titleField.querySelector("input");
+        if (titleInput) {
+          titleInput.value = selectedPlan.name;
+        }
+        updatePreview(selectedPlan);
+      });
+    }
 
     // Action buttons
     const btnRow = createElement("div", "modal-btn-row");
-    const submitBtn = createElement("button", "primary-action", "Simpan Asesmen");
+    const submitBtn = createElement("button", "primary-action", "Terapkan & Jadwalkan Asesmen");
     submitBtn.type = "submit";
 
     const cancelBtn = createElement("button", "btn-tool", "Batal");
@@ -1000,63 +1047,28 @@ export function renderClassesScreen(state, actions) {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const payload = formToObject(form);
-      const title = (payload.title || "").trim();
-      if (!title) {
-        window.alert("Judul asesmen wajib diisi.");
+      const chosenPlan = plans.find((p) => p.id === payload.definitionId) || selectedPlan;
+      if (!chosenPlan) {
+        window.alert("Pilih rencana asesmen terlebih dahulu.");
         return;
       }
 
-      const materials = (matTextarea.value || "")
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-      const questions = (qTextarea.value || "")
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-      const instructions = (instTextarea.value || "").trim();
-      const method = payload.method || "rubric";
-      const assessmentType = payload.assessmentType || "practice";
-      const purpose = payload.purpose || "formative";
+      const title = (payload.title || chosenPlan.name).trim();
       const dateVal = payload.date || new Date().toISOString().slice(0, 10);
-
-      const defaultRubricLevels = [
-        { level: 1, label: "Belum Berkembang", desc: "Belum menunjukkan kemampuan yang dinilai dan masih memerlukan bimbingan penuh." },
-        { level: 2, label: "Mulai Berkembang", desc: "Mulai menunjukkan kemampuan tetapi masih memerlukan banyak arahan atau bantuan." },
-        { level: 3, label: "Cukup Berkembang", desc: "Mampu menunjukkan kemampuan utama dengan cukup baik, meskipun belum konsisten." },
-        { level: 4, label: "Berkembang Baik", desc: "Mampu menunjukkan kemampuan dengan baik dan relatif mandiri." },
-        { level: 5, label: "Berkembang Sangat Baik", desc: "Mampu menunjukkan kemampuan dengan sangat baik, mandiri, dan konsisten." }
-      ];
-
-      let createdDef = null;
-      if (actions?.createAssessmentDefinition) {
-        createdDef = actions.createAssessmentDefinition({
-          name: title,
-          category: "keterampilan",
-          assessmentType,
-          method,
-          unit: method === "stopwatch" ? "detik" : method === "numeric" ? "poin" : "",
-          rubricScale: method === "rubric" ? 5 : 0,
-          rubricLevels: method === "rubric" ? defaultRubricLevels : [],
-          description: materials.join(", ")
-        });
-      }
 
       if (actions?.createAssessmentSession) {
         actions.createAssessmentSession({
           classId: classRoom.id,
-          definitionId: createdDef?.id || "",
+          definitionId: chosenPlan.id,
           date: dateVal,
           title,
-          purpose,
-          materials,
-          questions,
-          instructions,
+          purpose: chosenPlan.purpose || "formative",
+          materials: Array.isArray(chosenPlan.materials) ? chosenPlan.materials : [],
+          questions: Array.isArray(chosenPlan.questions) ? chosenPlan.questions : [],
+          instructions: chosenPlan.instructions || "",
           rubricSnapshot: {
-            scale: method === "rubric" ? 5 : 0,
-            levels: method === "rubric" ? defaultRubricLevels : []
+            scale: chosenPlan.rubricScale || 5,
+            levels: Array.isArray(chosenPlan.rubricLevels) ? chosenPlan.rubricLevels : []
           }
         });
       }

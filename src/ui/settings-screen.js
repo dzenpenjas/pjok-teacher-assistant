@@ -16,7 +16,7 @@ const SETTINGS_TABS = [
   { id: "school-teacher", label: "Profil Sekolah & Guru", icon: () => ICONS.home(16) },
   { id: "academic", label: "Tahun & Semester", icon: () => ICONS.calendar(16) },
   { id: "tags", label: "Tag Siswa", icon: () => ICONS.tag(16) },
-  { id: "assessments", label: "Definisi Nilai", icon: () => ICONS.chart(16) },
+  { id: "assessments", label: "Perencanaan Asesmen", icon: () => ICONS.chart(16) },
   { id: "backup", label: "Cadangan Data", icon: () => ICONS.database(16) }
 ];
 
@@ -267,21 +267,33 @@ export function renderSettingsScreen(state, actions) {
     target.append(card);
   }
 
-  // --- SECTION 4: ASSESSMENT DEFINITIONS ---
+  // --- SECTION 4: ASSESSMENT DEFINITIONS / PLANNING ---
   function renderAssessmentsSection(target) {
     const card = createElement("section", "settings-card");
     card.append(
-      createElement("h2", "section-title", "Definisi Indikator Penilaian PJOK"),
+      createElement("h2", "section-title", "Perencanaan Asesmen"),
       createElement(
         "p",
         "screen-copy",
-        "Atur instrumen tes fisik dan penilaian keterampilan (rubrik skala 1–5, stopwatch detik lari/renang, atau skor angka)."
+        "Rancang asesmen yang akan digunakan di kelas. Tentukan jenis asesmen, materi, bentuk pelaksanaan, metode penilaian, instrumen, dan rubrik."
       )
     );
 
     const form = createElement("form", "master-form");
     form.append(
-      createField({ label: "Nama Penilaian (misal: Tes Lari 50 Meter / Dribble Bola)", name: "name", required: true }),
+      createField({ label: "Nama Rencana Asesmen (misal: Penilaian Gerak Lokomotor Dasar)", name: "name", required: true }),
+      createSelectField({
+        label: "Jenis Asesmen",
+        name: "purpose",
+        value: "formative",
+        options: [
+          { value: "pretest", label: "Pretest" },
+          { value: "formative", label: "Harian / Formatif" },
+          { value: "posttest", label: "Posttest" },
+          { value: "midterm", label: "Tengah Semester" },
+          { value: "final", label: "Akhir Semester" }
+        ]
+      }),
       createSelectField({
         label: "Kategori Penilaian",
         name: "category",
@@ -310,16 +322,78 @@ export function renderSettingsScreen(state, actions) {
           { value: "numeric", label: "Nilai Angka" },
           { value: "stopwatch", label: "Stopwatch / Waktu" }
         ]
-      }),
+      })
+    );
+
+    // Textarea Materials
+    const matLabel = createElement("label", "field");
+    matLabel.append(
+      createElement("span", "", "Materi Pokok (Satu materi per baris)"),
+      createElement("span", "text-subtle text-xs", "Ketik tiap topik materi di baris baru")
+    );
+    const matTextarea = document.createElement("textarea");
+    matTextarea.name = "materials";
+    matTextarea.rows = 3;
+    matTextarea.className = "input-text";
+    matTextarea.placeholder = "Contoh:\nLokomotor\nNon Lokomotor\nManipulatif";
+    matLabel.append(matTextarea);
+    form.append(matLabel);
+
+    // Textarea Questions
+    const qLabel = createElement("label", "field");
+    qLabel.append(
+      createElement("span", "", "Pertanyaan / Butir Instrumen (Opsional)"),
+      createElement("span", "text-subtle text-xs", "Satu butir/soal per baris")
+    );
+    const qTextarea = document.createElement("textarea");
+    qTextarea.name = "questions";
+    qTextarea.rows = 3;
+    qTextarea.className = "input-text";
+    qTextarea.placeholder = "Contoh:\nJelaskan cara melakukan awalan lari cepat.\nSebutkan 3 variasi gerak melempar bola.";
+    qLabel.append(qTextarea);
+    form.append(qLabel);
+
+    // Textarea Instructions
+    const instLabel = createElement("label", "field");
+    instLabel.append(
+      createElement("span", "", "Panduan / Instruksi Penilaian (Opsional)"),
+      createElement("span", "text-subtle text-xs", "Panduan pelaksanaan bagi guru saat pengambilan nilai")
+    );
+    const instTextarea = document.createElement("textarea");
+    instTextarea.name = "instructions";
+    instTextarea.rows = 2;
+    instTextarea.className = "input-text";
+    instTextarea.placeholder = "Contoh:\nSiswa melakukan gerakan 3 kali percobaan, ambil capaian teknik terbaik.";
+    instLabel.append(instTextarea);
+    form.append(instLabel);
+
+    form.append(
       createField({ label: "Deskripsi Indikator / Kriteria", name: "description" }),
-      createElement("button", "primary-action compact-action", "Tambah Definisi Penilaian")
+      createElement("button", "primary-action compact-action", "Tambah Rencana Asesmen")
     );
 
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const payload = formToObject(form);
+      const materials = (matTextarea.value || "")
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const questions = (qTextarea.value || "")
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const instructions = (instTextarea.value || "").trim();
+
+      const fullPayload = {
+        ...payload,
+        materials,
+        questions,
+        instructions
+      };
+
       if (actions?.createAssessmentDefinition) {
-        actions.createAssessmentDefinition(payload);
+        actions.createAssessmentDefinition(fullPayload);
         render();
       }
     });
@@ -337,6 +411,15 @@ export function renderSettingsScreen(state, actions) {
         pengetahuan: "Pengetahuan"
       };
       const catLabel = categoryMap[(def.category || "").toLowerCase()] || def.category || "-";
+
+      const purposeMap = {
+        pretest: "Pretest",
+        formative: "Formatif",
+        posttest: "Posttest",
+        midterm: "UTS",
+        final: "UAS"
+      };
+      const purposeLabel = purposeMap[def.purpose] || def.purpose || "Formatif";
 
       const typeMap = {
         written: "Tertulis",
@@ -358,8 +441,11 @@ export function renderSettingsScreen(state, actions) {
 
       content.append(
         createElement("strong", "", def.name),
-        createElement("span", "", `${catLabel} • ${typeLabel} • ${methodLabel}`)
+        createElement("span", "", `${purposeLabel} • ${catLabel} • ${typeLabel} • ${methodLabel}`)
       );
+      if (def.materials && def.materials.length > 0) {
+        content.append(createElement("p", "screen-copy text-xs", `Materi: ${def.materials.join(", ")}`));
+      }
       if (def.description) {
         content.append(createElement("p", "screen-copy", def.description));
       }
