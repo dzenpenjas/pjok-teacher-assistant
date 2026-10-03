@@ -3837,6 +3837,50 @@ textarea {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+/* AI REPORT DRAFT */
+.report-ai-draft-container {
+  background: var(--color-surface, #ffffff);
+  border: 2px solid var(--color-primary, #116149);
+  border-radius: var(--radius-xl, 16px);
+  padding: 20px;
+  margin-top: 24px;
+  box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+}
+
+.report-ai-draft-header {
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.report-ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ecfdf5;
+  color: #065f46;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 9999px;
+  border: 1px solid #a7f3d0;
+}
+
+.report-ai-draft-section {
+  background: var(--color-surface-muted, #f8fafc);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  padding: 14px;
+}
+
+.report-ai-learning-card {
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-md, 8px);
+  padding: 12px;
+}
+
+
 
 
 

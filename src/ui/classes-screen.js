@@ -3,6 +3,7 @@ import { createPhotoPickerField } from "./student-photo-field.js";
 import { createStudentAvatar } from "./student-avatar.js";
 import { ICONS } from "./icons.js";
 import { generateRubricWithAI } from "../services/rubric-ai-service.js";
+import { generateStudentReportWithAI } from "../services/report-ai-service.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -677,6 +678,8 @@ export function renderClassesScreen(state, actions) {
     const expandedAssessmentIds = new Set();
     let isPreviewOpen = false;
     let isRcJsonOpen = false;
+    let reportAiDraft = null;
+    let isAiDraftLoading = false;
 
     // Build Data Sets
     // 1. Assessments
@@ -1031,30 +1034,35 @@ export function renderClassesScreen(state, actions) {
     const summaryCountP = createElement("p", "report-summary-count-text text-sm font-medium mt-2");
     summaryPanel.append(summaryCountP);
 
+    // Action buttons row
     const btnRow = createElement("div", "report-summary-btn-row flex flex-wrap gap-3 mt-4 items-center");
     
     const previewToggleBtn = createElement("button", "btn-tool text-xs", "Lihat Data Terpilih");
     previewToggleBtn.type = "button";
 
-    const aiReportBtn = createElement("button", "primary-action compact-action opacity-60 cursor-not-allowed", "✨ Buat Laporan AI");
+    const aiReportBtn = createElement("button", "primary-action compact-action", "✨ Buat Laporan AI");
     aiReportBtn.type = "button";
-    aiReportBtn.disabled = true;
 
     btnRow.append(previewToggleBtn, aiReportBtn);
     summaryPanel.append(btnRow);
 
-    const aiHelperText = createElement(
-      "p",
-      "text-subtle text-xs mt-2",
-      "Fitur pembuatan laporan AI akan diaktifkan setelah sumber data laporan diverifikasi."
-    );
+    const aiHelperText = createElement("p", "text-subtle text-xs mt-2");
     summaryPanel.append(aiHelperText);
 
     // Preview Container
     const previewContainer = createElement("div", "report-preview-container report-preview-panel mt-4 pt-4 border-t border-slate-200 dark:border-slate-800");
     summaryPanel.append(previewContainer);
 
+    // AI Report Draft Container
+    const aiDraftContainer = createElement("section", "report-ai-draft-container");
+    aiDraftContainer.style.display = "none";
+
     function updateSummaryAndPreview() {
+      let storedApiKey = "";
+      try {
+        storedApiKey = window.sessionStorage.getItem("pjok_gemini_api_key") || "";
+      } catch (_) {}
+
       const aCount = (classUi.reportSelection.assessmentSessionIds || []).length;
       const gCount = (classUi.reportSelection.growthRecordIds || []).length;
       const oCount = (classUi.reportSelection.observationIds || []).length;
@@ -1077,6 +1085,30 @@ export function renderClassesScreen(state, actions) {
 
       previewToggleBtn.textContent = isPreviewOpen ? "Tutup Preview Data Terpilih" : "Lihat Data Terpilih";
       renderPreviewContent();
+
+      const hasApiKey = Boolean(storedApiKey && storedApiKey.trim());
+      const canGenerate = totalCount > 0 && hasApiKey && !isAiDraftLoading;
+
+      aiReportBtn.disabled = !canGenerate;
+      if (canGenerate) {
+        aiReportBtn.classList.remove("opacity-60", "cursor-not-allowed");
+      } else {
+        aiReportBtn.classList.add("opacity-60", "cursor-not-allowed");
+      }
+
+      if (isAiDraftLoading) {
+        aiHelperText.textContent = "✨ AI sedang menyusun draf narasi laporan...";
+        aiHelperText.className = "text-primary text-xs mt-2 font-medium";
+      } else if (!hasApiKey) {
+        aiHelperText.textContent = "Masukkan API key terlebih dahulu di pembuat rubrik AI.";
+        aiHelperText.className = "text-amber-600 dark:text-amber-400 text-xs mt-2";
+      } else if (totalCount === 0) {
+        aiHelperText.textContent = "Pilih minimal satu sumber data untuk membuat laporan AI.";
+        aiHelperText.className = "text-subtle text-xs mt-2";
+      } else {
+        aiHelperText.textContent = "Siap membuat draf laporan AI berdasarkan sumber data terpilih.";
+        aiHelperText.className = "text-emerald-600 dark:text-emerald-400 text-xs mt-2";
+      }
     }
 
     function renderPreviewContent() {
@@ -1201,6 +1233,247 @@ export function renderClassesScreen(state, actions) {
       previewContainer.append(rcSection);
     }
 
+    function renderAiDraftContent() {
+      aiDraftContainer.replaceChildren();
+
+      if (isAiDraftLoading) {
+        aiDraftContainer.style.display = "block";
+        const loadingCard = createElement("div", "p-6 text-center space-y-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700");
+        loadingCard.append(
+          createElement("div", "font-bold text-primary text-sm", "✨ AI sedang menyusun draf narasi laporan..."),
+          createElement("p", "text-xs text-subtle", "Menginterpretasikan capaian asesmen, data pertumbuhan fisik, dan observasi sikap siswa...")
+        );
+        aiDraftContainer.append(loadingCard);
+        return;
+      }
+
+      if (!reportAiDraft) {
+        aiDraftContainer.style.display = "none";
+        return;
+      }
+
+      aiDraftContainer.style.display = "block";
+
+      // Header
+      const draftHeader = createElement("div", "report-ai-draft-header flex items-center justify-between flex-wrap gap-2");
+      const leftHeader = createElement("div");
+      const titleEl = createElement("h3", "sub-title font-bold text-base flex items-center gap-2");
+      titleEl.append(
+        document.createTextNode("Draf Narasi Laporan AI"),
+        createElement("span", "report-ai-badge", "DRAFT")
+      );
+      leftHeader.append(
+        titleEl,
+        createElement("p", "text-subtle text-xs mt-0.5", "Hasil interpretasi data oleh AI. Guru dapat mengedit seluruh teks di bawah ini.")
+      );
+      draftHeader.append(leftHeader);
+      aiDraftContainer.append(draftHeader);
+
+      const sectionsList = createElement("div", "space-y-4");
+
+      // 1. Ringkasan
+      const summaryBox = createElement("div", "report-ai-draft-section space-y-2");
+      const summaryLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "1. Ringkasan");
+      const summaryTextarea = document.createElement("textarea");
+      summaryTextarea.className = "input-text text-xs w-full";
+      summaryTextarea.rows = 3;
+      summaryTextarea.value = reportAiDraft.summary || "";
+      summaryTextarea.placeholder = "Tuliskan ringkasan perkembangan umum siswa...";
+      summaryTextarea.addEventListener("input", (e) => {
+        reportAiDraft.summary = e.target.value;
+      });
+      summaryBox.append(summaryLabel, summaryTextarea);
+      sectionsList.append(summaryBox);
+
+      // 2. Hasil Belajar
+      const learningBox = createElement("div", "report-ai-draft-section space-y-3");
+      learningBox.append(
+        createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", `2. Hasil Belajar (${(reportAiDraft.learning || []).length})`)
+      );
+      if (!reportAiDraft.learning || reportAiDraft.learning.length === 0) {
+        learningBox.append(createElement("p", "empty-copy text-xs", "Belum ada capaian hasil belajar."));
+      } else {
+        reportAiDraft.learning.forEach((item) => {
+          const itemCard = createElement("div", "report-ai-learning-card space-y-2");
+          
+          const itemHeader = createElement("div", "flex items-center justify-between gap-2");
+          const titleInput = document.createElement("input");
+          titleInput.type = "text";
+          titleInput.className = "input-text text-xs font-semibold flex-1";
+          titleInput.value = item.title || "";
+          titleInput.placeholder = "Nama Asesmen / Materi...";
+          titleInput.addEventListener("input", (e) => {
+            item.title = e.target.value;
+          });
+
+          const scoreBadge = createElement(
+            "span",
+            "badge badge-success text-xs font-bold whitespace-nowrap",
+            item.score !== null && item.score !== undefined ? `Nilai: ${item.score}` : "Tanpa Nilai"
+          );
+
+          itemHeader.append(titleInput, scoreBadge);
+
+          const descTextarea = document.createElement("textarea");
+          descTextarea.className = "input-text text-xs w-full";
+          descTextarea.rows = 3;
+          descTextarea.value = item.description || "";
+          descTextarea.placeholder = "Deskripsi capaian belajar siswa...";
+          descTextarea.addEventListener("input", (e) => {
+            item.description = e.target.value;
+          });
+
+          itemCard.append(itemHeader, descTextarea);
+          learningBox.append(itemCard);
+        });
+      }
+      sectionsList.append(learningBox);
+
+      // 3. Pemahaman
+      const understandBox = createElement("div", "report-ai-draft-section space-y-2");
+      const understandLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "3. Pemahaman");
+      const understandTextarea = document.createElement("textarea");
+      understandTextarea.className = "input-text text-xs w-full";
+      understandTextarea.rows = 3;
+      understandTextarea.value = reportAiDraft.understanding || "";
+      understandTextarea.placeholder = "Deskripsi pemahaman konsep materi...";
+      understandTextarea.addEventListener("input", (e) => {
+        reportAiDraft.understanding = e.target.value;
+      });
+      understandBox.append(understandLabel, understandTextarea);
+      sectionsList.append(understandBox);
+
+      // 4. Sikap
+      const attitudeBox = createElement("div", "report-ai-draft-section space-y-2");
+      const attitudeLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "4. Sikap");
+      const attitudeTextarea = document.createElement("textarea");
+      attitudeTextarea.className = "input-text text-xs w-full";
+      attitudeTextarea.rows = 3;
+      attitudeTextarea.value = reportAiDraft.attitude || "";
+      attitudeTextarea.placeholder = "Deskripsi sikap dan partisipasi siswa...";
+      attitudeTextarea.addEventListener("input", (e) => {
+        reportAiDraft.attitude = e.target.value;
+      });
+      attitudeBox.append(attitudeLabel, attitudeTextarea);
+      sectionsList.append(attitudeBox);
+
+      // 5. Pertumbuhan
+      const growthBox = createElement("div", "report-ai-draft-section space-y-2");
+      const growthLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "5. Pertumbuhan");
+      const growthTextarea = document.createElement("textarea");
+      growthTextarea.className = "input-text text-xs w-full";
+      growthTextarea.rows = 3;
+      growthTextarea.value = reportAiDraft.growth || "";
+      growthTextarea.placeholder = "Deskripsi pertumbuhan fisik siswa...";
+      growthTextarea.addEventListener("input", (e) => {
+        reportAiDraft.growth = e.target.value;
+      });
+      growthBox.append(growthLabel, growthTextarea);
+      sectionsList.append(growthBox);
+
+      // 6. Aktivitas di Rumah
+      const homeBox = createElement("div", "report-ai-draft-section space-y-2");
+      const homeLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "6. Aktivitas di Rumah");
+      const homeTextarea = document.createElement("textarea");
+      homeTextarea.className = "input-text text-xs w-full";
+      homeTextarea.rows = 3;
+      homeTextarea.value = reportAiDraft.homeActivity || "";
+      homeTextarea.placeholder = "Rekomendasi aktivitas gerak di rumah...";
+      homeTextarea.addEventListener("input", (e) => {
+        reportAiDraft.homeActivity = e.target.value;
+      });
+      homeBox.append(homeLabel, homeTextarea);
+      sectionsList.append(homeBox);
+
+      // 7. Saran Makanan
+      const nutritionBox = createElement("div", "report-ai-draft-section space-y-2");
+      const nutritionLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "7. Saran Makanan");
+      const nutritionTextarea = document.createElement("textarea");
+      nutritionTextarea.className = "input-text text-xs w-full";
+      nutritionTextarea.rows = 3;
+      nutritionTextarea.value = reportAiDraft.nutritionAdvice || "";
+      nutritionTextarea.placeholder = "Saran makanan sehat dan kebiasaan gizi...";
+      nutritionTextarea.addEventListener("input", (e) => {
+        reportAiDraft.nutritionAdvice = e.target.value;
+      });
+      nutritionBox.append(nutritionLabel, nutritionTextarea);
+      sectionsList.append(nutritionBox);
+
+      // 8. Tindak Lanjut
+      const followUpBox = createElement("div", "report-ai-draft-section space-y-2");
+      const followUpLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "8. Tindak Lanjut");
+      const followUpTextarea = document.createElement("textarea");
+      followUpTextarea.className = "input-text text-xs w-full";
+      followUpTextarea.rows = 3;
+      followUpTextarea.value = reportAiDraft.followUp || "";
+      followUpTextarea.placeholder = "Rencana tindak lanjut bimbingan guru...";
+      followUpTextarea.addEventListener("input", (e) => {
+        reportAiDraft.followUp = e.target.value;
+      });
+      followUpBox.append(followUpLabel, followUpTextarea);
+      sectionsList.append(followUpBox);
+
+      aiDraftContainer.append(sectionsList);
+    }
+
+    aiReportBtn.addEventListener("click", async () => {
+      let currentApiKey = "";
+      try {
+        currentApiKey = window.sessionStorage.getItem("pjok_gemini_api_key") || "";
+      } catch (_) {}
+
+      if (!currentApiKey || !currentApiKey.trim()) {
+        updateSummaryAndPreview();
+        return;
+      }
+
+      const selectedAssessments = studentAssessments.filter(({ assessmentSession: sess }) =>
+        (classUi.reportSelection.assessmentSessionIds || []).includes(sess.id)
+      );
+      const selectedGrowth = studentGrowth.filter((g) =>
+        (classUi.reportSelection.growthRecordIds || []).includes(g.id)
+      );
+      const selectedObs = studentObservations.filter((o) =>
+        (classUi.reportSelection.observationIds || []).includes(o.id)
+      );
+
+      if (selectedAssessments.length + selectedGrowth.length + selectedObs.length === 0) {
+        window.alert("Pilih minimal satu sumber data (asesmen, pertumbuhan, atau observasi).");
+        return;
+      }
+
+      const reportContext = buildSelectedReportContext({
+        student,
+        classRoom,
+        assessmentSelections: selectedAssessments,
+        growthSelections: selectedGrowth,
+        observationSelections: selectedObs
+      });
+
+      isAiDraftLoading = true;
+      aiReportBtn.disabled = true;
+      aiReportBtn.textContent = "✨ Menyusun Laporan AI...";
+      updateSummaryAndPreview();
+      renderAiDraftContent();
+
+      try {
+        const draft = await generateStudentReportWithAI({
+          apiKey: currentApiKey,
+          reportContext
+        });
+        reportAiDraft = draft;
+      } catch (err) {
+        console.error("[AI REPORT GENERATION ERROR]", err);
+        const message = err?.message || "Gagal membuat laporan AI";
+        window.alert(`Pembuatan laporan AI gagal.\n\nDetail: ${message}`);
+      } finally {
+        isAiDraftLoading = false;
+        aiReportBtn.textContent = "✨ Buat Laporan AI";
+        updateSummaryAndPreview();
+        renderAiDraftContent();
+      }
+    });
+
     previewToggleBtn.addEventListener("click", () => {
       const aCount = (classUi.reportSelection.assessmentSessionIds || []).length;
       const gCount = (classUi.reportSelection.growthRecordIds || []).length;
@@ -1211,7 +1484,9 @@ export function renderClassesScreen(state, actions) {
     });
 
     updateSummaryAndPreview();
-    container.append(summaryPanel);
+    renderAiDraftContent();
+    container.append(summaryPanel, aiDraftContainer);
+  }
   }
 
   function renderAddClassModal() {

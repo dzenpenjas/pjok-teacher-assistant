@@ -1,0 +1,204 @@
+/**
+ * Service for generating student report drafts using Gemini AI.
+ * strictly interprets data from ReportContext without inventing facts.
+ */
+
+export async function generateStudentReportWithAI({ apiKey, reportContext }) {
+  if (!apiKey || !apiKey.trim()) {
+    const error = new Error("API key is required");
+    error.isApiKeyError = true;
+    throw error;
+  }
+
+  if (!reportContext || typeof reportContext !== "object") {
+    throw new Error("Invalid reportContext provided");
+  }
+
+  const promptText = `Anda adalah asisten ahli penyusunan laporan perkembangan siswa PJOK (Pendidikan Jasmani, Olahraga, dan Kesehatan) untuk Sekolah Dasar (SD).
+Tugas Anda adalah menginterpretasikan data hasil asesmen, pertumbuhan fisik, dan observasi siswa yang diberikan untuk menyusun draf narasi laporan perkembangan siswa yang ramah, konstruktif, dan mudah dipahami orang tua.
+
+Berikut adalah data ReportContext siswa yang telah dipilih guru:
+${JSON.stringify(reportContext, null, 2)}
+
+ATURAN KETAT (CRITICAL RULES):
+1. Gunakan HANYA fakta dan data yang terdapat dalam ReportContext di atas.
+2. JANGAN PERNAH mengubah nilai numericScore dari asesmen. Nilai pada bagian learning harus sama persis dengan yang ada pada ReportContext (atau null jika tidak ada nilai numerik).
+3. JANGAN mengarang jawaban siswa, tindakan, atau kejadian yang tidak tercatat dalam rubrik, butir instrumen, riwayat pertumbuhan, atau observasi.
+4. JANGAN mengarang kemampuan fisik/kognitif yang tidak didukung oleh deskripsi rubrik atau catatan guru dalam context.
+5. Jika salah satu aspek data (misalnya pertumbuhan atau observasi atau asesmen tertentu) kosong atau tidak tersedia di ReportContext, kosongkan bagian terkait (isi dengan string kosong "") atau jelaskan secara singkat dan wajar bahwa belum ada data yang tercatat.
+6. Gunakan bahasa Indonesia yang santun, ramah, apresiatif, dan mudah dipahami oleh orang tua murid SD.
+7. Hindari istilah teknis yang terlalu klinis atau kaku, namun tetap profesional dan edukatif.
+8. Bedakan dengan jelas antara hasil capaian belajar materi, pemahaman konsep, sikap/perilaku, pertumbuhan fisik, aktivitas gerak lanjutan di rumah, saran gizi/makanan sehat, dan tindak lanjut pembelajaran.
+
+STRUKTUR KELUARAN JSON (HARUS PERSIS FORMAT BERIKUT):
+{
+  "summary": "Ringkasan umum perkembangan siswa secara keseluruhan",
+  "learning": [
+    {
+      "title": "Nama Asesmen / Materi Pembelajaran",
+      "score": 85,
+      "description": "Deskripsi capaian belajar siswa berdasarkan butir instrumen dan rubrik yang dicapai"
+    }
+  ],
+  "understanding": "Narasi mengenai pemahaman konsep gerak dan pengetahuan siswa",
+  "attitude": "Narasi mengenai sikap, sportivitas, kerja sama, dan keaktifan siswa saat pembelajaran",
+  "growth": "Narasi mengenai kondisi fisik, indeks tinggi/berat badan, dan pertumbuhan siswa",
+  "homeActivity": "Rekomendasi aktivitas fisik atau latihan gerak sederhana yang menyenangkan bersama orang tua di rumah",
+  "nutritionAdvice": "Saran pola makan bergizi, hidrasi, atau kebiasaan sehat pendukung aktivitas fisik",
+  "followUp": "Rencana tindak lanjut bimbingan guru di sekolah untuk mengembangkan potensi siswa"
+}
+
+KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
+
+  const requestBody = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: promptText
+          }
+        ]
+      }
+    ],
+    generationConfig: {
+      responseFormat: {
+        text: {
+          mimeType: "application/json",
+          schema: {
+            type: "object",
+            properties: {
+              summary: { type: "string" },
+              learning: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string" },
+                    score: { type: "number", nullable: true },
+                    description: { type: "string" }
+                  },
+                  required: ["title", "description"]
+                }
+              },
+              understanding: { type: "string" },
+              attitude: { type: "string" },
+              growth: { type: "string" },
+              homeActivity: { type: "string" },
+              nutritionAdvice: { type: "string" },
+              followUp: { type: "string" }
+            },
+            required: [
+              "summary",
+              "learning",
+              "understanding",
+              "attitude",
+              "growth",
+              "homeActivity",
+              "nutritionAdvice",
+              "followUp"
+            ]
+          }
+        }
+      }
+    }
+  };
+
+  const models = ["gemini-2.5-flash", "gemini-3.8-flash"];
+  let response = null;
+  let lastError = null;
+
+  for (const model of models) {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey.trim()
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (response.ok) {
+        break;
+      }
+
+      const errorBody = await response.text().catch(() => "");
+      const isAuthError =
+        response.status === 401 ||
+        response.status === 403 ||
+        errorBody.includes("API_KEY_INVALID") ||
+        errorBody.includes("API key not valid") ||
+        errorBody.includes("INVALID_API_KEY");
+
+      if (isAuthError) {
+        const err = new Error(`API key ditolak (${response.status}): ${errorBody}`);
+        err.isApiKeyError = true;
+        throw err;
+      }
+
+      if (response.status === 404) {
+        lastError = new Error(`Model ${model} tidak ditemukan: ${errorBody}`);
+        continue;
+      }
+
+      throw new Error(`API error (${response.status}): ${errorBody}`);
+    } catch (err) {
+      if (err.isApiKeyError) {
+        throw err;
+      }
+      lastError = err;
+    }
+  }
+
+  if (!response || !response.ok) {
+    throw lastError || new Error("Gagal menghubungi layanan AI Gemini");
+  }
+
+  const data = await response.json();
+  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!rawText) {
+    throw new Error("Respon kosong diterima dari model AI");
+  }
+
+  let parsed;
+  try {
+    let cleaned = rawText.trim();
+    if (cleaned.startsWith("```json")) {
+      cleaned = cleaned.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+    } else if (cleaned.startsWith("```")) {
+      cleaned = cleaned.replace(/^```\s*/, "").replace(/\s*```$/, "");
+    }
+    parsed = JSON.parse(cleaned);
+  } catch (parseErr) {
+    throw new Error(`Gagal memproses format respon AI: ${parseErr.message}`);
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Format respon AI tidak valid: bukan object JSON");
+  }
+
+  const sanitizedLearning = Array.isArray(parsed.learning)
+    ? parsed.learning.map((item) => ({
+        title: typeof item?.title === "string" ? item.title.trim() : "",
+        score:
+          item?.score !== null && item?.score !== undefined && !Number.isNaN(Number(item.score))
+            ? Number(item.score)
+            : null,
+        description: typeof item?.description === "string" ? item.description.trim() : ""
+      }))
+    : [];
+
+  return {
+    summary: typeof parsed.summary === "string" ? parsed.summary.trim() : "",
+    learning: sanitizedLearning,
+    understanding: typeof parsed.understanding === "string" ? parsed.understanding.trim() : "",
+    attitude: typeof parsed.attitude === "string" ? parsed.attitude.trim() : "",
+    growth: typeof parsed.growth === "string" ? parsed.growth.trim() : "",
+    homeActivity: typeof parsed.homeActivity === "string" ? parsed.homeActivity.trim() : "",
+    nutritionAdvice: typeof parsed.nutritionAdvice === "string" ? parsed.nutritionAdvice.trim() : "",
+    followUp: typeof parsed.followUp === "string" ? parsed.followUp.trim() : ""
+  };
+}
