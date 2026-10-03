@@ -1009,6 +1009,82 @@ export function renderClassesScreen(state, actions) {
 
     form.append(nameField, materialField, purposeField, typeField, scaleField);
 
+    // AI Config Panel
+    let rubricAiApiKey = "";
+    try {
+      rubricAiApiKey = window.sessionStorage.getItem("pjok_gemini_api_key") || "";
+    } catch (_) {
+      rubricAiApiKey = "";
+    }
+
+    const aiConfigPanel = createElement("div", "ai-rubric-config");
+    const aiConfigHeader = createElement("div", "ai-rubric-config-header");
+    aiConfigHeader.append(
+      createElement("strong", "ai-rubric-title", "🤖 AI Pembuat Rubrik"),
+      createElement("span", "text-subtle text-xs", "Gemini AI")
+    );
+
+    const aiKeyField = createElement("div", "field");
+    const aiKeyLabel = createElement("label", "font-medium text-xs", "Gemini API Key");
+
+    const aiKeyRow = createElement("div", "ai-rubric-key-row");
+
+    const aiKeyInput = document.createElement("input");
+    aiKeyInput.type = "password";
+    aiKeyInput.className = "input-text";
+    aiKeyInput.placeholder = "Masukkan Gemini API Key";
+    aiKeyInput.value = rubricAiApiKey;
+
+    const toggleShowKeyBtn = createElement("button", "btn-tool text-xs", "👁️ Tampilkan");
+    toggleShowKeyBtn.type = "button";
+    toggleShowKeyBtn.addEventListener("click", () => {
+      if (aiKeyInput.type === "password") {
+        aiKeyInput.type = "text";
+        toggleShowKeyBtn.textContent = "🙈 Sembunyikan";
+      } else {
+        aiKeyInput.type = "password";
+        toggleShowKeyBtn.textContent = "👁️ Tampilkan";
+      }
+    });
+
+    const saveKeyBtn = createElement("button", "btn-tool btn-tool-primary text-xs", "Simpan Key untuk Sesi Ini");
+    saveKeyBtn.type = "button";
+
+    aiKeyRow.append(aiKeyInput, toggleShowKeyBtn, saveKeyBtn);
+
+    const aiKeyHelper = createElement(
+      "p",
+      "text-subtle text-xs mt-1",
+      "API key hanya digunakan pada tab ini dan tidak disimpan ke data aplikasi."
+    );
+
+    const aiStatus = createElement(
+      "p",
+      "ai-rubric-status",
+      rubricAiApiKey
+        ? "API key siap digunakan pada sesi ini."
+        : "Masukkan Gemini API Key untuk menggunakan Generate Rubrik AI."
+    );
+
+    saveKeyBtn.addEventListener("click", () => {
+      const value = aiKeyInput.value.trim();
+      if (!value) {
+        window.alert("Masukkan Gemini API Key.");
+        return;
+      }
+      rubricAiApiKey = value;
+      try {
+        window.sessionStorage.setItem("pjok_gemini_api_key", value);
+      } catch (_) {
+        // Jangan gagalkan jika sessionStorage tidak tersedia
+      }
+      aiStatus.textContent = "API key siap digunakan pada sesi ini.";
+    });
+
+    aiKeyField.append(aiKeyLabel, aiKeyRow, aiKeyHelper, aiStatus);
+    aiConfigPanel.append(aiConfigHeader, aiKeyField);
+    form.append(aiConfigPanel);
+
     let currentScale = 5;
     let itemsData = [
       {
@@ -1092,66 +1168,51 @@ export function renderClassesScreen(state, actions) {
 
           if (aiBusy) return;
 
-          aiBusy = true;
+          const material = (materialField.querySelector("input")?.value || "").trim();
+          const purpose = purposeField.querySelector("select")?.value;
+          const assessmentType = typeField.querySelector("select")?.value;
+          const question = (item.prompt || "").trim();
+          const rubricScale = currentScale;
+          const gradeLevel = Number(classRoom.gradeLevel);
 
-          aiBtn.classList.add("is-ai-loading");
-          aiBtn.textContent = "Klik diterima...";
+          let phase = "Fase tidak diketahui";
+          if (gradeLevel === 1 || gradeLevel === 2) {
+            phase = "Fase A";
+          } else if (gradeLevel === 3 || gradeLevel === 4) {
+            phase = "Fase B";
+          } else if (gradeLevel === 5 || gradeLevel === 6) {
+            phase = "Fase C";
+          }
 
-          await Promise.resolve();
+          if (!material) {
+            window.alert("Isi materi terlebih dahulu agar AI dapat membuat rubrik yang sesuai.");
+            return;
+          }
 
-          aiBtn.textContent = "Memeriksa konteks...";
+          if (!question) {
+            window.alert("Tulis pertanyaan atau instrumen terlebih dahulu.");
+            return;
+          }
 
-          try {
-            const material = (materialField.querySelector("input")?.value || "").trim();
-            const purpose = purposeField.querySelector("select")?.value;
-            const assessmentType = typeField.querySelector("select")?.value;
-            const question = (item.prompt || "").trim();
-            const rubricScale = currentScale;
-            const gradeLevel = Number(classRoom.gradeLevel);
-
-            let phase = "Fase tidak diketahui";
-            if (gradeLevel === 1 || gradeLevel === 2) {
-              phase = "Fase A";
-            } else if (gradeLevel === 3 || gradeLevel === 4) {
-              phase = "Fase B";
-            } else if (gradeLevel === 5 || gradeLevel === 6) {
-              phase = "Fase C";
-            }
-
-            if (!material) {
-              window.alert("Isi materi terlebih dahulu agar AI dapat membuat rubrik yang sesuai.");
-              return;
-            }
-
-            if (!question) {
-              window.alert("Tulis pertanyaan atau instrumen terlebih dahulu.");
-              return;
-            }
-
-            let apiKey = "";
+          let apiKey = rubricAiApiKey.trim();
+          if (!apiKey) {
             try {
               apiKey = window.sessionStorage.getItem("pjok_gemini_api_key") || "";
-            } catch (storageErr) {
-              apiKey = "";
-            }
+            } catch (_) {}
+          }
 
-            if (!apiKey) {
-              const key = window.prompt(
-                "Masukkan Gemini API Key untuk sesi ini. Key hanya digunakan pada tab ini."
-              );
-              if (!key || !key.trim()) {
-                return;
-              }
-              apiKey = key.trim();
-              try {
-                window.sessionStorage.setItem("pjok_gemini_api_key", apiKey);
-              } catch (storageErr) {
-                // jangan gagalkan AI hanya karena sessionStorage tidak tersedia
-              }
-            }
+          if (!apiKey) {
+            aiStatus.textContent = "Masukkan Gemini API Key terlebih dahulu.";
+            aiKeyInput.focus();
+            return;
+          }
 
-            aiBtn.textContent = "Membuat Rubrik...";
+          aiBusy = true;
+          aiBtn.classList.add("is-ai-loading");
+          aiBtn.textContent = "Membuat Rubrik...";
+          aiStatus.textContent = `AI sedang membuat rubrik untuk Pertanyaan ${itemIdx + 1}...`;
 
+          try {
             const result = await generateRubricWithAI({
               apiKey,
               gradeLevel,
@@ -1169,18 +1230,22 @@ export function renderClassesScreen(state, actions) {
                 label: level.label || `Level ${level.level}`,
                 desc: level.desc
               }));
+              aiStatus.textContent = `Rubrik Pertanyaan ${itemIdx + 1} berhasil dibuat. Silakan periksa dan edit jika diperlukan.`;
               renderItems();
             }
           } catch (err) {
             console.error("[AI RUBRIC GENERATION ERROR]", err);
+            const message = err?.message || "Unknown AI error";
+            aiStatus.textContent = `AI gagal: ${message}`;
             if (err?.isApiKeyError) {
+              rubricAiApiKey = "";
               try {
                 window.sessionStorage.removeItem("pjok_gemini_api_key");
               } catch (_) {}
+              aiKeyInput.value = "";
+              aiStatus.textContent = "API key ditolak. Masukkan API key yang valid.";
             }
-            window.alert(
-              `Rubrik AI gagal dibuat.\n\nDetail: ${err?.message || "Unknown AI error"}`
-            );
+            window.alert(`Rubrik AI gagal dibuat.\n\nDetail: ${message}`);
           } finally {
             aiBusy = false;
             aiBtn.classList.remove("is-ai-loading");

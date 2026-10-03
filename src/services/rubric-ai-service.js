@@ -58,7 +58,7 @@ KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT BERIKUT (tanpa markdown atau teks lain
   ]
 }`;
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
+  const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
   const requestBody = {
     contents: [
@@ -82,7 +82,8 @@ KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT BERIKUT (tanpa markdown atau teks lain
     response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey.trim()
       },
       body: JSON.stringify(requestBody)
     });
@@ -93,7 +94,13 @@ KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT BERIKUT (tanpa markdown atau teks lain
   if (!response.ok) {
     const errorBody = await response.text().catch(() => "");
     const error = new Error(`API error (${response.status}): ${errorBody}`);
-    if (response.status === 400 || response.status === 401 || response.status === 403 || errorBody.includes("API_KEY_INVALID")) {
+    if (
+      response.status === 400 ||
+      response.status === 401 ||
+      response.status === 403 ||
+      errorBody.includes("API_KEY_INVALID") ||
+      errorBody.includes("API key not valid")
+    ) {
       error.isApiKeyError = true;
     }
     throw error;
