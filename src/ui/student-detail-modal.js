@@ -267,66 +267,12 @@ export function renderStudentDetailModal(studentId, context, onClose) {
     }
     tabBody.append(histSection);
 
-    // Form to add measurement
-    const addSection = createElement("details", "activity-add-accordion");
-    const summary = createElement("summary", "activity-add-summary", "+ Catat Pengukuran Baru");
-    const form = createElement("form", "master-form");
-
-    const dateF = createElement("label", "field");
-    dateF.append(createElement("span", "", "Tanggal"));
-    const dateIn = document.createElement("input");
-    dateIn.type = "date";
-    dateIn.name = "date";
-    dateIn.defaultValue = new Date().toISOString().slice(0, 10);
-    dateF.append(dateIn);
-
-    const hF = createElement("label", "field");
-    hF.append(createElement("span", "", "Tinggi Badan (cm) *"));
-    const hIn = document.createElement("input");
-    hIn.type = "number";
-    hIn.step = "0.5";
-    hIn.name = "heightCm";
-    hIn.required = true;
-    hIn.defaultValue = height || "";
-    hF.append(hIn);
-
-    const wF = createElement("label", "field");
-    wF.append(createElement("span", "", "Berat Badan (kg) *"));
-    const wIn = document.createElement("input");
-    wIn.type = "number";
-    wIn.step = "0.5";
-    wIn.name = "weightKg";
-    wIn.required = true;
-    wIn.defaultValue = weight || "";
-    wF.append(wIn);
-
-    const nF = createElement("label", "field");
-    nF.append(createElement("span", "", "Catatan"));
-    const nIn = document.createElement("input");
-    nIn.name = "note";
-    nIn.placeholder = "Pengukuran awal semester, postur, dll";
-    nF.append(nIn);
-
-    const submitBtn = createElement("button", "primary-action compact-action", "Simpan Pengukuran");
-    submitBtn.type = "submit";
-
-    form.append(dateF, hF, wF, nF, submitBtn);
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const vals = Object.fromEntries(new FormData(form).entries());
-      if (context.actions?.createGrowthRecord) {
-        context.actions.createGrowthRecord({
-          studentId: student.id,
-          date: vals.date,
-          heightCm: vals.heightCm,
-          weightKg: vals.weightKg,
-          note: vals.note
-        });
-      }
-    });
-
-    addSection.append(summary, form);
-    tabBody.append(addSection);
+    // Info note that growth screening is done via class menu
+    const infoNotice = createElement("div", "info-callout text-subtle");
+    infoNotice.append(
+      createElement("p", "screen-copy", "ℹ️ Pemeriksaan pertumbuhan dilakukan secara berkala melalui menu Kelas → Pemeriksaan Pertumbuhan.")
+    );
+    tabBody.append(infoNotice);
   }
 
   // TAB 2: ATTENDANCE HISTORY

@@ -19,6 +19,7 @@ export function renderClassesScreen(state, actions) {
 
   // State local to screen for selected class
   let selectedClassId = null;
+  let isGrowthScreening = false;
   let showAddClassModal = false;
   let showAddStudentModal = false;
   let activeTab = "students"; // "students" | "sessions"
@@ -31,8 +32,13 @@ export function renderClassesScreen(state, actions) {
     container.replaceChildren();
 
     if (selectedClassId) {
-      renderClassDetail(selectedClassId);
+      if (isGrowthScreening) {
+        renderClassGrowthScreening(selectedClassId);
+      } else {
+        renderClassDetail(selectedClassId);
+      }
     } else {
+      isGrowthScreening = false;
       renderClassList();
     }
   }
@@ -195,6 +201,14 @@ export function renderClassesScreen(state, actions) {
 
     // Secondary Admin Toolbar
     const adminCluster = createElement("div", "class-admin-cluster");
+    const growthScreeningBtn = createElement("button", "btn-tool");
+    growthScreeningBtn.type = "button";
+    growthScreeningBtn.append(ICONS.chart(15), document.createTextNode(" Pemeriksaan Pertumbuhan"));
+    growthScreeningBtn.addEventListener("click", () => {
+      isGrowthScreening = true;
+      render();
+    });
+
     const addStudentBtn = createElement("button", "btn-tool btn-tool-primary");
     addStudentBtn.type = "button";
     addStudentBtn.append(ICONS.plus(15), document.createTextNode(" Tambah Siswa"));
@@ -225,7 +239,7 @@ export function renderClassesScreen(state, actions) {
       }
     });
 
-    adminCluster.append(addStudentBtn, editClassBtn, deleteClassBtn);
+    adminCluster.append(growthScreeningBtn, addStudentBtn, editClassBtn, deleteClassBtn);
     header.append(titleGroup, mainStartBtn, adminCluster);
     container.append(header);
 
@@ -509,6 +523,210 @@ export function renderClassesScreen(state, actions) {
     modal.append(form);
     backdrop.append(modal);
     return backdrop;
+  }
+
+  function renderClassGrowthScreening(classId) {
+    const classRoom = (state.classes || []).find((c) => c.id === classId);
+    if (!classRoom) {
+      isGrowthScreening = false;
+      renderClassList();
+      return;
+    }
+
+    const classStudents = (state.students || []).filter((s) => s.classId === classRoom.id);
+
+    const backBtn = createElement("button", "btn-back-nav");
+    backBtn.type = "button";
+    backBtn.append(document.createTextNode(`← Kembali ke Detail ${classRoom.name}`));
+    backBtn.addEventListener("click", () => {
+      isGrowthScreening = false;
+      render();
+    });
+    container.append(backBtn);
+
+    const header = createElement("header", "screen-header-row");
+    const titleGroup = createElement("div");
+    const eyebrow = createElement("p", "eyebrow");
+    eyebrow.append(ICONS.chart(15), document.createTextNode(" Pemeriksaan Berkala"));
+    titleGroup.append(
+      eyebrow,
+      createElement("h1", "screen-title", `Pemeriksaan Pertumbuhan: ${classRoom.name}`),
+      createElement("p", "screen-copy", `Catat pengukuran tinggi badan (TB) dan berat badan (BB) seluruh siswa kelas ${classRoom.name}. Data akan otomatis tersimpan sebagai riwayat GrowthRecord.`)
+    );
+    header.append(titleGroup);
+    container.append(header);
+
+    if (classStudents.length === 0) {
+      const emptyCard = createElement("div", "empty-state-card");
+      emptyCard.append(
+        createElement("p", "empty-copy", "Belum ada siswa di kelas ini."),
+        createElement("p", "screen-copy", "Tambahkan siswa terlebih dahulu sebelum melakukan pemeriksaan pertumbuhan.")
+      );
+      container.append(emptyCard);
+      return;
+    }
+
+    const form = createElement("form", "growth-screening-form");
+
+    // Top Controls
+    const topBar = createElement("div", "growth-screening-top");
+    const dateField = createElement("label", "screening-date-field");
+    dateField.append(createElement("span", "field-label", "Tanggal Pengukuran:"));
+    const dateInput = document.createElement("input");
+    dateInput.type = "date";
+    dateInput.className = "screening-date-input";
+    dateInput.required = true;
+    dateInput.value = new Date().toISOString().slice(0, 10);
+    dateField.append(dateInput);
+    topBar.append(dateField);
+    form.append(topBar);
+
+    // Table of students
+    const tableCard = createElement("div", "growth-screening-card");
+    const table = createElement("table", "growth-screening-table");
+    const thead = createElement("thead");
+    thead.innerHTML = `
+      <tr>
+        <th style="width: 44px; text-align: center;">No</th>
+        <th>Nama Siswa</th>
+        <th style="width: 170px;">Tinggi Badan (cm)</th>
+        <th style="width: 170px;">Berat Badan (kg)</th>
+        <th style="width: 170px;">Data Terakhir</th>
+      </tr>
+    `;
+    table.append(thead);
+
+    const tbody = createElement("tbody");
+    const studentInputs = [];
+
+    classStudents.forEach((student, idx) => {
+      const tr = createElement("tr");
+
+      // Find latest growth record
+      const records = (state.growthRecords || [])
+        .filter((g) => g.studentId === student.id)
+        .sort((a, b) => (a.date > b.date ? 1 : -1));
+      const latest = records.length > 0 ? records[records.length - 1] : null;
+
+      const prevHeight = latest?.heightCm ?? student.heightCm ?? "";
+      const prevWeight = latest?.weightKg ?? student.weightKg ?? "";
+      const prevInfo = latest
+        ? `${latest.date}: ${latest.heightCm || "-"}cm / ${latest.weightKg || "-"}kg`
+        : (student.heightCm || student.weightKg
+            ? `Awal: ${student.heightCm || "-"}cm / ${student.weightKg || "-"}kg`
+            : "Belum ada");
+
+      // Col 1: Index
+      const tdIdx = createElement("td", "text-center text-subtle", `${idx + 1}`);
+
+      // Col 2: Student
+      const tdStudent = createElement("td");
+      const studentCell = createElement("div", "screening-student-cell");
+      const avatar = createStudentAvatar(student, "screening-student-avatar");
+      const meta = createElement("div");
+      meta.append(
+        createElement("strong", "student-name-text", student.name),
+        createElement("div", "text-subtle text-xs", `NIS: ${student.studentNumber || "-"} • ${student.gender === "female" ? "P" : "L"}`)
+      );
+      studentCell.append(avatar, meta);
+      tdStudent.append(studentCell);
+
+      // Col 3: Height
+      const tdHeight = createElement("td");
+      const hInput = document.createElement("input");
+      hInput.type = "number";
+      hInput.step = "0.1";
+      hInput.min = "0";
+      hInput.className = "screening-num-input";
+      hInput.placeholder = "TB (cm)";
+      if (prevHeight !== "") {
+        hInput.defaultValue = prevHeight;
+      }
+      tdHeight.append(hInput);
+
+      // Col 4: Weight
+      const tdWeight = createElement("td");
+      const wInput = document.createElement("input");
+      wInput.type = "number";
+      wInput.step = "0.1";
+      wInput.min = "0";
+      wInput.className = "screening-num-input";
+      wInput.placeholder = "BB (kg)";
+      if (prevWeight !== "") {
+        wInput.defaultValue = prevWeight;
+      }
+      tdWeight.append(wInput);
+
+      // Col 5: Last recorded
+      const tdPrev = createElement("td", "text-subtle text-xs", prevInfo);
+
+      tr.append(tdIdx, tdStudent, tdHeight, tdWeight, tdPrev);
+      tbody.append(tr);
+
+      studentInputs.push({
+        student,
+        hInput,
+        wInput
+      });
+    });
+
+    table.append(tbody);
+    tableCard.append(table);
+    form.append(tableCard);
+
+    // Bottom Action buttons
+    const actionsBar = createElement("div", "screening-actions-bar");
+    const saveBtn = createElement("button", "primary-action", "Simpan Pemeriksaan Kelas");
+    saveBtn.type = "submit";
+
+    const cancelBtn = createElement("button", "btn-tool", "Batal");
+    cancelBtn.type = "button";
+    cancelBtn.addEventListener("click", () => {
+      isGrowthScreening = false;
+      render();
+    });
+
+    actionsBar.append(saveBtn, cancelBtn);
+    form.append(actionsBar);
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const measureDate = dateInput.value || new Date().toISOString().slice(0, 10);
+      const recordsToSave = [];
+
+      studentInputs.forEach(({ student, hInput, wInput }) => {
+        const hVal = hInput.value.trim();
+        const wVal = wInput.value.trim();
+
+        const hasH = hVal !== "" && !isNaN(Number(hVal));
+        const hasW = wVal !== "" && !isNaN(Number(wVal));
+
+        if (hasH || hasW) {
+          recordsToSave.push({
+            studentId: student.id,
+            date: measureDate,
+            heightCm: hasH ? Number(hVal) : null,
+            weightKg: hasW ? Number(wVal) : null,
+            note: `Pemeriksaan Kelas ${classRoom.name}`
+          });
+        }
+      });
+
+      if (recordsToSave.length === 0) {
+        window.alert("Tidak ada data tinggi atau berat badan yang diisi untuk disimpan.");
+        return;
+      }
+
+      if (actions?.createGrowthRecord) {
+        actions.createGrowthRecord(recordsToSave);
+      }
+
+      window.alert(`Berhasil menyimpan pemeriksaan pertumbuhan untuk ${recordsToSave.length} siswa.`);
+      isGrowthScreening = false;
+      render();
+    });
+
+    container.append(form);
   }
 
   render();

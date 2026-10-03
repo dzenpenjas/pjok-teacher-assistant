@@ -540,7 +540,11 @@ function createCrudActions() {
 
     // GROWTH RECORDS & MEASUREMENTS
     createGrowthRecord: (input) => {
-      repositories.growthRecords.create(input);
+      if (Array.isArray(input)) {
+        input.forEach((item) => repositories.growthRecords.create(item));
+      } else {
+        repositories.growthRecords.create(input);
+      }
       refreshState();
     },
     deleteGrowthRecord: (id) => {
