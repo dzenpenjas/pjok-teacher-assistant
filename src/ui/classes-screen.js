@@ -1069,49 +1069,66 @@ export function renderClassesScreen(state, actions) {
         // AI Generate Rubric button
         const aiBtn = createElement("button", "btn-tool text-xs mt-1 self-start flex items-center gap-1", "✨ Generate Rubrik AI");
         aiBtn.type = "button";
+        aiBtn.disabled = false;
+        aiBtn.style.cursor = "pointer";
+
         aiBtn.addEventListener("click", async () => {
-          const material = (materialField.querySelector("input")?.value || "").trim();
-          const purpose = purposeField.querySelector("select")?.value;
-          const assessmentType = typeField.querySelector("select")?.value;
-          const question = (item.prompt || "").trim();
-          const rubricScale = currentScale;
-          const gradeLevel = Number(classRoom.gradeLevel);
-
-          let phase = "Fase tidak diketahui";
-          if (gradeLevel === 1 || gradeLevel === 2) {
-            phase = "Fase A";
-          } else if (gradeLevel === 3 || gradeLevel === 4) {
-            phase = "Fase B";
-          } else if (gradeLevel === 5 || gradeLevel === 6) {
-            phase = "Fase C";
-          }
-
-          if (!material) {
-            window.alert("Isi materi terlebih dahulu agar AI dapat membuat rubrik yang sesuai.");
-            return;
-          }
-
-          if (!question) {
-            window.alert("Tulis pertanyaan atau instrumen terlebih dahulu.");
-            return;
-          }
-
-          let apiKey = sessionStorage.getItem("pjok_gemini_api_key");
-          if (!apiKey) {
-            const key = window.prompt(
-              "Masukkan Gemini API Key untuk sesi ini. Key hanya disimpan sampai tab/browser ditutup."
-            );
-            if (!key || !key.trim()) {
-              return;
-            }
-            apiKey = key.trim();
-            sessionStorage.setItem("pjok_gemini_api_key", apiKey);
-          }
+          if (aiBtn.disabled) return;
 
           aiBtn.disabled = true;
-          aiBtn.textContent = "Membuat Rubrik...";
+          aiBtn.textContent = "Memeriksa konteks...";
 
           try {
+            const material = (materialField.querySelector("input")?.value || "").trim();
+            const purpose = purposeField.querySelector("select")?.value;
+            const assessmentType = typeField.querySelector("select")?.value;
+            const question = (item.prompt || "").trim();
+            const rubricScale = currentScale;
+            const gradeLevel = Number(classRoom.gradeLevel);
+
+            let phase = "Fase tidak diketahui";
+            if (gradeLevel === 1 || gradeLevel === 2) {
+              phase = "Fase A";
+            } else if (gradeLevel === 3 || gradeLevel === 4) {
+              phase = "Fase B";
+            } else if (gradeLevel === 5 || gradeLevel === 6) {
+              phase = "Fase C";
+            }
+
+            if (!material) {
+              window.alert("Isi materi terlebih dahulu agar AI dapat membuat rubrik yang sesuai.");
+              return;
+            }
+
+            if (!question) {
+              window.alert("Tulis pertanyaan atau instrumen terlebih dahulu.");
+              return;
+            }
+
+            let apiKey = "";
+            try {
+              apiKey = window.sessionStorage.getItem("pjok_gemini_api_key") || "";
+            } catch (storageErr) {
+              apiKey = "";
+            }
+
+            if (!apiKey) {
+              const key = window.prompt(
+                "Masukkan Gemini API Key untuk sesi ini. Key hanya digunakan pada tab ini."
+              );
+              if (!key || !key.trim()) {
+                return;
+              }
+              apiKey = key.trim();
+              try {
+                window.sessionStorage.setItem("pjok_gemini_api_key", apiKey);
+              } catch (storageErr) {
+                // jangan gagalkan AI hanya karena sessionStorage tidak tersedia
+              }
+            }
+
+            aiBtn.textContent = "Membuat Rubrik...";
+
             const result = await generateRubricWithAI({
               apiKey,
               gradeLevel,
@@ -1132,10 +1149,15 @@ export function renderClassesScreen(state, actions) {
               renderItems();
             }
           } catch (err) {
+            console.error("[AI RUBRIC GENERATION ERROR]", err);
             if (err?.isApiKeyError) {
-              sessionStorage.removeItem("pjok_gemini_api_key");
+              try {
+                window.sessionStorage.removeItem("pjok_gemini_api_key");
+              } catch (_) {}
             }
-            window.alert("Rubrik AI belum dapat dibuat. Periksa koneksi atau API key lalu coba lagi.");
+            const message = err?.message || "Unknown AI error";
+            window.alert(`Rubrik AI gagal dibuat.\n\nDetail: ${message}`);
+          } finally {
             aiBtn.disabled = false;
             aiBtn.textContent = "✨ Generate Rubrik AI";
           }
