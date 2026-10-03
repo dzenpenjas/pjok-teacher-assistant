@@ -275,7 +275,7 @@ export function renderSettingsScreen(state, actions) {
       createElement(
         "p",
         "screen-copy",
-        "Atur instrumen tes fisik dan penilaian keterampilan (rubrik skala 1-4, stopwatch detik lari/renang, atau skor angka)."
+        "Atur instrumen tes fisik dan penilaian keterampilan (rubrik skala 1–5, stopwatch detik lari/renang, atau skor angka)."
       )
     );
 
@@ -293,12 +293,22 @@ export function renderSettingsScreen(state, actions) {
         ]
       }),
       createSelectField({
-        label: "Tipe Skoring",
-        name: "scoringType",
+        label: "Bentuk Asesmen",
+        name: "assessmentType",
         options: [
-          { value: "rubric", label: "Rubrik Skala 1 - 4" },
-          { value: "numeric", label: "Nilai Angka Bebas (0 - 100)" },
-          { value: "stopwatch", label: "Waktu Stopwatch (detik)" }
+          { value: "written", label: "Tes Tertulis" },
+          { value: "oral", label: "Tes Lisan" },
+          { value: "practice", label: "Praktik" },
+          { value: "observation", label: "Observasi" }
+        ]
+      }),
+      createSelectField({
+        label: "Tipe Skoring",
+        name: "method",
+        options: [
+          { value: "rubric", label: "Rubrik Skala 1–5" },
+          { value: "numeric", label: "Nilai Angka" },
+          { value: "stopwatch", label: "Stopwatch / Waktu" }
         ]
       }),
       createField({ label: "Deskripsi Indikator / Kriteria", name: "description" }),
@@ -319,9 +329,36 @@ export function renderSettingsScreen(state, actions) {
     (state.assessmentDefinitions || []).forEach((def) => {
       const row = createElement("div", "record-row");
       const content = createElement("div");
+
+      const categoryMap = {
+        keterampilan: "Keterampilan",
+        kebugaran: "Kebugaran",
+        sikap: "Sikap",
+        pengetahuan: "Pengetahuan"
+      };
+      const catLabel = categoryMap[(def.category || "").toLowerCase()] || def.category || "-";
+
+      const typeMap = {
+        written: "Tertulis",
+        oral: "Lisan",
+        practice: "Praktik",
+        observation: "Observasi"
+      };
+      const typeLabel = typeMap[def.assessmentType] || (def.assessmentType && def.assessmentType !== "unspecified" ? def.assessmentType : "Belum ditentukan");
+
+      let methodLabel = "Rubrik 1–5";
+      const methodKey = def.method || def.scoringType;
+      if (methodKey === "numeric") {
+        methodLabel = "Nilai Angka";
+      } else if (methodKey === "stopwatch") {
+        methodLabel = "Stopwatch";
+      } else if (methodKey === "rubric") {
+        methodLabel = def.rubricScale ? `Rubrik 1–${def.rubricScale}` : "Rubrik 1–5";
+      }
+
       content.append(
         createElement("strong", "", def.name),
-        createElement("span", "", `Kategori: ${def.category || "-"} • Skoring: ${def.scoringType || "rubric"}`)
+        createElement("span", "", `${catLabel} • ${typeLabel} • ${methodLabel}`)
       );
       if (def.description) {
         content.append(createElement("p", "screen-copy", def.description));

@@ -69,7 +69,8 @@ export function renderAssessmentPanel(context) {
   definitions.forEach((def) => {
     const opt = document.createElement("option");
     opt.value = def.id;
-    opt.textContent = `[${def.category}] ${def.name} (${def.method === "rubric" ? "Rubrik 1-4" : def.unit || def.method})`;
+    const scaleStr = def.rubricScale ? `1–${def.rubricScale}` : "1–5";
+    opt.textContent = `[${def.category}] ${def.name} (${def.method === "rubric" ? `Rubrik ${scaleStr}` : def.unit || def.method})`;
     if (activeDefinition && def.id === activeDefinition.id) {
       opt.selected = true;
     }
@@ -171,14 +172,38 @@ export function renderAssessmentPanel(context) {
       const inputSection = createElement("div", "assess-input-section");
 
       if (activeDefinition.method === "rubric") {
-        // Rubric Level Buttons 1 - 4
+        // Rubric Level Buttons
         const rubricWrap = createElement("div", "rubric-buttons-wrap");
-        const levels = activeDefinition.rubricLevels || [
-          { level: 1, label: "Perlu Bimbingan" },
-          { level: 2, label: "Cukup" },
-          { level: 3, label: "Baik" },
-          { level: 4, label: "Sangat Baik" }
+        const defaultLevels = [
+          {
+            level: 1,
+            label: "Belum Berkembang",
+            desc: "Belum menunjukkan kemampuan yang dinilai dan masih memerlukan bimbingan penuh."
+          },
+          {
+            level: 2,
+            label: "Mulai Berkembang",
+            desc: "Mulai menunjukkan kemampuan tetapi masih memerlukan banyak arahan atau bantuan."
+          },
+          {
+            level: 3,
+            label: "Cukup Berkembang",
+            desc: "Mampu menunjukkan kemampuan utama dengan cukup baik, meskipun belum konsisten."
+          },
+          {
+            level: 4,
+            label: "Berkembang Baik",
+            desc: "Mampu menunjukkan kemampuan dengan baik dan relatif mandiri."
+          },
+          {
+            level: 5,
+            label: "Berkembang Sangat Baik",
+            desc: "Mampu menunjukkan kemampuan dengan sangat baik, mandiri, dan konsisten."
+          }
         ];
+        const levels = Array.isArray(activeDefinition.rubricLevels) && activeDefinition.rubricLevels.length > 0
+          ? activeDefinition.rubricLevels
+          : defaultLevels;
 
         levels.forEach((lvl) => {
           const isSelected = existingResult?.rubricLevel === lvl.level;

@@ -199,19 +199,40 @@ export function createAssessmentDefinition(input = {}) {
   return {
     ...withMeta(input, "assess-def"),
     name: input.name || "",
-    category: input.category || "Keterampilan", // Keterampilan, Kebugaran Jasmani, Sikap/Perilaku, Pengetahuan
-    assessmentType: input.assessmentType || "unspecified",
-    method: input.method || "numeric", // stopwatch, numeric, rubric
+    category: input.category || "keterampilan", // keterampilan, kebugaran, sikap, pengetahuan
+    assessmentType: input.assessmentType || "practice", // written, oral, practice, observation
+    method: input.method || "rubric", // rubric, numeric, stopwatch
     unit: input.unit || "", // detik, cm, kali, poin
     direction: input.direction || "higher_better", // higher_better, lower_better
-    rubricScale: Number(input.rubricScale) || 4,
+    rubricScale: Number(input.rubricScale) || 5,
     rubricLevels: Array.isArray(input.rubricLevels)
       ? input.rubricLevels
       : [
-          { level: 1, label: "Perlu Bimbingan", desc: "Belum menguasai teknik dasar" },
-          { level: 2, label: "Cukup", desc: "Mulai menguasai dengan bimbingan" },
-          { level: 3, label: "Baik", desc: "Menguasai teknik dengan mandiri" },
-          { level: 4, label: "Sangat Baik", desc: "Menguasai teknik secara konsisten dan tangkas" }
+          {
+            level: 1,
+            label: "Belum Berkembang",
+            desc: "Belum menunjukkan kemampuan yang dinilai dan masih memerlukan bimbingan penuh."
+          },
+          {
+            level: 2,
+            label: "Mulai Berkembang",
+            desc: "Mulai menunjukkan kemampuan tetapi masih memerlukan banyak arahan atau bantuan."
+          },
+          {
+            level: 3,
+            label: "Cukup Berkembang",
+            desc: "Mampu menunjukkan kemampuan utama dengan cukup baik, meskipun belum konsisten."
+          },
+          {
+            level: 4,
+            label: "Berkembang Baik",
+            desc: "Mampu menunjukkan kemampuan dengan baik dan relatif mandiri."
+          },
+          {
+            level: 5,
+            label: "Berkembang Sangat Baik",
+            desc: "Mampu menunjukkan kemampuan dengan sangat baik, mandiri, dan konsisten."
+          }
         ],
     description: input.description || ""
   };
