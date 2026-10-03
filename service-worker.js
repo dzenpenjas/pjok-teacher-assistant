@@ -1,4 +1,4 @@
-const CACHE_NAME = "pjok-teacher-assistant-v25";
+const CACHE_NAME = "pjok-teacher-assistant-v26";
 
 const APP_ASSETS = [
   "./",
@@ -79,12 +79,24 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Network-First, falling back to Cache
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      return (
-        cachedResponse ||
-        fetch(event.request).catch(() => caches.match("./index.html"))
-      );
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+        // Cache the successful network response for offline availability
+        if (networkResponse && networkResponse.status === 200) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        // If network request fails, fall back to cached copy
+        return caches.match(event.request).then((cachedResponse) => {
+          return cachedResponse || caches.match("./index.html");
+        });
+      })
   );
 });
