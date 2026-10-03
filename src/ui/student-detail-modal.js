@@ -107,19 +107,9 @@ export function renderStudentDetailModal(studentId, context, onClose) {
   modal.append(headerRow);
 
   // Identity & Physical Quick Meta Bar
-  const latestGrowth = growthRecords.length > 0 ? growthRecords[growthRecords.length - 1] : null;
-  const currentHeight = latestGrowth?.heightCm || student.heightCm;
-  const currentWeight = latestGrowth?.weightKg || student.weightKg;
-
   const profileMetaBar = createElement("div", "profile-meta-bar");
   if (student.birthDate) {
     profileMetaBar.append(createElement("span", "profile-meta-chip", `Lahir: ${student.birthDate}`));
-  }
-  if (currentHeight) {
-    profileMetaBar.append(createElement("span", "profile-meta-chip", `TB: ${currentHeight} cm`));
-  }
-  if (currentWeight) {
-    profileMetaBar.append(createElement("span", "profile-meta-chip", `BB: ${currentWeight} kg`));
   }
   const studentNotes = (context.studentNotes || context.notes || []).filter(
     (n) => (student.noteIds || []).includes(n.id) || n.studentId === student.id
@@ -180,7 +170,7 @@ export function renderStudentDetailModal(studentId, context, onClose) {
   let activeTab = "growth"; // growth, attendance, assessment, observations
 
   const modalTabs = [
-    { id: "growth", label: "Pertumbuhan & IMT", icon: () => ICONS.chart(16) },
+    { id: "growth", label: "Pemeriksaan Pertumbuhan", icon: () => ICONS.chart(16) },
     { id: "attendance", label: "Absensi", icon: () => ICONS.calendar(16) },
     { id: "assessment", label: "Nilai & Tes", icon: () => ICONS.target(16) },
     { id: "observations", label: "Observasi", icon: () => ICONS.clipboardCheck(16) }

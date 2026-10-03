@@ -541,17 +541,6 @@ function createCrudActions() {
     // GROWTH RECORDS & MEASUREMENTS
     createGrowthRecord: (input) => {
       repositories.growthRecords.create(input);
-      // Sync latest measurements to student entity
-      if (input.studentId) {
-        const student = repositories.students.findById(input.studentId);
-        if (student) {
-          repositories.students.update(student.id, {
-            ...student,
-            heightCm: Number(input.heightCm) || student.heightCm,
-            weightKg: Number(input.weightKg) || student.weightKg
-          });
-        }
-      }
       refreshState();
     },
     deleteGrowthRecord: (id) => {
