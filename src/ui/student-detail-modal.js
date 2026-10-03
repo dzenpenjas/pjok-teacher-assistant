@@ -2,6 +2,7 @@ import { calculateBmi } from "../data/models.js";
 import { createStudentAvatar } from "./student-avatar.js";
 import { openCameraModal } from "./camera-modal.js";
 import { ICONS } from "./icons.js";
+import { createField, createSelectField, formToObject } from "./form-controls.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -67,13 +68,14 @@ export function renderStudentDetailModal(studentId, context, onClose) {
   });
   avatarWrapper.append(changePhotoBtn);
 
+  const genderLabel = student.gender === "female" ? "Perempuan" : "Laki-laki";
   const textGroup = createElement("div", "modal-identity-text");
   textGroup.append(createElement("h2", "modal-student-name", student.name));
   textGroup.append(
     createElement(
       "span",
       "modal-student-sub",
-      `${classRoom?.name || "Tanpa Kelas"} • NIS: ${student.studentNumber || "-"} • ${student.gender === "P" ? "Perempuan" : "Laki-laki"}`
+      `${classRoom?.name || "Tanpa Kelas"} • NIS: ${student.studentNumber || "-"} • ${genderLabel}`
     )
   );
 
@@ -105,15 +107,19 @@ export function renderStudentDetailModal(studentId, context, onClose) {
   modal.append(headerRow);
 
   // Identity & Physical Quick Meta Bar
+  const latestGrowth = growthRecords.length > 0 ? growthRecords[growthRecords.length - 1] : null;
+  const currentHeight = latestGrowth?.heightCm || student.heightCm;
+  const currentWeight = latestGrowth?.weightKg || student.weightKg;
+
   const profileMetaBar = createElement("div", "profile-meta-bar");
   if (student.birthDate) {
     profileMetaBar.append(createElement("span", "profile-meta-chip", `Lahir: ${student.birthDate}`));
   }
-  if (student.heightCm) {
-    profileMetaBar.append(createElement("span", "profile-meta-chip", `TB: ${student.heightCm} cm`));
+  if (currentHeight) {
+    profileMetaBar.append(createElement("span", "profile-meta-chip", `TB: ${currentHeight} cm`));
   }
-  if (student.weightKg) {
-    profileMetaBar.append(createElement("span", "profile-meta-chip", `BB: ${student.weightKg} kg`));
+  if (currentWeight) {
+    profileMetaBar.append(createElement("span", "profile-meta-chip", `BB: ${currentWeight} kg`));
   }
   const studentNotes = (context.studentNotes || context.notes || []).filter(
     (n) => (student.noteIds || []).includes(n.id) || n.studentId === student.id
@@ -124,6 +130,48 @@ export function renderStudentDetailModal(studentId, context, onClose) {
   if (profileMetaBar.children.length > 0) {
     modal.append(profileMetaBar);
   }
+
+  // Identity Form (Collapsible/Accordion)
+  const identitySection = createElement("details", "activity-add-accordion student-identity-section");
+  const idSummary = createElement("summary", "activity-add-summary", "✏️ Edit Identitas Siswa");
+  const idForm = createElement("form", "master-form student-identity-form");
+
+  idForm.append(
+    createField({ label: "Nama Lengkap", name: "name", value: student.name || "", required: true }),
+    createField({ label: "NIS", name: "studentNumber", value: student.studentNumber || "" }),
+    createSelectField({
+      label: "Jenis Kelamin",
+      name: "gender",
+      value: student.gender || "male",
+      options: [
+        { value: "male", label: "Laki-laki" },
+        { value: "female", label: "Perempuan" }
+      ]
+    }),
+    createField({ label: "Tanggal Lahir", name: "birthDate", type: "date", value: student.birthDate || "" })
+  );
+
+  const saveBtn = createElement("button", "primary-action compact-action", "Simpan Profil");
+  saveBtn.type = "submit";
+  idForm.append(saveBtn);
+
+  idForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const data = formToObject(idForm);
+    if (context.actions?.updateStudent) {
+      context.actions.updateStudent(student.id, {
+        ...student,
+        name: data.name?.trim() || student.name,
+        studentNumber: (data.studentNumber || "").trim(),
+        gender: data.gender || student.gender,
+        birthDate: data.birthDate || ""
+      });
+      window.alert("Profil siswa berhasil diperbarui!");
+    }
+  });
+
+  identitySection.append(idSummary, idForm);
+  modal.append(identitySection);
 
   // MODAL TABS
   const navTabs = createElement("div", "modal-nav-tabs");
