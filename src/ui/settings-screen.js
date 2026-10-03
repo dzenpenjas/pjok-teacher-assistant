@@ -347,7 +347,7 @@ export function renderSettingsScreen(state, actions) {
       const typeLabel = typeMap[def.assessmentType] || (def.assessmentType && def.assessmentType !== "unspecified" ? def.assessmentType : "Belum ditentukan");
 
       let methodLabel = "Rubrik 1–5";
-      const methodKey = def.method || def.scoringType;
+      const methodKey = def.method;
       if (methodKey === "numeric") {
         methodLabel = "Nilai Angka";
       } else if (methodKey === "stopwatch") {

@@ -467,8 +467,9 @@ function createCrudActions() {
 
     // ASSESSMENT ACTIONS
     createAssessmentDefinition: (input) => {
-      repositories.assessmentDefinitions.create(input);
+      const res = repositories.assessmentDefinitions.create(input);
       refreshState();
+      return Array.isArray(res) ? res.at(-1) : res;
     },
     updateAssessmentDefinition: (id, input) => {
       repositories.assessmentDefinitions.update(id, input);
@@ -481,16 +482,15 @@ function createCrudActions() {
       }
     },
     createAssessmentSession: (input) => {
-      let rubricSnapshot = {
-        scale: 0,
-        levels: []
-      };
+      let rubricSnapshot = input && input.rubricSnapshot && input.rubricSnapshot.levels && input.rubricSnapshot.levels.length > 0
+        ? input.rubricSnapshot
+        : { scale: 0, levels: [] };
 
-      if (input && input.definitionId) {
+      if ((!rubricSnapshot.levels || rubricSnapshot.levels.length === 0) && input && input.definitionId) {
         const definition = repositories.assessmentDefinitions.findById(input.definitionId) || (appState.assessmentDefinitions || []).find((d) => d.id === input.definitionId);
         if (definition && definition.method === "rubric") {
           rubricSnapshot = {
-            scale: Number(definition.rubricScale) || 0,
+            scale: Number(definition.rubricScale) || 5,
             levels: Array.isArray(definition.rubricLevels)
               ? definition.rubricLevels.map((level) => ({
                   level: level.level,
@@ -507,25 +507,32 @@ function createCrudActions() {
         rubricSnapshot
       });
       refreshState();
-      return res.at(-1);
+      return Array.isArray(res) ? res.at(-1) : res;
     },
     saveAssessmentResult: (input) => {
-      const session = repositories.sessions.findById(input.sessionId);
-      if (session && sessionManager.isReadOnly(session)) {
-        return;
+      if (input.sessionId) {
+        const session = repositories.sessions.findById(input.sessionId);
+        if (session && sessionManager.isReadOnly(session)) {
+          return;
+        }
       }
 
       const allResults = repositories.assessmentResults.findAll();
-      const existing = allResults.find((r) => {
-        if (r.studentId !== input.studentId) return false;
-        if (input.assessmentSessionId && r.assessmentSessionId) {
-          return r.assessmentSessionId === input.assessmentSessionId;
-        }
-        if (input.definitionId && r.definitionId) {
-          return r.sessionId === input.sessionId && r.definitionId === input.definitionId;
-        }
-        return r.sessionId === input.sessionId;
-      });
+      let existing = null;
+
+      if (input.assessmentSessionId) {
+        existing = allResults.find(
+          (r) => r.studentId === input.studentId && r.assessmentSessionId === input.assessmentSessionId
+        );
+      } else if (input.definitionId && input.sessionId) {
+        existing = allResults.find(
+          (r) => r.studentId === input.studentId && r.sessionId === input.sessionId && r.definitionId === input.definitionId
+        );
+      } else if (input.sessionId) {
+        existing = allResults.find(
+          (r) => r.studentId === input.studentId && r.sessionId === input.sessionId
+        );
+      }
 
       if (existing) {
         repositories.assessmentResults.update(existing.id, {

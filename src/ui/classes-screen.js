@@ -20,9 +20,12 @@ export function renderClassesScreen(state, actions) {
   // State local to screen for selected class
   let selectedClassId = null;
   let isGrowthScreening = false;
+  let isCreatingAssessment = false;
+  let activeAssessmentSessionId = null;
+  let activeAssessmentStudentIndex = 0;
   let showAddClassModal = false;
   let showAddStudentModal = false;
-  let activeTab = "students"; // "students" | "sessions"
+  let activeTab = "students"; // "students" | "assessments" | "sessions"
   let studentSearchQuery = "";
 
   const container = createElement("div", "classes-hub-container");
@@ -34,11 +37,17 @@ export function renderClassesScreen(state, actions) {
     if (selectedClassId) {
       if (isGrowthScreening) {
         renderClassGrowthScreening(selectedClassId);
+      } else if (isCreatingAssessment) {
+        renderCreateAssessmentView(selectedClassId);
+      } else if (activeAssessmentSessionId) {
+        renderScoringWorkflowView(selectedClassId, activeAssessmentSessionId);
       } else {
         renderClassDetail(selectedClassId);
       }
     } else {
       isGrowthScreening = false;
+      isCreatingAssessment = false;
+      activeAssessmentSessionId = null;
       renderClassList();
     }
   }
@@ -201,6 +210,14 @@ export function renderClassesScreen(state, actions) {
 
     // Secondary Admin Toolbar
     const adminCluster = createElement("div", "class-admin-cluster");
+    const createAssessBtn = createElement("button", "btn-tool btn-tool-primary");
+    createAssessBtn.type = "button";
+    createAssessBtn.append(ICONS.target(15), document.createTextNode(" Buat Asesmen"));
+    createAssessBtn.addEventListener("click", () => {
+      isCreatingAssessment = true;
+      render();
+    });
+
     const growthScreeningBtn = createElement("button", "btn-tool");
     growthScreeningBtn.type = "button";
     growthScreeningBtn.append(ICONS.chart(15), document.createTextNode(" Pemeriksaan Pertumbuhan"));
@@ -209,7 +226,7 @@ export function renderClassesScreen(state, actions) {
       render();
     });
 
-    const addStudentBtn = createElement("button", "btn-tool btn-tool-primary");
+    const addStudentBtn = createElement("button", "btn-tool");
     addStudentBtn.type = "button";
     addStudentBtn.append(ICONS.plus(15), document.createTextNode(" Tambah Siswa"));
     addStudentBtn.addEventListener("click", () => {
@@ -239,9 +256,11 @@ export function renderClassesScreen(state, actions) {
       }
     });
 
-    adminCluster.append(growthScreeningBtn, addStudentBtn, editClassBtn, deleteClassBtn);
+    adminCluster.append(createAssessBtn, growthScreeningBtn, addStudentBtn, editClassBtn, deleteClassBtn);
     header.append(titleGroup, mainStartBtn, adminCluster);
     container.append(header);
+
+    const classAssessments = (state.assessmentSessions || []).filter((as) => as.classId === classRoom.id);
 
     // Tab Switcher
     const tabsRow = createElement("div", "subnav-tabs-row");
@@ -256,6 +275,17 @@ export function renderClassesScreen(state, actions) {
       render();
     });
 
+    const tabAssessments = createElement(
+      "button",
+      `subnav-tab ${activeTab === "assessments" ? "is-active" : ""}`,
+      `Asesmen (${classAssessments.length})`
+    );
+    tabAssessments.type = "button";
+    tabAssessments.addEventListener("click", () => {
+      activeTab = "assessments";
+      render();
+    });
+
     const tabSessions = createElement(
       "button",
       `subnav-tab ${activeTab === "sessions" ? "is-active" : ""}`,
@@ -267,11 +297,13 @@ export function renderClassesScreen(state, actions) {
       render();
     });
 
-    tabsRow.append(tabStudents, tabSessions);
+    tabsRow.append(tabStudents, tabAssessments, tabSessions);
     container.append(tabsRow);
 
     if (activeTab === "students") {
       renderClassStudentsList(classStudents, classRoom);
+    } else if (activeTab === "assessments") {
+      renderClassAssessmentsList(classAssessments, classRoom, classStudents);
     } else {
       renderClassSessionsList(classSessions, classRoom);
     }
@@ -725,6 +757,601 @@ export function renderClassesScreen(state, actions) {
     });
 
     container.append(form);
+  }
+
+  function renderClassAssessmentsList(assessments, classRoom, students) {
+    if (assessments.length === 0) {
+      const emptyCard = createElement("div", "empty-state-card");
+      emptyCard.append(
+        createElement("p", "empty-copy", `Belum ada asesmen tersimpan untuk ${classRoom.name}.`),
+        createElement("p", "screen-copy", "Klik tombol 'Buat Asesmen' di atas untuk merancang instrumen penilaian baru.")
+      );
+      container.append(emptyCard);
+      return;
+    }
+
+    const purposeMap = {
+      pretest: "Pretest / Asesmen Awal",
+      formative: "Harian / Formatif",
+      posttest: "Posttest",
+      summative: "Sumatif Materi",
+      midterm: "UTS / STS",
+      final: "UAS / SAS"
+    };
+
+    const typeMap = {
+      written: "Tes Tertulis",
+      oral: "Tes Lisan",
+      practice: "Praktik",
+      observation: "Observasi"
+    };
+
+    const grid = createElement("div", "assessment-sessions-grid");
+
+    assessments.forEach((as) => {
+      const def = (state.assessmentDefinitions || []).find((d) => d.id === as.definitionId);
+      const card = createElement("article", "assessment-item-card");
+
+      const topRow = createElement("div", "assessment-card-header");
+      const titleGroup = createElement("div");
+
+      const pLabel = purposeMap[as.purpose] || as.purpose || "Asesmen";
+      const tLabel = typeMap[def?.assessmentType] || (def?.assessmentType || "Praktik");
+      const mLabel = def?.method === "numeric" ? "Nilai Angka" : def?.method === "stopwatch" ? "Stopwatch" : (def?.rubricScale ? `Rubrik 1–${def.rubricScale}` : "Rubrik 1–5");
+
+      titleGroup.append(
+        createElement("h3", "assessment-card-title", as.title),
+        createElement("p", "assessment-card-meta", `${pLabel} • ${tLabel} • ${mLabel}${as.date ? ` • ${as.date}` : ""}`)
+      );
+      topRow.append(titleGroup);
+      card.append(topRow);
+
+      if (Array.isArray(as.materials) && as.materials.length > 0) {
+        const matRow = createElement("div", "assessment-materials-row");
+        matRow.append(createElement("span", "", `Materi: ${as.materials.join(", ")}`));
+        card.append(matRow);
+      }
+
+      // Progress calculation per assessmentSessionId
+      const scoredCount = students.filter((st) =>
+        (state.assessmentResults || []).some(
+          (r) => r.assessmentSessionId === as.id && r.studentId === st.id && r.value !== "" && r.value !== undefined && r.value !== null
+        )
+      ).length;
+
+      const total = students.length;
+      const pct = total > 0 ? Math.round((scoredCount / total) * 100) : 0;
+
+      const progressSection = createElement("div", "assessment-progress-section");
+      progressSection.append(
+        createElement("div", "assessment-progress-text", `${scoredCount} dari ${total} siswa dinilai (${pct}%)`)
+      );
+
+      const progWrap = createElement("div", "att-progress-wrap");
+      const progBar = createElement("div", "att-progress-bar");
+      progBar.style.width = `${pct}%`;
+      progWrap.append(progBar);
+      progressSection.append(progWrap);
+      card.append(progressSection);
+
+      const actionRow = createElement("div", "assessment-card-actions");
+      const startBtn = createElement("button", "primary-action compact-action", scoredCount > 0 ? "Lanjutkan Penilaian" : "Mulai Penilaian");
+      startBtn.type = "button";
+      startBtn.addEventListener("click", () => {
+        activeAssessmentSessionId = as.id;
+        activeAssessmentStudentIndex = 0;
+        render();
+      });
+
+      actionRow.append(startBtn);
+      card.append(actionRow);
+
+      grid.append(card);
+    });
+
+    container.append(grid);
+  }
+
+  function renderCreateAssessmentView(classId) {
+    const classRoom = (state.classes || []).find((c) => c.id === classId);
+    if (!classRoom) {
+      isCreatingAssessment = false;
+      renderClassList();
+      return;
+    }
+
+    const backBtn = createElement("button", "btn-back-nav");
+    backBtn.type = "button";
+    backBtn.append(document.createTextNode(`← Kembali ke Detail ${classRoom.name}`));
+    backBtn.addEventListener("click", () => {
+      isCreatingAssessment = false;
+      render();
+    });
+    container.append(backBtn);
+
+    const header = createElement("header", "screen-header-row");
+    const titleGroup = createElement("div");
+    const eyebrow = createElement("p", "eyebrow");
+    eyebrow.append(ICONS.target(15), document.createTextNode(" Perancangan Asesmen"));
+    titleGroup.append(
+      eyebrow,
+      createElement("h1", "screen-title", `Buat Asesmen: ${classRoom.name}`),
+      createElement(
+        "p",
+        "screen-copy",
+        `Rancang instrumen penilaian PJOK untuk ${classRoom.name}. Setiap asesmen disimpan sebagai entitas terpisah agar hasil penilaian siswa tercatat aman.`
+      )
+    );
+    header.append(titleGroup);
+    container.append(header);
+
+    const form = createElement("form", "master-form");
+
+    form.append(
+      createField({
+        label: "Judul Asesmen *",
+        name: "title",
+        required: true,
+        placeholder: "Contoh: UTS Gerak Dasar / Posttest Kebugaran"
+      }),
+      createField({
+        label: "Tanggal Pelaksanaan *",
+        name: "date",
+        type: "date",
+        value: new Date().toISOString().slice(0, 10),
+        required: true
+      }),
+      createSelectField({
+        label: "Jenis Asesmen *",
+        name: "purpose",
+        value: "formative",
+        options: [
+          { value: "pretest", label: "Pretest / Asesmen Awal" },
+          { value: "formative", label: "Harian / Formatif" },
+          { value: "posttest", label: "Posttest" },
+          { value: "summative", label: "Sumatif Materi" },
+          { value: "midterm", label: "UTS / STS" },
+          { value: "final", label: "UAS / SAS" }
+        ]
+      })
+    );
+
+    // Textarea Materials
+    const matLabel = createElement("label", "field");
+    matLabel.append(
+      createElement("span", "", "Materi Pokok (Satu materi per baris)"),
+      createElement("span", "text-subtle text-xs", "Ketik tiap topik materi di baris baru")
+    );
+    const matTextarea = document.createElement("textarea");
+    matTextarea.name = "materials";
+    matTextarea.rows = 3;
+    matTextarea.className = "input-text";
+    matTextarea.placeholder = "Contoh:\nLokomotor\nNon Lokomotor\nManipulatif";
+    matLabel.append(matTextarea);
+    form.append(matLabel);
+
+    form.append(
+      createSelectField({
+        label: "Bentuk Asesmen",
+        name: "assessmentType",
+        value: "practice",
+        options: [
+          { value: "practice", label: "Praktik" },
+          { value: "oral", label: "Tes Lisan" },
+          { value: "written", label: "Tes Tertulis" },
+          { value: "observation", label: "Observasi" }
+        ]
+      }),
+      createSelectField({
+        label: "Metode Skoring",
+        name: "method",
+        value: "rubric",
+        options: [
+          { value: "rubric", label: "Rubrik 1–5" },
+          { value: "numeric", label: "Nilai Angka" },
+          { value: "stopwatch", label: "Stopwatch" }
+        ]
+      })
+    );
+
+    // Textarea Questions
+    const qLabel = createElement("label", "field");
+    qLabel.append(
+      createElement("span", "", "Pertanyaan / Butir Instrumen (Opsional)"),
+      createElement("span", "text-subtle text-xs", "Satu pertanyaan per baris")
+    );
+    const qTextarea = document.createElement("textarea");
+    qTextarea.name = "questions";
+    qTextarea.rows = 4;
+    qTextarea.className = "input-text";
+    qTextarea.placeholder = "Contoh:\nApa yang dimaksud gerak lokomotor?\nSebutkan dua contoh gerak lokomotor.\nApa perbedaan lokomotor dan non lokomotor?";
+    qLabel.append(qTextarea);
+    form.append(qLabel);
+
+    // Textarea Instructions
+    const instLabel = createElement("label", "field");
+    instLabel.append(
+      createElement("span", "", "Instruksi Praktik / Observasi (Opsional)"),
+      createElement("span", "text-subtle text-xs", "Panduan pelaksanaan gerakan bagi guru & siswa")
+    );
+    const instTextarea = document.createElement("textarea");
+    instTextarea.name = "instructions";
+    instTextarea.rows = 3;
+    instTextarea.className = "input-text";
+    instTextarea.placeholder = "Contoh:\nLakukan berjalan, berlari, dan melompat sesuai instruksi guru.";
+    instLabel.append(instTextarea);
+    form.append(instLabel);
+
+    // Action buttons
+    const btnRow = createElement("div", "modal-btn-row");
+    const submitBtn = createElement("button", "primary-action", "Simpan Asesmen");
+    submitBtn.type = "submit";
+
+    const cancelBtn = createElement("button", "btn-tool", "Batal");
+    cancelBtn.type = "button";
+    cancelBtn.addEventListener("click", () => {
+      isCreatingAssessment = false;
+      render();
+    });
+
+    btnRow.append(submitBtn, cancelBtn);
+    form.append(btnRow);
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const payload = formToObject(form);
+      const title = (payload.title || "").trim();
+      if (!title) {
+        window.alert("Judul asesmen wajib diisi.");
+        return;
+      }
+
+      const materials = (matTextarea.value || "")
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const questions = (qTextarea.value || "")
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const instructions = (instTextarea.value || "").trim();
+      const method = payload.method || "rubric";
+      const assessmentType = payload.assessmentType || "practice";
+      const purpose = payload.purpose || "formative";
+      const dateVal = payload.date || new Date().toISOString().slice(0, 10);
+
+      const defaultRubricLevels = [
+        { level: 1, label: "Belum Berkembang", desc: "Belum menunjukkan kemampuan yang dinilai dan masih memerlukan bimbingan penuh." },
+        { level: 2, label: "Mulai Berkembang", desc: "Mulai menunjukkan kemampuan tetapi masih memerlukan banyak arahan atau bantuan." },
+        { level: 3, label: "Cukup Berkembang", desc: "Mampu menunjukkan kemampuan utama dengan cukup baik, meskipun belum konsisten." },
+        { level: 4, label: "Berkembang Baik", desc: "Mampu menunjukkan kemampuan dengan baik dan relatif mandiri." },
+        { level: 5, label: "Berkembang Sangat Baik", desc: "Mampu menunjukkan kemampuan dengan sangat baik, mandiri, dan konsisten." }
+      ];
+
+      let createdDef = null;
+      if (actions?.createAssessmentDefinition) {
+        createdDef = actions.createAssessmentDefinition({
+          name: title,
+          category: "keterampilan",
+          assessmentType,
+          method,
+          unit: method === "stopwatch" ? "detik" : method === "numeric" ? "poin" : "",
+          rubricScale: method === "rubric" ? 5 : 0,
+          rubricLevels: method === "rubric" ? defaultRubricLevels : [],
+          description: materials.join(", ")
+        });
+      }
+
+      if (actions?.createAssessmentSession) {
+        actions.createAssessmentSession({
+          classId: classRoom.id,
+          definitionId: createdDef?.id || "",
+          date: dateVal,
+          title,
+          purpose,
+          materials,
+          questions,
+          instructions,
+          rubricSnapshot: {
+            scale: method === "rubric" ? 5 : 0,
+            levels: method === "rubric" ? defaultRubricLevels : []
+          }
+        });
+      }
+
+      isCreatingAssessment = false;
+      activeTab = "assessments";
+      render();
+    });
+
+    container.append(form);
+  }
+
+  function renderScoringWorkflowView(classId, assessSessId) {
+    const classRoom = (state.classes || []).find((c) => c.id === classId);
+    const as = (state.assessmentSessions || []).find((s) => s.id === assessSessId);
+    if (!classRoom || !as) {
+      activeAssessmentSessionId = null;
+      render();
+      return;
+    }
+
+    const classStudents = (state.students || []).filter((s) => s.classId === classRoom.id);
+    const def = (state.assessmentDefinitions || []).find((d) => d.id === as.definitionId);
+
+    const backBtn = createElement("button", "btn-back-nav");
+    backBtn.type = "button";
+    backBtn.append(document.createTextNode(`← Kembali ke Asesmen ${classRoom.name}`));
+    backBtn.addEventListener("click", () => {
+      activeAssessmentSessionId = null;
+      activeTab = "assessments";
+      render();
+    });
+    container.append(backBtn);
+
+    const purposeMap = {
+      pretest: "Pretest / Asesmen Awal",
+      formative: "Harian / Formatif",
+      posttest: "Posttest",
+      summative: "Sumatif Materi",
+      midterm: "UTS / STS",
+      final: "UAS / SAS"
+    };
+
+    const typeMap = {
+      written: "Tes Tertulis",
+      oral: "Tes Lisan",
+      practice: "Praktik",
+      observation: "Observasi"
+    };
+
+    const header = createElement("header", "screen-header-row");
+    const titleGroup = createElement("div");
+    const eyebrow = createElement("p", "eyebrow");
+    eyebrow.append(ICONS.target(15), document.createTextNode(" Penilaian Asesmen Terfokus"));
+    titleGroup.append(
+      eyebrow,
+      createElement("h1", "screen-title", as.title),
+      createElement(
+        "p",
+        "screen-copy",
+        `${purposeMap[as.purpose] || as.purpose} • ${typeMap[def?.assessmentType] || "Praktik"} • Kelas ${classRoom.name}${as.materials?.length ? ` • Materi: ${as.materials.join(", ")}` : ""}`
+      )
+    );
+    header.append(titleGroup);
+    container.append(header);
+
+    // Reference box if questions or instructions exist
+    const hasQuestions = Array.isArray(as.questions) && as.questions.length > 0;
+    const hasInstructions = Boolean(as.instructions);
+
+    if (hasQuestions || hasInstructions) {
+      const refBox = createElement("div", "scoring-reference-box");
+      if (hasInstructions) {
+        refBox.append(
+          createElement("div", "scoring-reference-title", "📋 Panduan / Instruksi Gerak:"),
+          createElement("p", "screen-copy mb-2", as.instructions)
+        );
+      }
+      if (hasQuestions) {
+        refBox.append(createElement("div", "scoring-reference-title", "❓ Butir Pertanyaan / Instrumen:"));
+        const qList = createElement("div", "scoring-questions-list");
+        as.questions.forEach((q, idx) => {
+          qList.append(createElement("div", "scoring-question-item", `${idx + 1}. ${q}`));
+        });
+        refBox.append(qList);
+      }
+      container.append(refBox);
+    }
+
+    if (classStudents.length === 0) {
+      const emptyCard = createElement("div", "empty-state-card");
+      emptyCard.append(
+        createElement("p", "empty-copy", "Belum ada siswa di kelas ini."),
+        createElement("p", "screen-copy", "Tambahkan siswa terlebih dahulu sebelum melakukan penilaian.")
+      );
+      container.append(emptyCard);
+      return;
+    }
+
+    // Clamp active student index
+    if (activeAssessmentStudentIndex < 0) activeAssessmentStudentIndex = 0;
+    if (activeAssessmentStudentIndex >= classStudents.length) activeAssessmentStudentIndex = classStudents.length - 1;
+
+    const currentStudent = classStudents[activeAssessmentStudentIndex];
+
+    // Stepper & Jump Bar
+    const stepperBar = createElement("div", "student-stepper-bar");
+    stepperBar.append(
+      createElement("div", "student-stepper-counter", `Siswa ${activeAssessmentStudentIndex + 1} dari ${classStudents.length}`)
+    );
+
+    const jumpPills = createElement("div", "student-jump-pills");
+    classStudents.forEach((st, idx) => {
+      const hasScore = (state.assessmentResults || []).some(
+        (r) => r.assessmentSessionId === as.id && r.studentId === st.id && r.value !== "" && r.value !== undefined && r.value !== null
+      );
+      const pill = createElement(
+        "button",
+        `student-jump-pill ${idx === activeAssessmentStudentIndex ? "is-active" : ""} ${hasScore ? "is-scored" : ""}`,
+        hasScore ? `✓ ${idx + 1}` : `${idx + 1}`
+      );
+      pill.type = "button";
+      pill.title = `${st.name} (${hasScore ? "Sudah dinilai" : "Belum dinilai"})`;
+      pill.addEventListener("click", () => {
+        activeAssessmentStudentIndex = idx;
+        render();
+      });
+      jumpPills.append(pill);
+    });
+    stepperBar.append(jumpPills);
+    container.append(stepperBar);
+
+    // Current Student Result for this assessmentSessionId
+    const currentResult = (state.assessmentResults || []).find(
+      (r) => r.assessmentSessionId === as.id && r.studentId === currentStudent.id
+    );
+
+    // Main Focus Card
+    const focusCard = createElement("div", "scoring-focus-card");
+
+    // Student Header
+    const studentHeader = createElement("div", "scoring-student-header");
+    const profileWrap = createElement("div", "scoring-student-profile");
+    const avatar = createStudentAvatar(currentStudent, "scoring-student-avatar");
+    const nameWrap = createElement("div");
+    nameWrap.append(
+      createElement("h2", "font-bold text-lg", currentStudent.name),
+      createElement("div", "text-subtle text-xs", `NIS: ${currentStudent.studentNumber || "-"} • ${currentStudent.gender === "female" ? "Perempuan" : "Laki-laki"}`)
+    );
+    profileWrap.append(avatar, nameWrap);
+
+    const scoreBadge = createElement(
+      "span",
+      `assess-score-badge ${currentResult?.value ? "badge-has-score" : ""}`,
+      currentResult?.formattedValue || "Belum dinilai"
+    );
+
+    studentHeader.append(profileWrap, scoreBadge);
+    focusCard.append(studentHeader);
+
+    // Note Input
+    const noteField = createElement("label", "field");
+    noteField.append(createElement("span", "field-label", "Catatan Evaluasi Guru (Opsional)"));
+    const noteInput = document.createElement("input");
+    noteInput.type = "text";
+    noteInput.className = "input-text";
+    noteInput.placeholder = "Catatan evaluasi khusus...";
+    if (currentResult?.note) {
+      noteInput.value = currentResult.note;
+    }
+    noteField.append(noteInput);
+
+    // Rubric / Scoring Controls
+    const method = def?.method || "rubric";
+
+    if (method === "rubric") {
+      const defaultRubricLevels = [
+        { level: 1, label: "Belum Berkembang", desc: "Belum menunjukkan kemampuan yang dinilai dan masih memerlukan bimbingan penuh." },
+        { level: 2, label: "Mulai Berkembang", desc: "Mulai menunjukkan kemampuan tetapi masih memerlukan banyak arahan atau bantuan." },
+        { level: 3, label: "Cukup Berkembang", desc: "Mampu menunjukkan kemampuan utama dengan cukup baik, meskipun belum konsisten." },
+        { level: 4, label: "Berkembang Baik", desc: "Mampu menunjukkan kemampuan dengan baik dan relatif mandiri." },
+        { level: 5, label: "Berkembang Sangat Baik", desc: "Mampu menunjukkan kemampuan dengan sangat baik, mandiri, dan konsisten." }
+      ];
+
+      const levels = as.rubricSnapshot?.levels?.length > 0
+        ? as.rubricSnapshot.levels
+        : (def?.rubricLevels?.length > 0 ? def.rubricLevels : defaultRubricLevels);
+
+      const rubricGrid = createElement("div", "scoring-rubric-grid");
+
+      levels.forEach((lvl) => {
+        const isSelected = currentResult?.rubricLevel === lvl.level;
+        const rBtn = createElement(
+          "button",
+          `scoring-rubric-btn level-${lvl.level} ${isSelected ? "is-selected" : ""}`
+        );
+        rBtn.type = "button";
+        if (lvl.desc) rBtn.title = lvl.desc;
+
+        rBtn.append(
+          createElement("span", "scoring-rubric-num", String(lvl.level)),
+          createElement("span", "scoring-rubric-label", lvl.label)
+        );
+
+        rBtn.addEventListener("click", () => {
+          if (actions?.saveAssessmentResult) {
+            actions.saveAssessmentResult({
+              assessmentSessionId: as.id,
+              definitionId: as.definitionId || "",
+              studentId: currentStudent.id,
+              value: String(lvl.level),
+              numericValue: lvl.level,
+              rubricLevel: lvl.level,
+              formattedValue: `Skala ${lvl.level} (${lvl.label})`,
+              note: noteInput.value.trim()
+            });
+          }
+
+          if (activeAssessmentStudentIndex < classStudents.length - 1) {
+            activeAssessmentStudentIndex++;
+          }
+          render();
+        });
+
+        rubricGrid.append(rBtn);
+      });
+
+      focusCard.append(rubricGrid);
+    } else {
+      // Numeric or Stopwatch
+      const numRow = createElement("div", "assess-num-row");
+      const valInput = document.createElement("input");
+      valInput.type = "number";
+      valInput.step = method === "stopwatch" ? "0.01" : "1";
+      valInput.className = "assess-num-input";
+      valInput.placeholder = `Nilai (${def?.unit || ""})`;
+      if (currentResult?.value !== undefined && currentResult?.value !== null) {
+        valInput.value = currentResult.value;
+      }
+
+      const saveBtn = createElement("button", "primary-action compact-action", "Simpan Nilai");
+      saveBtn.type = "button";
+      saveBtn.addEventListener("click", () => {
+        const val = valInput.value.trim();
+        if (!val) return;
+        const num = parseFloat(val);
+        if (actions?.saveAssessmentResult) {
+          actions.saveAssessmentResult({
+            assessmentSessionId: as.id,
+            definitionId: as.definitionId || "",
+            studentId: currentStudent.id,
+            value: val,
+            numericValue: isNaN(num) ? null : num,
+            formattedValue: `${val} ${def?.unit || ""}`.trim(),
+            note: noteInput.value.trim()
+          });
+        }
+        if (activeAssessmentStudentIndex < classStudents.length - 1) {
+          activeAssessmentStudentIndex++;
+        }
+        render();
+      });
+
+      numRow.append(valInput, saveBtn);
+      focusCard.append(numRow);
+    }
+
+    focusCard.append(noteField);
+
+    // Bottom Prev / Next Nav
+    const navButtons = createElement("div", "scoring-nav-buttons");
+    const prevBtn = createElement("button", "btn-tool", "← Siswa Sebelumnya");
+    prevBtn.type = "button";
+    prevBtn.disabled = activeAssessmentStudentIndex === 0;
+    prevBtn.addEventListener("click", () => {
+      if (activeAssessmentStudentIndex > 0) {
+        activeAssessmentStudentIndex--;
+        render();
+      }
+    });
+
+    const nextBtn = createElement("button", "btn-tool", "Siswa Berikutnya →");
+    nextBtn.type = "button";
+    nextBtn.disabled = activeAssessmentStudentIndex === classStudents.length - 1;
+    nextBtn.addEventListener("click", () => {
+      if (activeAssessmentStudentIndex < classStudents.length - 1) {
+        activeAssessmentStudentIndex++;
+        render();
+      }
+    });
+
+    navButtons.append(prevBtn, nextBtn);
+    focusCard.append(navButtons);
+
+    container.append(focusCard);
   }
 
   render();

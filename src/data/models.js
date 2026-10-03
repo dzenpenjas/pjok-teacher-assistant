@@ -200,7 +200,7 @@ export function createAssessmentDefinition(input = {}) {
     ...withMeta(input, "assess-def"),
     name: input.name || "",
     category: input.category || "keterampilan", // keterampilan, kebugaran, sikap, pengetahuan
-    assessmentType: input.assessmentType || "practice", // written, oral, practice, observation
+    assessmentType: input.assessmentType || "unspecified", // written, oral, practice, observation, unspecified
     method: input.method || "rubric", // rubric, numeric, stopwatch
     unit: input.unit || "", // detik, cm, kali, poin
     direction: input.direction || "higher_better", // higher_better, lower_better
@@ -263,6 +263,10 @@ export function createAssessmentSession(input = {}) {
     date: input.date || nowIso().slice(0, 10),
     title: input.title || "",
     notes: input.notes || "",
+    purpose: input.purpose || "formative", // pretest, formative, posttest, summative, midterm, final
+    materials: Array.isArray(input.materials) ? input.materials : [],
+    questions: Array.isArray(input.questions) ? input.questions : [],
+    instructions: input.instructions || "",
     rubricSnapshot
   };
 }
