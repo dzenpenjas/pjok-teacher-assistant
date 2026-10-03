@@ -1,4 +1,4 @@
-const CACHE_NAME = "pjok-teacher-assistant-v7";
+const CACHE_NAME = "pjok-teacher-assistant-v8";
 
 const APP_ASSETS = [
   "./",
@@ -18,6 +18,7 @@ const APP_ASSETS = [
   "./src/repositories/class-repository.js",
   "./src/repositories/note-repository.js",
   "./src/repositories/repository-context.js",
+  "./src/repositories/schedule-repository.js",
   "./src/repositories/session-repository.js",
   "./src/repositories/school-repository.js",
   "./src/repositories/semester-repository.js",
@@ -33,6 +34,10 @@ const APP_ASSETS = [
   "./src/services/session-manager.js",
   "./src/services/camera-service.js",
   "./src/ui/form-controls.js",
+  "./src/ui/first-run-setup.js",
+  "./src/ui/classes-screen.js",
+  "./src/ui/students-screen.js",
+  "./src/ui/settings-screen.js",
   "./src/ui/master-data-screen.js",
   "./src/ui/navigation.js",
   "./src/ui/screens.js",
@@ -45,7 +50,8 @@ const APP_ASSETS = [
   "./src/session/attendance-panel.js",
   "./src/session/activity-panel.js",
   "./src/session/assessment-panel.js",
-  "./src/session/summary-panel.js"
+  "./src/session/summary-panel.js",
+  "./src/utils/date-utils.js"
 ];
 
 self.addEventListener("install", (event) => {
