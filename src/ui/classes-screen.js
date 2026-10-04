@@ -1681,18 +1681,29 @@ export function renderClassesScreen(state, actions) {
         `;
         const tbody = document.createElement("tbody");
         finalReportData.learning.forEach((item) => {
-          const tr = document.createElement("tr");
-          const hasScore = item.numericScore !== null && item.numericScore !== undefined;
-          const scoreNumStr = hasScore ? String(item.numericScore) : "-";
-          const scoreCellHtml = hasScore
-            ? `<div class="a4-cell-score-box"><span class="a4-cell-score-num">${scoreNumStr}</span><span class="a4-cell-score-denom">/100</span></div>`
-            : `<div class="a4-cell-score-box"><span class="a4-cell-score-num">-</span></div>`;
+          const tr = createElement("tr");
 
-          tr.innerHTML = `
-            <td class="a4-td-mat">${item.title || "Asesmen PJOK"}</td>
-            <td class="a4-td-score">${scoreCellHtml}</td>
-            <td class="a4-td-desc">${item.description || "-"}</td>
-          `;
+          // Col 1: Material / Title
+          const tdMat = createElement("td", "a4-td-mat");
+          tdMat.textContent = item.title || "Asesmen PJOK";
+
+          // Col 2: Score
+          const tdScore = createElement("td", "a4-td-score");
+          const scoreBox = createElement("div", "a4-cell-score-box");
+          const hasScore = item.numericScore !== null && item.numericScore !== undefined;
+          const scoreNum = createElement("span", "a4-cell-score-num", hasScore ? String(item.numericScore) : "-");
+          scoreBox.append(scoreNum);
+          if (hasScore) {
+            const scoreDenom = createElement("span", "a4-cell-score-denom", "/100");
+            scoreBox.append(scoreDenom);
+          }
+          tdScore.append(scoreBox);
+
+          // Col 3: Description
+          const tdDesc = createElement("td", "a4-td-desc");
+          tdDesc.textContent = item.description || "-";
+
+          tr.append(tdMat, tdScore, tdDesc);
           tbody.append(tr);
         });
         table.append(thead, tbody);
@@ -1804,11 +1815,17 @@ export function renderClassesScreen(state, actions) {
       modalBackdrop.append(modalCard);
       document.body.append(modalBackdrop);
 
-      // Verify whether content exceeds printable A4 height and apply compact mode if needed
+      // Verify whether content exceeds the actual A4 element height and apply compact mode if needed
       requestAnimationFrame(() => {
-        const a4MaxHeightPx = 297 * (96 / 25.4);
-        if (a4Paper.scrollHeight > a4MaxHeightPx || a4Paper.offsetHeight > a4MaxHeightPx) {
+        // 1. remove a4-compact first
+        a4Paper.classList.remove("a4-compact");
+
+        // 2. measure content against actual A4 element height
+        if (a4Paper.scrollHeight > a4Paper.clientHeight) {
+          // 3. if content exceeds the A4 element height, add a4-compact
           a4Paper.classList.add("a4-compact");
+          // 4. measure again
+          void a4Paper.scrollHeight;
         }
       });
 
@@ -1827,7 +1844,7 @@ export function renderClassesScreen(state, actions) {
         downloadPdfBtn.textContent = "⏳ Memproses PDF...";
 
         const opt = {
-          margin: [6, 6, 6, 6],
+          margin: 0,
           filename: pdfFilename,
           image: {
             type: "jpeg",

@@ -3920,7 +3920,7 @@ textarea {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 .a4-header {
