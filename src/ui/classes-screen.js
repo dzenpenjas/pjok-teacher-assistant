@@ -1558,6 +1558,7 @@ export function renderClassesScreen(state, actions) {
       }
 
       const schoolName = state.school?.name || state.schoolName || "SD NEGERI PJOK";
+      const schoolAddress = state.school?.address ? state.school.address.trim() : "";
       const formattedToday = new Date().toLocaleDateString("id-ID", {
         day: "numeric",
         month: "long",
@@ -1566,6 +1567,7 @@ export function renderClassesScreen(state, actions) {
 
       const finalReportData = {
         schoolName,
+        schoolAddress,
         studentName: student.name,
         studentNumber: student.studentNumber || "-",
         className: classRoom.name,
@@ -1623,11 +1625,19 @@ export function renderClassesScreen(state, actions) {
       a4Paper.id = "a4-report-preview-document";
 
       // HEADER
-      const headerSection = createElement("header", "text-center mb-3 pb-2 border-b border-emerald-800");
+      const headerSection = createElement("header", "a4-header");
+      const schoolNameEl = createElement("p", "a4-header-school", finalReportData.schoolName);
+      headerSection.append(schoolNameEl);
+
+      if (finalReportData.schoolAddress) {
+        headerSection.append(createElement("p", "a4-header-location", finalReportData.schoolAddress));
+      }
+
       headerSection.append(
-        createElement("p", "a4-header-school", finalReportData.schoolName),
-        createElement("h1", "a4-header-title text-slate-900 font-extrabold text-base", `Laporan Belajar dan Pertumbuhan ${finalReportData.studentName}`),
-        createElement("p", "a4-meta-row text-xs mt-1", `${finalReportData.schoolName} | Kelas ${finalReportData.className} | Usia: ${finalReportData.studentAge} | ${finalReportData.genderText} | Tanggal: ${finalReportData.reportDate}`)
+        createElement("p", "a4-doc-type", "Laporan Belajar dan Pertumbuhan"),
+        createElement("h1", "a4-student-name", finalReportData.studentName),
+        createElement("p", "a4-meta-row", `Kelas ${finalReportData.className} • Usia ${finalReportData.studentAge} • ${finalReportData.genderText}`),
+        createElement("p", "a4-date-row", `Tanggal laporan: ${finalReportData.reportDate}`)
       );
       a4Paper.append(headerSection);
 
@@ -1638,21 +1648,26 @@ export function renderClassesScreen(state, actions) {
         growth: isGrowthActive
       } = currentContext.selectedSections || {};
 
-      // NILAI AGREGAT (JIKA ADA & LEARNING SELECTION ACTIVE)
+      // NILAI PJOK TENGAH SEMESTER HERO (JIKA ADA & LEARNING SELECTION ACTIVE)
       if (isLearningActive && finalReportData.overallScore !== null && finalReportData.overallScore !== undefined) {
-        const scoreSection = createElement("section", "mb-2.5 p-2 bg-emerald-50 rounded border border-emerald-200 text-xs");
-        scoreSection.append(
-          createElement("div", "font-bold text-emerald-900", `Rata-rata Nilai PJOK Tengah Semester: ${finalReportData.overallScore} / 100`),
-          createElement("p", "text-slate-600 text-xs mt-0.5", "Nilai dari seluruh tes lisan dan praktik sampai tengah semester.")
-        );
-        a4Paper.append(scoreSection);
+        const scoreHero = createElement("section", "a4-score-hero");
+        const heroLabel = createElement("span", "a4-score-hero-label", "NILAI PJOK TENGAH SEMESTER");
+        
+        const heroScoreWrap = createElement("div", "a4-score-hero-num");
+        const heroScoreVal = createElement("span", "a4-score-hero-val", String(finalReportData.overallScore));
+        const heroScoreDenom = createElement("span", "a4-score-hero-denom", "/100");
+        heroScoreWrap.append(heroScoreVal, heroScoreDenom);
+
+        const heroNote = createElement("p", "a4-score-hero-note", "Nilai dari asesmen yang dipilih guru.");
+        scoreHero.append(heroLabel, heroScoreWrap, heroNote);
+        a4Paper.append(scoreHero);
       }
 
-      // TABEL "APA YANG SUDAH DIPELAJARI"
+      // TABEL HASIL BELAJAR
       if (isLearningActive && finalReportData.learning.length > 0) {
-        const learningSection = createElement("section", "mb-2.5");
+        const learningSection = createElement("section", "a4-section");
         learningSection.append(
-          createElement("h2", "a4-section-title", `Apa Yang Sudah Dikuasai ${finalReportData.studentName}`)
+          createElement("h2", "a4-section-title", `${finalReportData.studentName} sudah bisa apa`)
         );
 
         const table = createElement("table", "a4-table");
@@ -1667,11 +1682,16 @@ export function renderClassesScreen(state, actions) {
         const tbody = document.createElement("tbody");
         finalReportData.learning.forEach((item) => {
           const tr = document.createElement("tr");
-          const scoreDisplay = item.numericScore !== null && item.numericScore !== undefined ? String(item.numericScore) : "-";
+          const hasScore = item.numericScore !== null && item.numericScore !== undefined;
+          const scoreNumStr = hasScore ? String(item.numericScore) : "-";
+          const scoreCellHtml = hasScore
+            ? `<div class="a4-cell-score-box"><span class="a4-cell-score-num">${scoreNumStr}</span><span class="a4-cell-score-denom">/100</span></div>`
+            : `<div class="a4-cell-score-box"><span class="a4-cell-score-num">-</span></div>`;
+
           tr.innerHTML = `
-            <td style="font-weight: 600;">${item.title || "Asesmen PJOK"}</td>
-            <td style="text-align: center; font-weight: 700;">${scoreDisplay}</td>
-            <td style="line-height: 1.3;">${item.description || "-"}</td>
+            <td class="a4-td-mat">${item.title || "Asesmen PJOK"}</td>
+            <td class="a4-td-score">${scoreCellHtml}</td>
+            <td class="a4-td-desc">${item.description || "-"}</td>
           `;
           tbody.append(tr);
         });
@@ -1684,72 +1704,97 @@ export function renderClassesScreen(state, actions) {
       const showUnderstand = isUnderstandingActive && Boolean(finalReportData.understanding);
       const showAttitude = isAttitudeActive && Boolean(finalReportData.attitude);
 
-      if (showUnderstand || showAttitude) {
-        const understandSection = createElement("section", "mb-2.5 text-xs space-y-1");
-        understandSection.append(createElement("h2", "a4-section-title", "Pemahaman Konsep & Sikap"));
-        if (showUnderstand) {
-          const p1 = createElement("p", "leading-tight text-slate-800");
-          p1.append(createElement("strong", "", "Pemahaman Konsep: "), document.createTextNode(finalReportData.understanding));
-          understandSection.append(p1);
-        }
-        if (showAttitude) {
-          const p2 = createElement("p", "leading-tight text-slate-800");
-          p2.append(createElement("strong", "", "Sikap & Sportivitas: "), document.createTextNode(finalReportData.attitude));
-          understandSection.append(p2);
-        }
+      if (showUnderstand) {
+        const understandSection = createElement("section", "a4-section");
+        understandSection.append(
+          createElement("h2", "a4-section-title", "Pemahaman"),
+          createElement("p", "a4-body-text", finalReportData.understanding)
+        );
         a4Paper.append(understandSection);
+      }
+
+      if (showAttitude) {
+        const attitudeSection = createElement("section", "a4-section");
+        attitudeSection.append(
+          createElement("h2", "a4-section-title", "Sikap & Observasi"),
+          createElement("p", "a4-body-text", finalReportData.attitude)
+        );
+        a4Paper.append(attitudeSection);
       }
 
       // PERTUMBUHAN & GROWTH INTERPRETATION
       if (isGrowthActive) {
-        const growthSection = createElement("section", "mb-2.5 text-xs space-y-1");
+        const growthSection = createElement("section", "a4-section");
         growthSection.append(
-          createElement("h2", "a4-section-title", `Bagaimana Pertumbuhan ${finalReportData.studentName}`)
+          createElement("h2", "a4-section-title", `Bagaimana pertumbuhan ${finalReportData.studentName}`)
         );
-        
-        const growthMetaP = createElement("p", "font-bold text-slate-900", `Tinggi badan: ${finalReportData.growth.heightCm} cm | Berat badan: ${finalReportData.growth.weightKg} kg (Pengukuran: ${finalReportData.growth.date})`);
-        growthSection.append(growthMetaP);
+
+        const cardsRow = createElement("div", "a4-growth-cards-row");
+
+        const hCard = createElement("div", "a4-growth-card");
+        const hVal = finalReportData.growth.heightCm && finalReportData.growth.heightCm !== "-"
+          ? `${finalReportData.growth.heightCm} cm`
+          : "-";
+        hCard.append(
+          createElement("span", "a4-growth-card-label", "TINGGI BADAN"),
+          createElement("span", "a4-growth-card-value", hVal)
+        );
+
+        const wCard = createElement("div", "a4-growth-card");
+        const wVal = finalReportData.growth.weightKg && finalReportData.growth.weightKg !== "-"
+          ? `${finalReportData.growth.weightKg} kg`
+          : "-";
+        wCard.append(
+          createElement("span", "a4-growth-card-label", "BERAT BADAN"),
+          createElement("span", "a4-growth-card-value", wVal)
+        );
+
+        cardsRow.append(hCard, wCard);
+        growthSection.append(cardsRow);
+
+        const dateNote = createElement("p", "a4-growth-date-note", `Diukur pada ${finalReportData.growth.date}`);
+        growthSection.append(dateNote);
 
         if (finalReportData.growth.interpretation) {
-          const growthNarrativeP = createElement("p", "leading-tight text-slate-800", finalReportData.growth.interpretation);
-          growthSection.append(growthNarrativeP);
+          growthSection.append(createElement("p", "a4-body-text mb-1", finalReportData.growth.interpretation));
         }
 
         if (finalReportData.growth.nutritionAdvice) {
-          const nutritionP = createElement("p", "leading-tight text-slate-800");
-          nutritionP.append(createElement("strong", "", "Saran Pola Makan & Kebiasaan Sehat: "), document.createTextNode(finalReportData.growth.nutritionAdvice));
-          growthSection.append(nutritionP);
+          const p = createElement("p", "a4-body-text mb-1");
+          p.append(createElement("strong", "", "Saran Pola Makan & Kebiasaan Sehat: "), document.createTextNode(finalReportData.growth.nutritionAdvice));
+          growthSection.append(p);
         }
+
+        if (finalReportData.growth.followUp) {
+          const p = createElement("p", "a4-body-text");
+          p.append(createElement("strong", "", "Tindak Lanjut Pembelajaran: "), document.createTextNode(finalReportData.growth.followUp));
+          growthSection.append(p);
+        }
+
         a4Paper.append(growthSection);
       }
 
       // AYO BERMAIN BERSAMA DI RUMAH (HOME ACTIVITY)
       if (finalReportData.homeActivity) {
-        const homeSection = createElement("section", "mb-2.5 text-xs space-y-1");
-        homeSection.append(createElement("h2", "a4-section-title", "Ayo Bermain Bersama di Rumah"));
-        homeSection.append(createElement("p", "leading-tight text-slate-800", finalReportData.homeActivity));
+        const homeSection = createElement("section", "a4-section");
+        homeSection.append(
+          createElement("h2", "a4-section-title", "Ayo bermain bersama di rumah"),
+          createElement("p", "a4-body-text", finalReportData.homeActivity)
+        );
         a4Paper.append(homeSection);
       }
 
-      // TINDAK LANJUT
-      if (isGrowthActive && finalReportData.growth.followUp) {
-        const followSection = createElement("section", "mb-2.5 text-xs space-y-1");
-        followSection.append(createElement("h2", "a4-section-title", "Tindak Lanjut Pembelajaran"));
-        followSection.append(createElement("p", "leading-tight text-slate-800", finalReportData.growth.followUp));
-        a4Paper.append(followSection);
-      }
-
       // FOOTER
-      const footerSection = createElement("footer", "a4-footer-row border-t pt-2 mt-3 text-xs");
-      const leftFooter = createElement("div", "space-y-0.5");
+      const footerSection = createElement("footer", "a4-footer-row");
+      const leftFooter = createElement("div", "a4-footer-left");
       leftFooter.append(
-        createElement("p", "italic text-slate-500", "* Pengukuran ini membantu pemantauan awal dan bukan diagnosis medis.")
+        createElement("p", "a4-footer-disclaimer", "Pengukuran ini membantu pemantauan awal dan bukan diagnosis medis.")
       );
 
-      const rightFooter = createElement("div", "text-right font-medium text-slate-700");
+      const rightFooter = createElement("div", "a4-footer-right");
       rightFooter.append(
-        createElement("p", "", "Guru PJOK:"),
-        createElement("p", "mt-6 border-b border-slate-400 w-36 inline-block", "")
+        createElement("p", "a4-footer-sign-title", "Guru PJOK"),
+        createElement("div", "a4-footer-sign-line")
       );
 
       footerSection.append(leftFooter, rightFooter);
@@ -1758,6 +1803,14 @@ export function renderClassesScreen(state, actions) {
       modalCard.append(a4Paper);
       modalBackdrop.append(modalCard);
       document.body.append(modalBackdrop);
+
+      // Verify whether content exceeds printable A4 height and apply compact mode if needed
+      requestAnimationFrame(() => {
+        const a4MaxHeightPx = 297 * (96 / 25.4);
+        if (a4Paper.scrollHeight > a4MaxHeightPx || a4Paper.offsetHeight > a4MaxHeightPx) {
+          a4Paper.classList.add("a4-compact");
+        }
+      });
 
       // Download PDF Handler
       downloadPdfBtn.addEventListener("click", () => {
