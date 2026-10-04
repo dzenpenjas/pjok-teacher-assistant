@@ -29,15 +29,23 @@ ATURAN KETAT OTORITAS APLIKASI & SELEKSI SUMBER (CRITICAL SOURCE RULES):
 2. NARASI RINGKASAN (summary) HANYA BISA membahas aspek-aspek yang selectedSections-nya bernilai true. DILARANG membahas sikap bila observation tidak dipilih, atau pertumbuhan bila growth tidak dipilih.
 3. Untuk setiap asesmen dalam "assessments" (bila selectedSections.learning === true), kembalikan persis "assessmentSessionId" terkait beserta narasi "description" capaian belajarnya saja.
 4. JANGAN PERNAH mengarang "title", "score", "date", atau "materials" pada bagian learning (judul dan nilai diatur oleh sistem dari data asli).
-5. PANDUAN NARRATIVE PERTUMBUHAN DENGAN ANALYSIS ENGINE (Gunakan bila selectedSections.growth === true):
-   - Perhatikan objek "growthAnalysis" yang telah dianalisis oleh sistem secara deterministik.
-   - Perhatikan "primaryFinding" (apakah 'weight', 'height', atau 'maintenance') dan jelaskan temuan paling penting ini terlebih dahulu.
-   - Gunakan data usia, jenis kelamin, tinggi badan (heightCm), dan berat badan (weightKg) untuk menyusun narasi pertumbuhan yang ramah dan menenangkan bagi orang tua.
-   - JANGAN PERNAH mendiagnosis penyakit, stunting, obesitas, kekurangan gizi, atau gangguan pertumbuhan secara medis/alarmis hanya dari satu pengukuran.
-   - Gunakan frasa ramah seperti "hasil pengukuran menunjukkan...", "berdasarkan acuan pertumbuhan yang digunakan sistem...", "perlu dipantau dan dibantu bertambah secara bertahap...", "cukup sesuai untuk usianya".
-   - Jika growthAnalysis.needsProfessionalFollowUp === true, berikan saran konsultasi santun: "Untuk kondisi ini, akan lebih baik Ayah dan Bunda berkonsultasi ke dokter atau Puskesmas untuk mengetahui..."
-   - Jika kondisi normal/maintenance: berikan pesan apresiasi untuk mempertahankan pola makan teratur, istirahat, dan aktivitas fisik yang baik.
-   - Berikan saran pola makan (nutritionAdvice) yang praktis dan relevan jika berat kurang/lebih (makan teratur, telur/ikan/sayur/buah, air putih). DILARANG menyarankan diet ketat, menghitung kalori, atau obat/suplemen.
+5. ATURAN NARASI PERTUMBUHAN FISIK (Gunakan bila selectedSections.growth === true):
+   - Deskripsikan HANYA fakta pengukuran yang tercatat pada context:
+     * usia siswa hanya jika birthDate valid tercatat (DILARANG menebak atau mengarang usia jika birthDate tidak ada atau kosong)
+     * jenis kelamin (gender)
+     * tinggi badan (heightCm)
+     * berat badan (weightKg)
+     * tanggal pengukuran (date)
+     * nilai BMI yang sudah ada jika tercatat pada data
+   - DILARANG KERAS mengarang, menyimpulkan, atau mencantumkan:
+     * rentang normal atau batas bawah/atas berat/tinggi badan
+     * persentil atau kurva pertumbuhan
+     * angka cutoff WHO atau Kemenkes
+     * berat atau tinggi badan minimal/maksimal yang diharapkan
+     * status diagnosis medis apa pun (stunting, gizi kurang, obesitas, gangguan pertumbuhan)
+   - Gunakan bahasa netral, santun, dan objektif bagi orang tua, misalnya: "Berdasarkan catatan pengukuran tanggal [tanggal], ananda memiliki tinggi badan [X] cm dan berat badan [Y] kg."
+   - Berikan saran gizi dan kebiasaan sehat (nutritionAdvice) yang bersifat edukasi kebiasaan baik secara umum (makan makanan bergizi seimbang dengan teratur, minum air putih cukup, dan tidur cukup). DILARANG menyarankan diet ketat atau suplemen/obat.
+   - Tindak lanjut (followUp): sampaikan pentingnya pemantauan berkala dan dukungan aktivitas fisik yang menyenangkan.
 6. BATASAN PANJANG NARASI (HARUS RINGKAS AGAR MUAT DALAM 1 HALAMAN A4):
    - summary: maksimal ±45 kata
    - description (per asesmen): ±25–45 kata

@@ -1548,17 +1548,13 @@ export function renderClassesScreen(state, actions) {
 
       const latestGrowthRecord = currentContext.growth?.[0] || null;
 
-      let studentAgeText = "";
+      let studentAgeText = "-";
       if (student.birthDate) {
         const birthYear = new Date(student.birthDate).getFullYear();
         const currentYear = new Date().getFullYear();
-        if (!isNaN(birthYear) && birthYear > 1990) {
+        if (!isNaN(birthYear) && birthYear > 1990 && currentYear >= birthYear) {
           studentAgeText = `${currentYear - birthYear} Tahun`;
         }
-      }
-      if (!studentAgeText) {
-        const gradeNum = Number(classRoom.grade || 1);
-        studentAgeText = `${6 + (Number.isFinite(gradeNum) ? gradeNum : 1)} Tahun`;
       }
 
       const schoolName = state.school?.name || state.schoolName || "SD NEGERI PJOK";
@@ -1747,8 +1743,7 @@ export function renderClassesScreen(state, actions) {
       const footerSection = createElement("footer", "a4-footer-row border-t pt-2 mt-3 text-xs");
       const leftFooter = createElement("div", "space-y-0.5");
       leftFooter.append(
-        createElement("p", "italic text-slate-500", "* Pengukuran ini membantu pemantauan awal dan bukan diagnosis medis."),
-        createElement("p", "text-slate-400 font-medium", "Acuan pertumbuhan: WHO / Kemenkes")
+        createElement("p", "italic text-slate-500", "* Pengukuran ini membantu pemantauan awal dan bukan diagnosis medis.")
       );
 
       const rightFooter = createElement("div", "text-right font-medium text-slate-700");
@@ -2119,9 +2114,6 @@ export function renderClassesScreen(state, actions) {
       hInput.min = "0";
       hInput.className = "screening-num-input";
       hInput.placeholder = "TB (cm)";
-      if (prevHeight !== "") {
-        hInput.defaultValue = prevHeight;
-      }
       tdHeight.append(hInput);
 
       // Col 4: Weight
@@ -2132,9 +2124,6 @@ export function renderClassesScreen(state, actions) {
       wInput.min = "0";
       wInput.className = "screening-num-input";
       wInput.placeholder = "BB (kg)";
-      if (prevWeight !== "") {
-        wInput.defaultValue = prevWeight;
-      }
       tdWeight.append(wInput);
 
       // Col 5: Last recorded
@@ -3383,172 +3372,6 @@ function createPillStat(label, value, icon) {
   return pill;
 }
 
-export function calculateDeterministicGrowthAnalysis({
-  ageYears,
-  gender = "male",
-  heightCm,
-  weightKg,
-  measurementDate = ""
-}) {
-  const ageKey = Math.max(6, Math.min(12, Math.round(ageYears || 10)));
-  
-  // Reference WHO / Kemenkes SD standards for 6-12 years
-  const refData = {
-    male: {
-      6: { minH: 108, maxH: 122, minW: 17, maxW: 24 },
-      7: { minH: 113, maxH: 128, minW: 19, maxW: 27 },
-      8: { minH: 118, maxH: 134, minW: 21, maxW: 32 },
-      9: { minH: 123, maxH: 140, minW: 23, maxW: 37 },
-      10: { minH: 128, maxH: 146, minW: 25, maxW: 43 },
-      11: { minH: 133, maxH: 152, minW: 28, maxW: 50 },
-      12: { minH: 138, maxH: 159, minW: 31, maxW: 57 }
-    },
-    female: {
-      6: { minH: 107, maxH: 121, minW: 16, maxW: 24 },
-      7: { minH: 112, maxH: 127, minW: 18, maxW: 27 },
-      8: { minH: 117, maxH: 134, minW: 20, maxW: 32 },
-      9: { minH: 123, maxH: 141, minW: 22, maxW: 37 },
-      10: { minH: 128, maxH: 148, minW: 25, maxW: 44 },
-      11: { minH: 134, maxH: 154, minW: 28, maxW: 50 },
-      12: { minH: 140, maxH: 160, minW: 32, maxW: 56 }
-    }
-  };
-
-  const ref = (refData[gender === "female" ? "female" : "male"] || refData.male)[ageKey] || refData.male[10];
-
-  let bmi = null;
-  if (heightCm && weightKg && heightCm > 0) {
-    bmi = Number((weightKg / ((heightCm / 100) ** 2)).toFixed(1));
-  }
-
-  let heightFinding = { status: "tidak_ada_data", severity: "normal" };
-  let hDevRatio = 0;
-  let hSevScore = 0;
-
-  if (heightCm) {
-    if (heightCm < ref.minH - 8) {
-      heightFinding = { status: "sangat_kurang", severity: "severe" };
-      hSevScore = 4;
-      hDevRatio = (ref.minH - heightCm) / ref.minH;
-    } else if (heightCm < ref.minH) {
-      heightFinding = { status: "sedikit_kurang", severity: "mild" };
-      hSevScore = 2;
-      hDevRatio = (ref.minH - heightCm) / ref.minH;
-    } else if (heightCm > ref.maxH + 10) {
-      heightFinding = { status: "sangat_tinggi", severity: "mild" };
-      hSevScore = 1;
-      hDevRatio = (heightCm - ref.maxH) / ref.maxH;
-    } else if (heightCm > ref.maxH) {
-      heightFinding = { status: "sedikit_tinggi", severity: "mild" };
-      hSevScore = 1;
-      hDevRatio = (heightCm - ref.maxH) / ref.maxH;
-    } else {
-      heightFinding = { status: "sesuai", severity: "normal" };
-      hSevScore = 0;
-      hDevRatio = 0;
-    }
-  }
-
-  let weightFinding = {
-    status: "tidak_ada_data",
-    severity: "normal",
-    referenceMinKg: ref.minW,
-    referenceMaxKg: ref.maxW
-  };
-  let wDevRatio = 0;
-  let wSevScore = 0;
-
-  if (weightKg) {
-    if (weightKg < ref.minW - 5) {
-      weightFinding = {
-        status: "sangat_kurang",
-        severity: "severe",
-        referenceMinKg: ref.minW,
-        referenceMaxKg: ref.maxW
-      };
-      wSevScore = 4;
-      wDevRatio = (ref.minW - weightKg) / ref.minW;
-    } else if (weightKg < ref.minW) {
-      weightFinding = {
-        status: "sedikit_kurang",
-        severity: "mild",
-        referenceMinKg: ref.minW,
-        referenceMaxKg: ref.maxW
-      };
-      wSevScore = 2;
-      wDevRatio = (ref.minW - weightKg) / ref.minW;
-    } else if (weightKg > ref.maxW + 10) {
-      weightFinding = {
-        status: "sangat_lebih",
-        severity: "moderate",
-        referenceMinKg: ref.minW,
-        referenceMaxKg: ref.maxW
-      };
-      wSevScore = 3;
-      wDevRatio = (weightKg - ref.maxW) / ref.maxW;
-    } else if (weightKg > ref.maxW) {
-      weightFinding = {
-        status: "sedikit_lebih",
-        severity: "mild",
-        referenceMinKg: ref.minW,
-        referenceMaxKg: ref.maxW
-      };
-      wSevScore = 2;
-      wDevRatio = (weightKg - ref.maxW) / ref.maxW;
-    } else {
-      weightFinding = {
-        status: "sesuai",
-        severity: "normal",
-        referenceMinKg: ref.minW,
-        referenceMaxKg: ref.maxW
-      };
-      wSevScore = 0;
-      wDevRatio = 0;
-    }
-  }
-
-  let primaryFinding = "maintenance";
-  let secondaryFinding = null;
-
-  if (wSevScore > hSevScore && wSevScore > 0) {
-    primaryFinding = "weight";
-    secondaryFinding = hSevScore > 0 ? "height" : null;
-  } else if (hSevScore > wSevScore && hSevScore > 0) {
-    primaryFinding = "height";
-    secondaryFinding = wSevScore > 0 ? "weight" : null;
-  } else if (wSevScore > 0 && wSevScore === hSevScore) {
-    if (wDevRatio >= hDevRatio) {
-      primaryFinding = "weight";
-      secondaryFinding = "height";
-    } else {
-      primaryFinding = "height";
-      secondaryFinding = "weight";
-    }
-  } else {
-    primaryFinding = "maintenance";
-    secondaryFinding = null;
-  }
-
-  const maxSeverityScore = Math.max(wSevScore, hSevScore);
-  const needsMonitoring = maxSeverityScore > 0;
-  const needsProfessionalFollowUp = maxSeverityScore >= 3;
-
-  return {
-    ageYears,
-    gender: gender === "female" ? "female" : "male",
-    heightCm,
-    weightKg,
-    bmi,
-    heightFinding,
-    weightFinding,
-    primaryFinding,
-    secondaryFinding,
-    needsMonitoring,
-    needsProfessionalFollowUp,
-    measurementDate
-  };
-}
-
 export function buildSelectedReportContext({
   student,
   classRoom,
@@ -3666,40 +3489,12 @@ export function buildSelectedReportContext({
       }))
     : [];
 
-  let growthAnalysis = null;
-  if (hasGrowth && growth.length > 0) {
-    const latestGrowth = growth[0];
-    const h = latestGrowth.heightCm ? Number(latestGrowth.heightCm) : null;
-    const w = latestGrowth.weightKg ? Number(latestGrowth.weightKg) : null;
-
-    let ageYears = 10;
-    if (studentData.birthDate) {
-      const bYear = new Date(studentData.birthDate).getFullYear();
-      const currYear = new Date().getFullYear();
-      if (!isNaN(bYear) && bYear > 1990) {
-        ageYears = Math.max(5, Math.min(15, currYear - bYear));
-      }
-    } else {
-      const gNum = studentData.gradeLevel || 1;
-      ageYears = Math.max(6, Math.min(13, 6 + gNum));
-    }
-
-    growthAnalysis = calculateDeterministicGrowthAnalysis({
-      ageYears,
-      gender: studentData.gender === "female" ? "female" : "male",
-      heightCm: Number.isFinite(h) && h > 0 ? h : null,
-      weightKg: Number.isFinite(w) && w > 0 ? w : null,
-      measurementDate: latestGrowth.date || ""
-    });
-  }
-
   return {
     student: studentData,
     selectedSections,
     assessments,
     growth,
-    observations,
-    growthAnalysis
+    observations
   };
 }
 
