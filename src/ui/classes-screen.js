@@ -1330,99 +1330,114 @@ export function renderClassesScreen(state, actions) {
         observationSelections: currentSelectedObs
       });
 
-      const validLearningItems = (reportAiDraft.learning || [])
-        .map((item) => {
-          const matchSource = (currentContext.assessments || []).find(
-            (a) => a.assessmentSessionId === item.assessmentSessionId
-          );
-          if (!matchSource) return null;
-          return { item, matchSource };
-        })
-        .filter(Boolean);
+      const {
+        learning: isLearningActive,
+        understanding: isUnderstandingActive,
+        attitude: isAttitudeActive,
+        growth: isGrowthActive
+      } = currentContext.selectedSections || {};
 
-      const learningBox = createElement("div", "report-ai-draft-section space-y-3");
-      learningBox.append(
-        createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", `2. Hasil Belajar (${validLearningItems.length})`)
-      );
+      if (isLearningActive) {
+        const validLearningItems = (reportAiDraft.learning || [])
+          .map((item) => {
+            const matchSource = (currentContext.assessments || []).find(
+              (a) => a.assessmentSessionId === item.assessmentSessionId
+            );
+            if (!matchSource) return null;
+            return { item, matchSource };
+          })
+          .filter(Boolean);
 
-      if (validLearningItems.length === 0) {
-        learningBox.append(createElement("p", "empty-copy text-xs", "Belum ada capaian hasil belajar dari asesmen terpilih."));
-      } else {
-        validLearningItems.forEach(({ item, matchSource }) => {
-          const itemCard = createElement("div", "report-ai-learning-card space-y-2");
-          
-          const itemHeader = createElement("div", "flex items-center justify-between gap-2");
-          const titleEl = createElement("strong", "text-xs text-slate-900 dark:text-slate-100 flex-1", matchSource.title || "Asesmen PJOK");
+        const learningBox = createElement("div", "report-ai-draft-section space-y-3");
+        learningBox.append(
+          createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", `2. Hasil Belajar (${validLearningItems.length})`)
+        );
 
-          const scoreText =
-            matchSource.numericScore !== null && matchSource.numericScore !== undefined
-              ? `Nilai: ${matchSource.numericScore}`
-              : "Belum ada nilai final";
+        if (validLearningItems.length === 0) {
+          learningBox.append(createElement("p", "empty-copy text-xs", "Belum ada capaian hasil belajar dari asesmen terpilih."));
+        } else {
+          validLearningItems.forEach(({ item, matchSource }) => {
+            const itemCard = createElement("div", "report-ai-learning-card space-y-2");
+            
+            const itemHeader = createElement("div", "flex items-center justify-between gap-2");
+            const titleEl = createElement("strong", "text-xs text-slate-900 dark:text-slate-100 flex-1", matchSource.title || "Asesmen PJOK");
 
-          const scoreBadge = createElement(
-            "span",
-            "badge badge-success text-xs font-bold whitespace-nowrap",
-            scoreText
-          );
+            const scoreText =
+              matchSource.numericScore !== null && matchSource.numericScore !== undefined
+                ? `Nilai: ${matchSource.numericScore}`
+                : "Belum ada nilai final";
 
-          itemHeader.append(titleEl, scoreBadge);
+            const scoreBadge = createElement(
+              "span",
+              "badge badge-success text-xs font-bold whitespace-nowrap",
+              scoreText
+            );
 
-          const descTextarea = document.createElement("textarea");
-          descTextarea.className = "input-text text-xs w-full";
-          descTextarea.rows = 3;
-          descTextarea.value = item.description || "";
-          descTextarea.placeholder = "Deskripsi capaian belajar siswa...";
-          descTextarea.addEventListener("input", (e) => {
-            item.description = e.target.value;
+            itemHeader.append(titleEl, scoreBadge);
+
+            const descTextarea = document.createElement("textarea");
+            descTextarea.className = "input-text text-xs w-full";
+            descTextarea.rows = 3;
+            descTextarea.value = item.description || "";
+            descTextarea.placeholder = "Deskripsi capaian belajar siswa...";
+            descTextarea.addEventListener("input", (e) => {
+              item.description = e.target.value;
+            });
+
+            itemCard.append(itemHeader, descTextarea);
+            learningBox.append(itemCard);
           });
-
-          itemCard.append(itemHeader, descTextarea);
-          learningBox.append(itemCard);
-        });
+        }
+        sectionsList.append(learningBox);
       }
-      sectionsList.append(learningBox);
 
       // 3. Pemahaman
-      const understandBox = createElement("div", "report-ai-draft-section space-y-2");
-      const understandLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "3. Pemahaman");
-      const understandTextarea = document.createElement("textarea");
-      understandTextarea.className = "input-text text-xs w-full";
-      understandTextarea.rows = 3;
-      understandTextarea.value = reportAiDraft.understanding || "";
-      understandTextarea.placeholder = "Deskripsi pemahaman konsep materi...";
-      understandTextarea.addEventListener("input", (e) => {
-        reportAiDraft.understanding = e.target.value;
-      });
-      understandBox.append(understandLabel, understandTextarea);
-      sectionsList.append(understandBox);
+      if (isUnderstandingActive) {
+        const understandBox = createElement("div", "report-ai-draft-section space-y-2");
+        const understandLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "3. Pemahaman");
+        const understandTextarea = document.createElement("textarea");
+        understandTextarea.className = "input-text text-xs w-full";
+        understandTextarea.rows = 3;
+        understandTextarea.value = reportAiDraft.understanding || "";
+        understandTextarea.placeholder = "Deskripsi pemahaman konsep materi...";
+        understandTextarea.addEventListener("input", (e) => {
+          reportAiDraft.understanding = e.target.value;
+        });
+        understandBox.append(understandLabel, understandTextarea);
+        sectionsList.append(understandBox);
+      }
 
       // 4. Sikap
-      const attitudeBox = createElement("div", "report-ai-draft-section space-y-2");
-      const attitudeLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "4. Sikap");
-      const attitudeTextarea = document.createElement("textarea");
-      attitudeTextarea.className = "input-text text-xs w-full";
-      attitudeTextarea.rows = 3;
-      attitudeTextarea.value = reportAiDraft.attitude || "";
-      attitudeTextarea.placeholder = "Deskripsi sikap dan partisipasi siswa...";
-      attitudeTextarea.addEventListener("input", (e) => {
-        reportAiDraft.attitude = e.target.value;
-      });
-      attitudeBox.append(attitudeLabel, attitudeTextarea);
-      sectionsList.append(attitudeBox);
+      if (isAttitudeActive) {
+        const attitudeBox = createElement("div", "report-ai-draft-section space-y-2");
+        const attitudeLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "4. Sikap");
+        const attitudeTextarea = document.createElement("textarea");
+        attitudeTextarea.className = "input-text text-xs w-full";
+        attitudeTextarea.rows = 3;
+        attitudeTextarea.value = reportAiDraft.attitude || "";
+        attitudeTextarea.placeholder = "Deskripsi sikap dan partisipasi siswa...";
+        attitudeTextarea.addEventListener("input", (e) => {
+          reportAiDraft.attitude = e.target.value;
+        });
+        attitudeBox.append(attitudeLabel, attitudeTextarea);
+        sectionsList.append(attitudeBox);
+      }
 
       // 5. Pertumbuhan
-      const growthBox = createElement("div", "report-ai-draft-section space-y-2");
-      const growthLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "5. Pertumbuhan");
-      const growthTextarea = document.createElement("textarea");
-      growthTextarea.className = "input-text text-xs w-full";
-      growthTextarea.rows = 3;
-      growthTextarea.value = reportAiDraft.growth || "";
-      growthTextarea.placeholder = "Deskripsi pertumbuhan fisik siswa...";
-      growthTextarea.addEventListener("input", (e) => {
-        reportAiDraft.growth = e.target.value;
-      });
-      growthBox.append(growthLabel, growthTextarea);
-      sectionsList.append(growthBox);
+      if (isGrowthActive) {
+        const growthBox = createElement("div", "report-ai-draft-section space-y-2");
+        const growthLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "5. Pertumbuhan");
+        const growthTextarea = document.createElement("textarea");
+        growthTextarea.className = "input-text text-xs w-full";
+        growthTextarea.rows = 3;
+        growthTextarea.value = reportAiDraft.growth || "";
+        growthTextarea.placeholder = "Deskripsi pertumbuhan fisik siswa...";
+        growthTextarea.addEventListener("input", (e) => {
+          reportAiDraft.growth = e.target.value;
+        });
+        growthBox.append(growthLabel, growthTextarea);
+        sectionsList.append(growthBox);
+      }
 
       // 6. Aktivitas di Rumah
       const homeBox = createElement("div", "report-ai-draft-section space-y-2");
@@ -1439,32 +1454,36 @@ export function renderClassesScreen(state, actions) {
       sectionsList.append(homeBox);
 
       // 7. Saran Makanan
-      const nutritionBox = createElement("div", "report-ai-draft-section space-y-2");
-      const nutritionLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "7. Saran Makanan");
-      const nutritionTextarea = document.createElement("textarea");
-      nutritionTextarea.className = "input-text text-xs w-full";
-      nutritionTextarea.rows = 3;
-      nutritionTextarea.value = reportAiDraft.nutritionAdvice || "";
-      nutritionTextarea.placeholder = "Saran makanan sehat dan kebiasaan gizi...";
-      nutritionTextarea.addEventListener("input", (e) => {
-        reportAiDraft.nutritionAdvice = e.target.value;
-      });
-      nutritionBox.append(nutritionLabel, nutritionTextarea);
-      sectionsList.append(nutritionBox);
+      if (isGrowthActive) {
+        const nutritionBox = createElement("div", "report-ai-draft-section space-y-2");
+        const nutritionLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "7. Saran Makanan");
+        const nutritionTextarea = document.createElement("textarea");
+        nutritionTextarea.className = "input-text text-xs w-full";
+        nutritionTextarea.rows = 3;
+        nutritionTextarea.value = reportAiDraft.nutritionAdvice || "";
+        nutritionTextarea.placeholder = "Saran makanan sehat dan kebiasaan gizi...";
+        nutritionTextarea.addEventListener("input", (e) => {
+          reportAiDraft.nutritionAdvice = e.target.value;
+        });
+        nutritionBox.append(nutritionLabel, nutritionTextarea);
+        sectionsList.append(nutritionBox);
+      }
 
       // 8. Tindak Lanjut
-      const followUpBox = createElement("div", "report-ai-draft-section space-y-2");
-      const followUpLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "8. Tindak Lanjut");
-      const followUpTextarea = document.createElement("textarea");
-      followUpTextarea.className = "input-text text-xs w-full";
-      followUpTextarea.rows = 3;
-      followUpTextarea.value = reportAiDraft.followUp || "";
-      followUpTextarea.placeholder = "Rencana tindak lanjut bimbingan guru...";
-      followUpTextarea.addEventListener("input", (e) => {
-        reportAiDraft.followUp = e.target.value;
-      });
-      followUpBox.append(followUpLabel, followUpTextarea);
-      sectionsList.append(followUpBox);
+      if (isGrowthActive) {
+        const followUpBox = createElement("div", "report-ai-draft-section space-y-2");
+        const followUpLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "8. Tindak Lanjut");
+        const followUpTextarea = document.createElement("textarea");
+        followUpTextarea.className = "input-text text-xs w-full";
+        followUpTextarea.rows = 3;
+        followUpTextarea.value = reportAiDraft.followUp || "";
+        followUpTextarea.placeholder = "Rencana tindak lanjut bimbingan guru...";
+        followUpTextarea.addEventListener("input", (e) => {
+          reportAiDraft.followUp = e.target.value;
+        });
+        followUpBox.append(followUpLabel, followUpTextarea);
+        sectionsList.append(followUpBox);
+      }
 
       // Final Action Bar for 1-Page A4 Preview
       const finalActionPanel = createElement("div", "mt-6 pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl");
@@ -1616,8 +1635,15 @@ export function renderClassesScreen(state, actions) {
       );
       a4Paper.append(headerSection);
 
-      // NILAI AGREGAT (JIKA ADA)
-      if (finalReportData.overallScore !== null && finalReportData.overallScore !== undefined) {
+      const {
+        learning: isLearningActive,
+        understanding: isUnderstandingActive,
+        attitude: isAttitudeActive,
+        growth: isGrowthActive
+      } = currentContext.selectedSections || {};
+
+      // NILAI AGREGAT (JIKA ADA & LEARNING SELECTION ACTIVE)
+      if (isLearningActive && finalReportData.overallScore !== null && finalReportData.overallScore !== undefined) {
         const scoreSection = createElement("section", "mb-2.5 p-2 bg-emerald-50 rounded border border-emerald-200 text-xs");
         scoreSection.append(
           createElement("div", "font-bold text-emerald-900", `Rata-rata Nilai PJOK Tengah Semester: ${finalReportData.overallScore} / 100`),
@@ -1627,14 +1653,12 @@ export function renderClassesScreen(state, actions) {
       }
 
       // TABEL "APA YANG SUDAH DIPELAJARI"
-      const learningSection = createElement("section", "mb-2.5");
-      learningSection.append(
-        createElement("h2", "a4-section-title", `Apa Yang Sudah Dikuasai ${finalReportData.studentName}`)
-      );
+      if (isLearningActive && finalReportData.learning.length > 0) {
+        const learningSection = createElement("section", "mb-2.5");
+        learningSection.append(
+          createElement("h2", "a4-section-title", `Apa Yang Sudah Dikuasai ${finalReportData.studentName}`)
+        );
 
-      if (finalReportData.learning.length === 0) {
-        learningSection.append(createElement("p", "text-xs text-slate-500 italic", "Belum ada materi asesmen terpilih."));
-      } else {
         const table = createElement("table", "a4-table");
         const thead = document.createElement("thead");
         thead.innerHTML = `
@@ -1657,19 +1681,22 @@ export function renderClassesScreen(state, actions) {
         });
         table.append(thead, tbody);
         learningSection.append(table);
+        a4Paper.append(learningSection);
       }
-      a4Paper.append(learningSection);
 
       // PEMAHAMAN DAN SIKAP
-      if (finalReportData.understanding || finalReportData.attitude) {
+      const showUnderstand = isUnderstandingActive && Boolean(finalReportData.understanding);
+      const showAttitude = isAttitudeActive && Boolean(finalReportData.attitude);
+
+      if (showUnderstand || showAttitude) {
         const understandSection = createElement("section", "mb-2.5 text-xs space-y-1");
         understandSection.append(createElement("h2", "a4-section-title", "Pemahaman Konsep & Sikap"));
-        if (finalReportData.understanding) {
+        if (showUnderstand) {
           const p1 = createElement("p", "leading-tight text-slate-800");
           p1.append(createElement("strong", "", "Pemahaman Konsep: "), document.createTextNode(finalReportData.understanding));
           understandSection.append(p1);
         }
-        if (finalReportData.attitude) {
+        if (showAttitude) {
           const p2 = createElement("p", "leading-tight text-slate-800");
           p2.append(createElement("strong", "", "Sikap & Sportivitas: "), document.createTextNode(finalReportData.attitude));
           understandSection.append(p2);
@@ -1678,25 +1705,27 @@ export function renderClassesScreen(state, actions) {
       }
 
       // PERTUMBUHAN & GROWTH INTERPRETATION
-      const growthSection = createElement("section", "mb-2.5 text-xs space-y-1");
-      growthSection.append(
-        createElement("h2", "a4-section-title", `Bagaimana Pertumbuhan ${finalReportData.studentName}`)
-      );
-      
-      const growthMetaP = createElement("p", "font-bold text-slate-900", `Tinggi badan: ${finalReportData.growth.heightCm} cm | Berat badan: ${finalReportData.growth.weightKg} kg (Pengukuran: ${finalReportData.growth.date})`);
-      growthSection.append(growthMetaP);
+      if (isGrowthActive) {
+        const growthSection = createElement("section", "mb-2.5 text-xs space-y-1");
+        growthSection.append(
+          createElement("h2", "a4-section-title", `Bagaimana Pertumbuhan ${finalReportData.studentName}`)
+        );
+        
+        const growthMetaP = createElement("p", "font-bold text-slate-900", `Tinggi badan: ${finalReportData.growth.heightCm} cm | Berat badan: ${finalReportData.growth.weightKg} kg (Pengukuran: ${finalReportData.growth.date})`);
+        growthSection.append(growthMetaP);
 
-      if (finalReportData.growth.interpretation) {
-        const growthNarrativeP = createElement("p", "leading-tight text-slate-800", finalReportData.growth.interpretation);
-        growthSection.append(growthNarrativeP);
-      }
+        if (finalReportData.growth.interpretation) {
+          const growthNarrativeP = createElement("p", "leading-tight text-slate-800", finalReportData.growth.interpretation);
+          growthSection.append(growthNarrativeP);
+        }
 
-      if (finalReportData.growth.nutritionAdvice) {
-        const nutritionP = createElement("p", "leading-tight text-slate-800");
-        nutritionP.append(createElement("strong", "", "Saran Pola Makan & Kebiasaan Sehat: "), document.createTextNode(finalReportData.growth.nutritionAdvice));
-        growthSection.append(nutritionP);
+        if (finalReportData.growth.nutritionAdvice) {
+          const nutritionP = createElement("p", "leading-tight text-slate-800");
+          nutritionP.append(createElement("strong", "", "Saran Pola Makan & Kebiasaan Sehat: "), document.createTextNode(finalReportData.growth.nutritionAdvice));
+          growthSection.append(nutritionP);
+        }
+        a4Paper.append(growthSection);
       }
-      a4Paper.append(growthSection);
 
       // AYO BERMAIN BERSAMA DI RUMAH (HOME ACTIVITY)
       if (finalReportData.homeActivity) {
@@ -1707,7 +1736,7 @@ export function renderClassesScreen(state, actions) {
       }
 
       // TINDAK LANJUT
-      if (finalReportData.growth.followUp) {
+      if (isGrowthActive && finalReportData.growth.followUp) {
         const followSection = createElement("section", "mb-2.5 text-xs space-y-1");
         followSection.append(createElement("h2", "a4-section-title", "Tindak Lanjut Pembelajaran"));
         followSection.append(createElement("p", "leading-tight text-slate-800", finalReportData.growth.followUp));
@@ -1741,30 +1770,46 @@ export function renderClassesScreen(state, actions) {
         const formattedDateKey = new Date().toISOString().slice(0, 10);
         const pdfFilename = `Laporan_PJOK_${cleanStudentName}_${formattedDateKey}.pdf`;
 
-        if (window.html2pdf) {
-          downloadPdfBtn.disabled = true;
-          downloadPdfBtn.textContent = "⏳ Memproses PDF...";
-
-          const opt = {
-            margin: [6, 6, 6, 6],
-            filename: pdfFilename,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, logging: false },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-          };
-
-          window.html2pdf().set(opt).from(a4Paper).save().then(() => {
-            downloadPdfBtn.disabled = false;
-            downloadPdfBtn.textContent = "📥 Unduh PDF";
-          }).catch((pdfErr) => {
-            console.error("[PDF GENERATION ERROR]", pdfErr);
-            downloadPdfBtn.disabled = false;
-            downloadPdfBtn.textContent = "📥 Unduh PDF";
-            window.print();
-          });
-        } else {
-          window.print();
+        if (!window.html2pdf) {
+          window.alert("Mesin PDF belum tersedia. Muat ulang aplikasi lalu coba lagi.");
+          return;
         }
+
+        downloadPdfBtn.disabled = true;
+        downloadPdfBtn.textContent = "⏳ Memproses PDF...";
+
+        const opt = {
+          margin: [6, 6, 6, 6],
+          filename: pdfFilename,
+          image: {
+            type: "jpeg",
+            quality: 0.98
+          },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            backgroundColor: "#ffffff"
+          },
+          jsPDF: {
+            unit: "mm",
+            format: "a4",
+            orientation: "portrait"
+          },
+          pagebreak: {
+            mode: ["avoid-all", "css", "legacy"]
+          }
+        };
+
+        window.html2pdf().set(opt).from(a4Paper).save().then(() => {
+          downloadPdfBtn.disabled = false;
+          downloadPdfBtn.textContent = "📥 Unduh PDF";
+        }).catch((pdfErr) => {
+          console.error("[PDF GENERATION ERROR]", pdfErr);
+          downloadPdfBtn.disabled = false;
+          downloadPdfBtn.textContent = "📥 Unduh PDF";
+          window.alert("PDF gagal dibuat. Silakan coba kembali.");
+        });
       });
     }
 
@@ -3338,6 +3383,172 @@ function createPillStat(label, value, icon) {
   return pill;
 }
 
+export function calculateDeterministicGrowthAnalysis({
+  ageYears,
+  gender = "male",
+  heightCm,
+  weightKg,
+  measurementDate = ""
+}) {
+  const ageKey = Math.max(6, Math.min(12, Math.round(ageYears || 10)));
+  
+  // Reference WHO / Kemenkes SD standards for 6-12 years
+  const refData = {
+    male: {
+      6: { minH: 108, maxH: 122, minW: 17, maxW: 24 },
+      7: { minH: 113, maxH: 128, minW: 19, maxW: 27 },
+      8: { minH: 118, maxH: 134, minW: 21, maxW: 32 },
+      9: { minH: 123, maxH: 140, minW: 23, maxW: 37 },
+      10: { minH: 128, maxH: 146, minW: 25, maxW: 43 },
+      11: { minH: 133, maxH: 152, minW: 28, maxW: 50 },
+      12: { minH: 138, maxH: 159, minW: 31, maxW: 57 }
+    },
+    female: {
+      6: { minH: 107, maxH: 121, minW: 16, maxW: 24 },
+      7: { minH: 112, maxH: 127, minW: 18, maxW: 27 },
+      8: { minH: 117, maxH: 134, minW: 20, maxW: 32 },
+      9: { minH: 123, maxH: 141, minW: 22, maxW: 37 },
+      10: { minH: 128, maxH: 148, minW: 25, maxW: 44 },
+      11: { minH: 134, maxH: 154, minW: 28, maxW: 50 },
+      12: { minH: 140, maxH: 160, minW: 32, maxW: 56 }
+    }
+  };
+
+  const ref = (refData[gender === "female" ? "female" : "male"] || refData.male)[ageKey] || refData.male[10];
+
+  let bmi = null;
+  if (heightCm && weightKg && heightCm > 0) {
+    bmi = Number((weightKg / ((heightCm / 100) ** 2)).toFixed(1));
+  }
+
+  let heightFinding = { status: "tidak_ada_data", severity: "normal" };
+  let hDevRatio = 0;
+  let hSevScore = 0;
+
+  if (heightCm) {
+    if (heightCm < ref.minH - 8) {
+      heightFinding = { status: "sangat_kurang", severity: "severe" };
+      hSevScore = 4;
+      hDevRatio = (ref.minH - heightCm) / ref.minH;
+    } else if (heightCm < ref.minH) {
+      heightFinding = { status: "sedikit_kurang", severity: "mild" };
+      hSevScore = 2;
+      hDevRatio = (ref.minH - heightCm) / ref.minH;
+    } else if (heightCm > ref.maxH + 10) {
+      heightFinding = { status: "sangat_tinggi", severity: "mild" };
+      hSevScore = 1;
+      hDevRatio = (heightCm - ref.maxH) / ref.maxH;
+    } else if (heightCm > ref.maxH) {
+      heightFinding = { status: "sedikit_tinggi", severity: "mild" };
+      hSevScore = 1;
+      hDevRatio = (heightCm - ref.maxH) / ref.maxH;
+    } else {
+      heightFinding = { status: "sesuai", severity: "normal" };
+      hSevScore = 0;
+      hDevRatio = 0;
+    }
+  }
+
+  let weightFinding = {
+    status: "tidak_ada_data",
+    severity: "normal",
+    referenceMinKg: ref.minW,
+    referenceMaxKg: ref.maxW
+  };
+  let wDevRatio = 0;
+  let wSevScore = 0;
+
+  if (weightKg) {
+    if (weightKg < ref.minW - 5) {
+      weightFinding = {
+        status: "sangat_kurang",
+        severity: "severe",
+        referenceMinKg: ref.minW,
+        referenceMaxKg: ref.maxW
+      };
+      wSevScore = 4;
+      wDevRatio = (ref.minW - weightKg) / ref.minW;
+    } else if (weightKg < ref.minW) {
+      weightFinding = {
+        status: "sedikit_kurang",
+        severity: "mild",
+        referenceMinKg: ref.minW,
+        referenceMaxKg: ref.maxW
+      };
+      wSevScore = 2;
+      wDevRatio = (ref.minW - weightKg) / ref.minW;
+    } else if (weightKg > ref.maxW + 10) {
+      weightFinding = {
+        status: "sangat_lebih",
+        severity: "moderate",
+        referenceMinKg: ref.minW,
+        referenceMaxKg: ref.maxW
+      };
+      wSevScore = 3;
+      wDevRatio = (weightKg - ref.maxW) / ref.maxW;
+    } else if (weightKg > ref.maxW) {
+      weightFinding = {
+        status: "sedikit_lebih",
+        severity: "mild",
+        referenceMinKg: ref.minW,
+        referenceMaxKg: ref.maxW
+      };
+      wSevScore = 2;
+      wDevRatio = (weightKg - ref.maxW) / ref.maxW;
+    } else {
+      weightFinding = {
+        status: "sesuai",
+        severity: "normal",
+        referenceMinKg: ref.minW,
+        referenceMaxKg: ref.maxW
+      };
+      wSevScore = 0;
+      wDevRatio = 0;
+    }
+  }
+
+  let primaryFinding = "maintenance";
+  let secondaryFinding = null;
+
+  if (wSevScore > hSevScore && wSevScore > 0) {
+    primaryFinding = "weight";
+    secondaryFinding = hSevScore > 0 ? "height" : null;
+  } else if (hSevScore > wSevScore && hSevScore > 0) {
+    primaryFinding = "height";
+    secondaryFinding = wSevScore > 0 ? "weight" : null;
+  } else if (wSevScore > 0 && wSevScore === hSevScore) {
+    if (wDevRatio >= hDevRatio) {
+      primaryFinding = "weight";
+      secondaryFinding = "height";
+    } else {
+      primaryFinding = "height";
+      secondaryFinding = "weight";
+    }
+  } else {
+    primaryFinding = "maintenance";
+    secondaryFinding = null;
+  }
+
+  const maxSeverityScore = Math.max(wSevScore, hSevScore);
+  const needsMonitoring = maxSeverityScore > 0;
+  const needsProfessionalFollowUp = maxSeverityScore >= 3;
+
+  return {
+    ageYears,
+    gender: gender === "female" ? "female" : "male",
+    heightCm,
+    weightKg,
+    bmi,
+    heightFinding,
+    weightFinding,
+    primaryFinding,
+    secondaryFinding,
+    needsMonitoring,
+    needsProfessionalFollowUp,
+    measurementDate
+  };
+}
+
 export function buildSelectedReportContext({
   student,
   classRoom,
@@ -3353,11 +3564,22 @@ export function buildSelectedReportContext({
       ? Number(rawGrade)
       : null;
 
+  const hasAssessments = (assessmentSelections || []).length > 0;
+  const hasObservations = (observationSelections || []).length > 0;
+  const hasGrowth = (growthSelections || []).length > 0;
+
+  const selectedSections = {
+    learning: hasAssessments,
+    understanding: hasAssessments,
+    attitude: hasObservations,
+    growth: hasGrowth
+  };
+
   const studentData = {
     id: student?.id || "",
     name: student?.name || "",
     studentNumber: student?.studentNumber || "",
-    gender: student?.gender || "",
+    gender: student?.gender || "male",
     birthDate: student?.birthDate || "",
     gradeLevel:
       gradeNumber !== null && Number.isFinite(gradeNumber)
@@ -3366,83 +3588,118 @@ export function buildSelectedReportContext({
     className: classRoom?.name || ""
   };
 
-  const assessments = (assessmentSelections || []).map(({ result, assessmentSession: sess, definition: def }) => {
-    const isComplete = result?.numericScore !== null && result?.numericScore !== undefined;
-    
-    const items = (sess?.itemsSnapshot || []).map((item) => {
-      const itemResult = (result?.itemResults || []).find((ir) => ir.itemId === item.id);
-      const hasRating =
-        itemResult?.rubricLevel !== null &&
-        itemResult?.rubricLevel !== undefined &&
-        !Number.isNaN(Number(itemResult.rubricLevel));
+  const assessments = hasAssessments
+    ? (assessmentSelections || []).map(({ result, assessmentSession: sess, definition: def }) => {
+        const isComplete = result?.numericScore !== null && result?.numericScore !== undefined;
+        
+        const items = (sess?.itemsSnapshot || []).map((item) => {
+          const itemResult = (result?.itemResults || []).find((ir) => ir.itemId === item.id);
+          const hasRating =
+            itemResult?.rubricLevel !== null &&
+            itemResult?.rubricLevel !== undefined &&
+            !Number.isNaN(Number(itemResult.rubricLevel));
 
-      let rubricLevel = null;
-      let rubricLabel = "";
-      let rubricDescription = "";
-      let teacherNote = "";
+          let rubricLevel = null;
+          let rubricLabel = "";
+          let rubricDescription = "";
+          let teacherNote = "";
 
-      if (hasRating) {
-        rubricLevel = Number(itemResult.rubricLevel);
-        const matchedLevel = (item.rubricLevels || []).find(
-          (lvl) => Number(lvl.level) === rubricLevel
-        );
-        rubricLabel = matchedLevel?.label || `Level ${rubricLevel}`;
-        rubricDescription = matchedLevel?.desc || "";
-        teacherNote = itemResult.note || "";
+          if (hasRating) {
+            rubricLevel = Number(itemResult.rubricLevel);
+            const matchedLevel = (item.rubricLevels || []).find(
+              (lvl) => Number(lvl.level) === rubricLevel
+            );
+            rubricLabel = matchedLevel?.label || `Level ${rubricLevel}`;
+            rubricDescription = matchedLevel?.desc || "";
+            teacherNote = itemResult.note || "";
+          }
+
+          return {
+            itemId: item.id || "",
+            prompt: item.prompt || item.title || item.question || "",
+            rubricScale: Number(item.rubricScale) || 5,
+            rubricLevel,
+            rubricLabel,
+            rubricDescription,
+            teacherNote
+          };
+        });
+
+        return {
+          assessmentSessionId: sess?.id || "",
+          title: sess?.title || "",
+          date: sess?.date || result?.recordedAt || "",
+          purpose: sess?.purpose || "",
+          materials: sess?.materials || def?.materials || [],
+          assessmentType: def?.assessmentType || sess?.assessmentType || "",
+          numericScore: isComplete ? Number(result.numericScore) : null,
+          averageRubricScore:
+            result?.averageRubricScore !== null &&
+            result?.averageRubricScore !== undefined &&
+            !Number.isNaN(Number(result.averageRubricScore))
+              ? Number(result.averageRubricScore)
+              : null,
+          complete: isComplete,
+          items,
+          teacherNote: result?.note || ""
+        };
+      })
+    : [];
+
+  const growth = hasGrowth
+    ? (growthSelections || []).map((g) => ({
+        id: g.id || "",
+        date: g.date || "",
+        heightCm: g.heightCm ? String(g.heightCm) : "",
+        weightKg: g.weightKg ? String(g.weightKg) : "",
+        bmi: g.bmi !== undefined && g.bmi !== null ? g.bmi : null,
+        note: g.note || ""
+      }))
+    : [];
+
+  const observations = hasObservations
+    ? (observationSelections || []).map((o) => ({
+        id: o.id || "",
+        recordedAt: o.recordedAt || o.date || "",
+        type: o.type || "umum",
+        text: o.text || ""
+      }))
+    : [];
+
+  let growthAnalysis = null;
+  if (hasGrowth && growth.length > 0) {
+    const latestGrowth = growth[0];
+    const h = latestGrowth.heightCm ? Number(latestGrowth.heightCm) : null;
+    const w = latestGrowth.weightKg ? Number(latestGrowth.weightKg) : null;
+
+    let ageYears = 10;
+    if (studentData.birthDate) {
+      const bYear = new Date(studentData.birthDate).getFullYear();
+      const currYear = new Date().getFullYear();
+      if (!isNaN(bYear) && bYear > 1990) {
+        ageYears = Math.max(5, Math.min(15, currYear - bYear));
       }
+    } else {
+      const gNum = studentData.gradeLevel || 1;
+      ageYears = Math.max(6, Math.min(13, 6 + gNum));
+    }
 
-      return {
-        itemId: item.id || "",
-        prompt: item.prompt || item.title || item.question || "",
-        rubricScale: Number(item.rubricScale) || 5,
-        rubricLevel,
-        rubricLabel,
-        rubricDescription,
-        teacherNote
-      };
+    growthAnalysis = calculateDeterministicGrowthAnalysis({
+      ageYears,
+      gender: studentData.gender === "female" ? "female" : "male",
+      heightCm: Number.isFinite(h) && h > 0 ? h : null,
+      weightKg: Number.isFinite(w) && w > 0 ? w : null,
+      measurementDate: latestGrowth.date || ""
     });
-
-    return {
-      assessmentSessionId: sess?.id || "",
-      title: sess?.title || "",
-      date: sess?.date || result?.recordedAt || "",
-      purpose: sess?.purpose || "",
-      materials: sess?.materials || def?.materials || [],
-      assessmentType: def?.assessmentType || sess?.assessmentType || "",
-      numericScore: isComplete ? Number(result.numericScore) : null,
-      averageRubricScore:
-        result?.averageRubricScore !== null &&
-        result?.averageRubricScore !== undefined &&
-        !Number.isNaN(Number(result.averageRubricScore))
-          ? Number(result.averageRubricScore)
-          : null,
-      complete: isComplete,
-      items,
-      teacherNote: result?.note || ""
-    };
-  });
-
-  const growth = (growthSelections || []).map((g) => ({
-    id: g.id || "",
-    date: g.date || "",
-    heightCm: g.heightCm ? String(g.heightCm) : "",
-    weightKg: g.weightKg ? String(g.weightKg) : "",
-    bmi: g.bmi !== undefined && g.bmi !== null ? g.bmi : null,
-    note: g.note || ""
-  }));
-
-  const observations = (observationSelections || []).map((o) => ({
-    id: o.id || "",
-    recordedAt: o.recordedAt || o.date || "",
-    type: o.type || "umum",
-    text: o.text || ""
-  }));
+  }
 
   return {
     student: studentData,
+    selectedSections,
     assessments,
     growth,
-    observations
+    observations,
+    growthAnalysis
   };
 }
 

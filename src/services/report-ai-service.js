@@ -20,21 +20,25 @@ Tugas Anda adalah menginterpretasikan data hasil asesmen, pertumbuhan fisik, dan
 Berikut adalah data ReportContext siswa yang telah dipilih guru:
 ${JSON.stringify(reportContext, null, 2)}
 
-ATURAN KETAT (CRITICAL RULES):
-1. Gunakan HANYA fakta dan data yang terdapat dalam ReportContext di atas.
-2. Untuk setiap asesmen yang ada di dalam ReportContext (bagian assessments), kembalikan persis "assessmentSessionId" terkait beserta narasi "description" capaian belajarnya saja.
-3. JANGAN menghasilkan atau mengarang "title", "score", "date", atau "materials" pada bagian learning (judul dan nilai akan diambil langsung oleh sistem dari sumber data asli).
-4. JANGAN mengarang jawaban siswa, tindakan, atau kejadian yang tidak tercatat dalam rubrik, butir instrumen, riwayat pertumbuhan, atau observasi.
-5. JANGAN mengarang kemampuan fisik/kognitif yang tidak didukung oleh deskripsi rubrik atau catatan guru dalam context.
-6. PANDUAN INTERPRETASI PERTUMBUHAN & KESELAMATAN (GROWTH SAFETY):
+ATURAN KETAT OTORITAS APLIKASI & SELEKSI SUMBER (CRITICAL SOURCE RULES):
+1. PERHATIKAN "selectedSections" pada ReportContext:
+   - Jika selectedSections.learning === false: WAJIB kembalikan "learning": []
+   - Jika selectedSections.understanding === false: WAJIB kembalikan "understanding": "" (DILARANG mengarang pemahaman jika tidak ada asesmen terpilih)
+   - Jika selectedSections.attitude === false: WAJIB kembalikan "attitude": "" (DILARANG menyimpulkan sikap/sportivitas jika tidak ada observasi terpilih)
+   - Jika selectedSections.growth === false: WAJIB kembalikan "growth": "", "nutritionAdvice": "", "followUp": "" (DILARANG membahas pertumbuhan jika data pertumbuhan tidak dipilih)
+2. NARASI RINGKASAN (summary) HANYA BISA membahas aspek-aspek yang selectedSections-nya bernilai true. DILARANG membahas sikap bila observation tidak dipilih, atau pertumbuhan bila growth tidak dipilih.
+3. Untuk setiap asesmen dalam "assessments" (bila selectedSections.learning === true), kembalikan persis "assessmentSessionId" terkait beserta narasi "description" capaian belajarnya saja.
+4. JANGAN PERNAH mengarang "title", "score", "date", atau "materials" pada bagian learning (judul dan nilai diatur oleh sistem dari data asli).
+5. PANDUAN NARRATIVE PERTUMBUHAN DENGAN ANALYSIS ENGINE (Gunakan bila selectedSections.growth === true):
+   - Perhatikan objek "growthAnalysis" yang telah dianalisis oleh sistem secara deterministik.
+   - Perhatikan "primaryFinding" (apakah 'weight', 'height', atau 'maintenance') dan jelaskan temuan paling penting ini terlebih dahulu.
    - Gunakan data usia, jenis kelamin, tinggi badan (heightCm), dan berat badan (weightKg) untuk menyusun narasi pertumbuhan yang ramah dan menenangkan bagi orang tua.
    - JANGAN PERNAH mendiagnosis penyakit, stunting, obesitas, kekurangan gizi, atau gangguan pertumbuhan secara medis/alarmis hanya dari satu pengukuran.
-   - Gunakan frasa ramah seperti "hasil pengukuran menunjukkan...", "berdasarkan acuan pertumbuhan yang digunakan sistem...", "berat/tinggi badan perlu dipantau dan dibantu bertambah secara bertahap...".
-   - Jika kondisi membutuhkan perhatian khusus, gunakan saran berkonsultasi yang santun: "Untuk kondisi ini, akan lebih baik Ayah dan Bunda berkonsultasi ke dokter atau Puskesmas untuk mengetahui..."
-   - Berikan saran pola makan (nutritionAdvice) yang praktis (makan teratur, buah/sayur, air putih, kurangi minuman manis). DILARANG menyarankan diet ketat, menghitung kalori, atau suplemen/obat.
-7. PANDUAN AKTIVITAS DI RUMAH (HOME ACTIVITY):
-   - Berikan rekomendasi permainan/aktivitas fisik sederhana dan spesifik yang menyenangkan untuk dilakukan bersama orang tua di rumah.
-8. BATASAN PANJANG NARASI (HARUS RINGKAS AGAR MUAT DALAM 1 HALAMAN A4):
+   - Gunakan frasa ramah seperti "hasil pengukuran menunjukkan...", "berdasarkan acuan pertumbuhan yang digunakan sistem...", "perlu dipantau dan dibantu bertambah secara bertahap...", "cukup sesuai untuk usianya".
+   - Jika growthAnalysis.needsProfessionalFollowUp === true, berikan saran konsultasi santun: "Untuk kondisi ini, akan lebih baik Ayah dan Bunda berkonsultasi ke dokter atau Puskesmas untuk mengetahui..."
+   - Jika kondisi normal/maintenance: berikan pesan apresiasi untuk mempertahankan pola makan teratur, istirahat, dan aktivitas fisik yang baik.
+   - Berikan saran pola makan (nutritionAdvice) yang praktis dan relevan jika berat kurang/lebih (makan teratur, telur/ikan/sayur/buah, air putih). DILARANG menyarankan diet ketat, menghitung kalori, atau obat/suplemen.
+6. BATASAN PANJANG NARASI (HARUS RINGKAS AGAR MUAT DALAM 1 HALAMAN A4):
    - summary: maksimal ±45 kata
    - description (per asesmen): ±25–45 kata
    - understanding: ±40 kata
@@ -46,19 +50,19 @@ ATURAN KETAT (CRITICAL RULES):
 
 STRUKTUR KELUARAN JSON (HARUS PERSIS FORMAT BERIKUT):
 {
-  "summary": "Ringkasan umum perkembangan siswa secara keseluruhan (max 45 kata)",
+  "summary": "Ringkasan perkembangan siswa berdasarkan section aktif (max 45 kata)",
   "learning": [
     {
       "assessmentSessionId": "id-assessment-session-dari-context",
       "description": "Deskripsi capaian belajar siswa berdasarkan rubrik yang dicapai (25-45 kata)"
     }
   ],
-  "understanding": "Narasi mengenai pemahaman konsep gerak dan pengetahuan siswa (max 40 kata)",
-  "attitude": "Narasi mengenai sikap, sportivitas, kerja sama, dan keaktifan siswa (max 35 kata)",
-  "growth": "Narasi interpretasi pertumbuhan fisik siswa yang ramah bagi orang tua (max 70 kata)",
+  "understanding": "Narasi pemahaman konsep (kosongkan \"\" jika selectedSections.understanding === false) (max 40 kata)",
+  "attitude": "Narasi sikap & sportivitas (kosongkan \"\" jika selectedSections.attitude === false) (max 35 kata)",
+  "growth": "Narasi interpretasi pertumbuhan fisik (kosongkan \"\" jika selectedSections.growth === false) (max 70 kata)",
   "homeActivity": "Rekomendasi permainan/aktivitas fisik bersama di rumah (max 45 kata)",
-  "nutritionAdvice": "Saran gizi, pola makan teratur, dan kebiasaan sehat sederhana (max 60 kata)",
-  "followUp": "Rencana tindak lanjut bimbingan guru di sekolah (max 45 kata)"
+  "nutritionAdvice": "Saran gizi & kebiasaan sehat (kosongkan \"\" jika selectedSections.growth === false) (max 60 kata)",
+  "followUp": "Rencana tindak lanjut bimbingan (kosongkan \"\" jika selectedSections.growth === false) (max 45 kata)"
 }
 
 KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
@@ -139,7 +143,13 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
     throw new Error("Format respon AI tidak valid: bukan object JSON");
   }
 
-  const sanitizedLearning = Array.isArray(parsed.learning)
+  const selectedSections = reportContext.selectedSections || {};
+  const isLearningActive = Boolean(selectedSections.learning);
+  const isUnderstandingActive = Boolean(selectedSections.understanding);
+  const isAttitudeActive = Boolean(selectedSections.attitude);
+  const isGrowthActive = Boolean(selectedSections.growth);
+
+  const sanitizedLearning = isLearningActive && Array.isArray(parsed.learning)
     ? parsed.learning.map((item) => ({
         assessmentSessionId:
           typeof item?.assessmentSessionId === "string"
@@ -155,11 +165,11 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
   return {
     summary: typeof parsed.summary === "string" ? parsed.summary.trim() : "",
     learning: sanitizedLearning,
-    understanding: typeof parsed.understanding === "string" ? parsed.understanding.trim() : "",
-    attitude: typeof parsed.attitude === "string" ? parsed.attitude.trim() : "",
-    growth: typeof parsed.growth === "string" ? parsed.growth.trim() : "",
+    understanding: isUnderstandingActive && typeof parsed.understanding === "string" ? parsed.understanding.trim() : "",
+    attitude: isAttitudeActive && typeof parsed.attitude === "string" ? parsed.attitude.trim() : "",
+    growth: isGrowthActive && typeof parsed.growth === "string" ? parsed.growth.trim() : "",
     homeActivity: typeof parsed.homeActivity === "string" ? parsed.homeActivity.trim() : "",
-    nutritionAdvice: typeof parsed.nutritionAdvice === "string" ? parsed.nutritionAdvice.trim() : "",
-    followUp: typeof parsed.followUp === "string" ? parsed.followUp.trim() : ""
+    nutritionAdvice: isGrowthActive && typeof parsed.nutritionAdvice === "string" ? parsed.nutritionAdvice.trim() : "",
+    followUp: isGrowthActive && typeof parsed.followUp === "string" ? parsed.followUp.trim() : ""
   };
 }

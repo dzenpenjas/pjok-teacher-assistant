@@ -1,9 +1,10 @@
-const CACHE_NAME = "pjok-teacher-assistant-v39";
+const CACHE_NAME = "pjok-teacher-assistant-v40";
 
 const APP_ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
+  "./vendor/html2pdf.bundle.min.js",
   "./src/app.js",
   "./src/styles.css",
   "./src/data/models.js",
