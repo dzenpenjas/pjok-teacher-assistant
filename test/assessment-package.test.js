@@ -225,6 +225,7 @@ test("validateAssessmentPackage validates correct package and returns structured
     assessments: [
       {
         externalCode: "",
+        sourceVersion: "",
         name: "",
         purpose: "invalid_purpose",
         assessmentType: "invalid_type",
@@ -255,12 +256,215 @@ test("validateAssessmentPackage validates correct package and returns structured
   assert.ok(errorFields.includes("formatVersion"));
   assert.ok(errorFields.includes("name"));
   assert.ok(errorFields.includes("externalCode"));
+  assert.ok(errorFields.includes("sourceVersion"));
   assert.ok(errorFields.includes("purpose"));
   assert.ok(errorFields.includes("assessmentType"));
   assert.ok(errorFields.includes("method"));
+  assert.ok(errorFields.includes("rubricScale"));
   assert.ok(errorFields.includes("materials"));
   assert.ok(errorFields.includes("prompt"));
   assert.ok(errorFields.includes("rubricLevels"));
+});
+
+test("Export fallback externalCode does not contain local DB IDs and is deterministic for identical content", () => {
+  const session1 = createAssessmentSession({
+    id: "local-session-id-111",
+    definitionId: "local-def-id-aaa",
+    title: "Senam Lantai Guling Depan",
+    purpose: "formative",
+    materials: ["Matras Senam"],
+    instructions: "Lakukan guling depan dengan benar di atas matras.",
+    itemsSnapshot: [
+      {
+        id: "item-snap-1",
+        number: 1,
+        prompt: "Posisi mendarat",
+        rubricScale: 3,
+        rubricLevels: [
+          { level: 1, label: "L1", desc: "Jatuh miring" },
+          { level: 2, label: "L2", desc: "Mendarat cukup tegak" },
+          { level: 3, label: "L3", desc: "Mendarat tegak sempurna" }
+        ]
+      }
+    ]
+  });
+
+  const definition1 = createAssessmentDefinition({
+    id: "local-def-id-aaa",
+    name: "Senam Lantai Guling Depan",
+    rubricScale: 3,
+    items: []
+  });
+
+  const session2 = createAssessmentSession({
+    id: "different-local-session-999",
+    definitionId: "different-local-def-zzz",
+    title: "Senam Lantai Guling Depan",
+    purpose: "formative",
+    materials: ["Matras Senam"],
+    instructions: "Lakukan guling depan dengan benar di atas matras.",
+    itemsSnapshot: [
+      {
+        id: "different-item-snap-2",
+        number: 1,
+        prompt: "Posisi mendarat",
+        rubricScale: 3,
+        rubricLevels: [
+          { level: 1, label: "L1", desc: "Jatuh miring" },
+          { level: 2, label: "L2", desc: "Mendarat cukup tegak" },
+          { level: 3, label: "L3", desc: "Mendarat tegak sempurna" }
+        ]
+      }
+    ]
+  });
+
+  const definition2 = createAssessmentDefinition({
+    id: "different-local-def-zzz",
+    name: "Senam Lantai Guling Depan",
+    rubricScale: 3,
+    items: []
+  });
+
+  const canonical1 = buildCanonicalAssessmentFromSession(session1, definition1);
+  const canonical2 = buildCanonicalAssessmentFromSession(session2, definition2);
+
+  // Both have no externalCode in options or sourceMeta, so they fallback to LOCAL-<fp>
+  assert.ok(canonical1.externalCode.startsWith("LOCAL-fp_"));
+  assert.ok(canonical2.externalCode.startsWith("LOCAL-fp_"));
+
+  // Ensure no local database IDs leaked into externalCode
+  assert.equal(canonical1.externalCode.includes("local-session-id-111"), false);
+  assert.equal(canonical1.externalCode.includes("local-def-id-aaa"), false);
+  assert.equal(canonical2.externalCode.includes("different-local-session-999"), false);
+  assert.equal(canonical2.externalCode.includes("different-local-def-zzz"), false);
+
+  // Identical substantive content produces the exact same generated externalCode
+  assert.equal(canonical1.externalCode, canonical2.externalCode);
+});
+
+test("Multi-version dedupe correctly handles existing historical versions (v1 + v2)", () => {
+  const v1Def = createAssessmentDefinition({
+    id: "def-v1",
+    name: "Dribble Bola Tangan",
+    purpose: "formative",
+    assessmentType: "practice",
+    method: "rubric",
+    materials: ["Bola Tangan"],
+    rubricScale: 3,
+    sourceMeta: {
+      externalCode: "HANDBALL-DRIBBLE",
+      sourceVersion: "1.0"
+    },
+    items: [
+      {
+        number: 1,
+        prompt: "Dribble dasar v1",
+        rubricScale: 3,
+        rubricLevels: [
+          { level: 1, label: "L1", desc: "V1 desc 1" },
+          { level: 2, label: "L2", desc: "V1 desc 2" },
+          { level: 3, label: "L3", desc: "V1 desc 3" }
+        ]
+      }
+    ]
+  });
+  v1Def.sourceMeta.fingerprint = calculateAssessmentFingerprint(v1Def);
+
+  const v2Def = createAssessmentDefinition({
+    id: "def-v2",
+    name: "Dribble Bola Tangan v2",
+    purpose: "formative",
+    assessmentType: "practice",
+    method: "rubric",
+    materials: ["Bola Tangan"],
+    rubricScale: 3,
+    sourceMeta: {
+      externalCode: "HANDBALL-DRIBBLE",
+      sourceVersion: "2.0"
+    },
+    items: [
+      {
+        number: 1,
+        prompt: "Dribble lanjutan v2",
+        rubricScale: 3,
+        rubricLevels: [
+          { level: 1, label: "L1", desc: "V2 desc 1" },
+          { level: 2, label: "L2", desc: "V2 desc 2" },
+          { level: 3, label: "L3", desc: "V2 desc 3" }
+        ]
+      }
+    ]
+  });
+  v2Def.sourceMeta.fingerprint = calculateAssessmentFingerprint(v2Def);
+
+  const existingDefinitions = [v1Def, v2Def];
+
+  // Case 1: incoming is identical to existing v2 -> MUST be EXACT_MATCH on v2 (not NEW_VERSION)
+  const incomingV2Identical = {
+    externalCode: "HANDBALL-DRIBBLE",
+    sourceVersion: "2.0",
+    name: "Dribble Bola Tangan v2",
+    purpose: "formative",
+    assessmentType: "practice",
+    method: "rubric",
+    materials: ["Bola Tangan"],
+    rubricScale: 3,
+    items: v2Def.items
+  };
+  const resV2Match = classifyAssessment(incomingV2Identical, existingDefinitions);
+  assert.equal(resV2Match.classification, DEDUPE_STATUS.EXACT_MATCH);
+  assert.equal(resV2Match.existingDefinition.id, "def-v2");
+
+  // Case 2: incoming is identical to existing v1 -> MUST be EXACT_MATCH on v1
+  const incomingV1Identical = {
+    externalCode: "HANDBALL-DRIBBLE",
+    sourceVersion: "1.0",
+    name: "Dribble Bola Tangan",
+    purpose: "formative",
+    assessmentType: "practice",
+    method: "rubric",
+    materials: ["Bola Tangan"],
+    rubricScale: 3,
+    items: v1Def.items
+  };
+  const resV1Match = classifyAssessment(incomingV1Identical, existingDefinitions);
+  assert.equal(resV1Match.classification, DEDUPE_STATUS.EXACT_MATCH);
+  assert.equal(resV1Match.existingDefinition.id, "def-v1");
+
+  // Case 3: incoming has unseen version v3 -> MUST be NEW_VERSION
+  const incomingV3 = {
+    externalCode: "HANDBALL-DRIBBLE",
+    sourceVersion: "3.0",
+    name: "Dribble Bola Tangan v3",
+    purpose: "formative",
+    assessmentType: "practice",
+    method: "rubric",
+    materials: ["Bola Tangan"],
+    rubricScale: 3,
+    items: [
+      {
+        number: 1,
+        prompt: "Dribble zigzag v3",
+        rubricScale: 3,
+        rubricLevels: [
+          { level: 1, label: "L1", desc: "V3 desc 1" },
+          { level: 2, label: "L2", desc: "V3 desc 2" },
+          { level: 3, label: "L3", desc: "V3 desc 3" }
+        ]
+      }
+    ]
+  };
+  const resV3 = classifyAssessment(incomingV3, existingDefinitions);
+  assert.equal(resV3.classification, DEDUPE_STATUS.NEW_VERSION);
+
+  // Case 4: incoming is v2 but content is changed -> MUST be CONFLICT
+  const incomingV2Conflict = {
+    ...incomingV2Identical,
+    name: "Dribble Bola Tangan v2 Perubahan Konten"
+  };
+  const resV2Conflict = classifyAssessment(incomingV2Conflict, existingDefinitions);
+  assert.equal(resV2Conflict.classification, DEDUPE_STATUS.CONFLICT);
+  assert.equal(resV2Conflict.existingDefinition.id, "def-v2");
 });
 
 test("classifyAssessment correctly identifies NEW, EXACT_MATCH, NEW_VERSION, and CONFLICT", () => {

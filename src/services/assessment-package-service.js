@@ -104,7 +104,6 @@ export function buildCanonicalAssessmentFromSession(assessmentSession, assessmen
   const definition = assessmentDefinition || {};
 
   const sourceMeta = definition.sourceMeta || {};
-  const externalCode = normalizeString(options.externalCode || sourceMeta.externalCode || definition.id || session.definitionId || `ASM-${session.id || "EXPORT"}`);
   const sourceVersion = normalizeString(options.sourceVersion || sourceMeta.sourceVersion || "1.0");
   const name = normalizeString(session.title || definition.name || "");
 
@@ -162,6 +161,23 @@ export function buildCanonicalAssessmentFromSession(assessmentSession, assessmen
     };
   });
 
+  // Priority: options.externalCode -> sourceMeta.externalCode -> deterministic portable code (LOCAL-<fingerprint>)
+  // Local DB IDs (definition.id, session.definitionId, session.id) must NEVER be used as externalCode
+  let externalCode = normalizeString(options.externalCode || sourceMeta.externalCode);
+  if (!externalCode) {
+    const fp = calculateAssessmentFingerprint({
+      name,
+      purpose,
+      assessmentType,
+      method,
+      materials,
+      instructions,
+      rubricScale,
+      items
+    });
+    externalCode = `LOCAL-${fp}`;
+  }
+
   return {
     externalCode,
     sourceVersion,
@@ -202,6 +218,7 @@ export function createCanonicalAssessmentPackage({ sourceName = "PJOK Assistant"
 /**
  * Validates a canonical assessment package before persistence.
  * Returns structured validation result with detailed error messages.
+ * Strict validation: requires externalCode, sourceVersion, name, purpose, assessmentType, method, materials, rubricScale, items.
  */
 export function validateAssessmentPackage(packageData) {
   const errors = [];
@@ -271,7 +288,16 @@ export function validateAssessmentPackage(packageData) {
       });
     }
 
-    if (!SUPPORTED_PURPOSES.includes(assessment.purpose)) {
+    const sourceVersion = normalizeString(assessment.sourceVersion);
+    if (!sourceVersion) {
+      errors.push({
+        assessmentIndex,
+        field: "sourceVersion",
+        message: "Versi sumber (sourceVersion) wajib diisi."
+      });
+    }
+
+    if (!assessment.purpose || !SUPPORTED_PURPOSES.includes(assessment.purpose)) {
       errors.push({
         assessmentIndex,
         field: "purpose",
@@ -279,7 +305,7 @@ export function validateAssessmentPackage(packageData) {
       });
     }
 
-    if (!SUPPORTED_ASSESSMENT_TYPES.includes(assessment.assessmentType)) {
+    if (!assessment.assessmentType || !SUPPORTED_ASSESSMENT_TYPES.includes(assessment.assessmentType)) {
       errors.push({
         assessmentIndex,
         field: "assessmentType",
@@ -287,7 +313,7 @@ export function validateAssessmentPackage(packageData) {
       });
     }
 
-    if (assessment.method && !SUPPORTED_METHODS.includes(assessment.method)) {
+    if (!assessment.method || !SUPPORTED_METHODS.includes(assessment.method)) {
       errors.push({
         assessmentIndex,
         field: "method",
@@ -295,8 +321,9 @@ export function validateAssessmentPackage(packageData) {
       });
     }
 
-    const assessmentScale = Number(assessment.rubricScale);
-    if (assessment.rubricScale !== undefined && !SUPPORTED_RUBRIC_SCALES.includes(assessmentScale)) {
+    const rawScale = assessment.rubricScale;
+    const assessmentScale = Number(rawScale);
+    if (rawScale === undefined || rawScale === null || !SUPPORTED_RUBRIC_SCALES.includes(assessmentScale)) {
       errors.push({
         assessmentIndex,
         field: "rubricScale",
@@ -345,8 +372,9 @@ export function validateAssessmentPackage(packageData) {
         });
       }
 
-      const itemScale = Number(item.rubricScale) || assessmentScale || 5;
-      if (!SUPPORTED_RUBRIC_SCALES.includes(itemScale)) {
+      const rawItemScale = item.rubricScale;
+      const itemScale = Number(rawItemScale);
+      if (rawItemScale === undefined || rawItemScale === null || !SUPPORTED_RUBRIC_SCALES.includes(itemScale)) {
         errors.push({
           assessmentIndex,
           itemIndex,
@@ -357,15 +385,16 @@ export function validateAssessmentPackage(packageData) {
 
       const rubricLevels = Array.isArray(item.rubricLevels) ? item.rubricLevels : [];
       const presentLevels = new Set();
+      const validItemScale = SUPPORTED_RUBRIC_SCALES.includes(itemScale) ? itemScale : null;
 
       rubricLevels.forEach((lvl) => {
         const lvlNum = Number(lvl.level);
-        if (Number.isNaN(lvlNum) || lvlNum < 1 || lvlNum > itemScale) {
+        if (Number.isNaN(lvlNum) || (validItemScale && (lvlNum < 1 || lvlNum > validItemScale))) {
           errors.push({
             assessmentIndex,
             itemIndex,
             field: "rubricLevels",
-            message: `Level rubrik ${lvl.level} pada butir ${itemIndex + 1} berada di luar rentang 1..${itemScale}.`
+            message: `Level rubrik ${lvl.level} pada butir ${itemIndex + 1} berada di luar rentang 1..${validItemScale || item.rubricScale}.`
           });
         } else if (presentLevels.has(lvlNum)) {
           errors.push({
@@ -389,15 +418,17 @@ export function validateAssessmentPackage(packageData) {
         }
       });
 
-      // Verify all levels 1..itemScale are present
-      for (let l = 1; l <= itemScale; l++) {
-        if (!presentLevels.has(l)) {
-          errors.push({
-            assessmentIndex,
-            itemIndex,
-            field: "rubricLevels",
-            message: `Rubrik level ${l} pada butir ${itemIndex + 1} belum tersedia.`
-          });
+      // Verify all levels 1..validItemScale are present
+      if (validItemScale) {
+        for (let l = 1; l <= validItemScale; l++) {
+          if (!presentLevels.has(l)) {
+            errors.push({
+              assessmentIndex,
+              itemIndex,
+              field: "rubricLevels",
+              message: `Rubrik level ${l} pada butir ${itemIndex + 1} belum tersedia.`
+            });
+          }
         }
       }
     });
@@ -411,6 +442,7 @@ export function validateAssessmentPackage(packageData) {
 
 /**
  * Deduplicates and classifies an incoming canonical assessment against existing AssessmentDefinitions.
+ * Considers ALL existing definitions matching externalCode across historical versions.
  * Returns classification: NEW | EXACT_MATCH | NEW_VERSION | CONFLICT.
  */
 export function classifyAssessment(incomingAssessment, existingDefinitions = []) {
@@ -424,7 +456,7 @@ export function classifyAssessment(incomingAssessment, existingDefinitions = [])
   }
 
   const incomingCode = normalizeString(incomingAssessment.externalCode);
-  const incomingVersion = normalizeString(incomingAssessment.sourceVersion || "1.0");
+  const incomingVersion = normalizeString(incomingAssessment.sourceVersion);
   const incomingFingerprint = calculateAssessmentFingerprint(incomingAssessment);
 
   if (!incomingCode) {
@@ -436,12 +468,13 @@ export function classifyAssessment(incomingAssessment, existingDefinitions = [])
     };
   }
 
-  const matchingDef = existingDefinitions.find((def) => {
-    const defCode = normalizeString(def.sourceMeta?.externalCode || def.externalCode);
+  // Find ALL matching definitions with same externalCode
+  const matchingDefs = (Array.isArray(existingDefinitions) ? existingDefinitions : []).filter((def) => {
+    const defCode = normalizeString(def?.sourceMeta?.externalCode || def?.externalCode);
     return defCode && defCode === incomingCode;
   });
 
-  if (!matchingDef) {
+  if (matchingDefs.length === 0) {
     return {
       classification: DEDUPE_STATUS.NEW,
       incomingFingerprint,
@@ -450,33 +483,43 @@ export function classifyAssessment(incomingAssessment, existingDefinitions = [])
     };
   }
 
-  const defVersion = normalizeString(matchingDef.sourceMeta?.sourceVersion || matchingDef.sourceVersion || "1.0");
-  const defFingerprint = matchingDef.sourceMeta?.fingerprint || calculateAssessmentFingerprint(matchingDef);
+  // Filter existing definitions that share the same sourceVersion (legacy defs default to "1.0" in comparison)
+  const sameVersionDefs = matchingDefs.filter((def) => {
+    const defVersion = normalizeString(def?.sourceMeta?.sourceVersion || def?.sourceVersion || "1.0");
+    return defVersion === (incomingVersion || "1.0");
+  });
 
-  if (defVersion === incomingVersion && defFingerprint === incomingFingerprint) {
-    return {
-      classification: DEDUPE_STATUS.EXACT_MATCH,
-      incomingFingerprint,
-      existingDefinition: matchingDef,
-      reason: "Asesmen identik (externalCode, versi, dan konten sama persis)."
-    };
-  }
+  if (sameVersionDefs.length > 0) {
+    // Check if any existing definition of the same version has the exact same fingerprint
+    const exactMatchDef = sameVersionDefs.find((def) => {
+      const defFingerprint = def?.sourceMeta?.fingerprint || calculateAssessmentFingerprint(def);
+      return defFingerprint === incomingFingerprint;
+    });
 
-  if (defVersion === incomingVersion && defFingerprint !== incomingFingerprint) {
+    if (exactMatchDef) {
+      return {
+        classification: DEDUPE_STATUS.EXACT_MATCH,
+        incomingFingerprint,
+        existingDefinition: exactMatchDef,
+        reason: "Asesmen identik (externalCode, versi, dan konten sama persis)."
+      };
+    }
+
+    // Same version exists, but content differs -> CONFLICT
     return {
       classification: DEDUPE_STATUS.CONFLICT,
       incomingFingerprint,
-      existingDefinition: matchingDef,
-      reason: `Konflik: versi sama (${incomingVersion}) tetapi konten asesmen berbeda.`
+      existingDefinition: sameVersionDefs[0],
+      reason: `Konflik: versi sama (${incomingVersion || "1.0"}) tetapi konten asesmen berbeda.`
     };
   }
 
-  // defVersion !== incomingVersion
+  // Same externalCode exists across definitions, but not with this sourceVersion -> NEW_VERSION
   return {
     classification: DEDUPE_STATUS.NEW_VERSION,
     incomingFingerprint,
-    existingDefinition: matchingDef,
-    reason: `Versi baru: versi lama (${defVersion || "-"}) diperbarui ke (${incomingVersion}).`
+    existingDefinition: matchingDefs[0],
+    reason: `Versi baru: externalCode '${incomingCode}' ditemukan dengan versi lain.`
   };
 }
 
