@@ -1614,6 +1614,26 @@ textarea {
   border-bottom: none;
 }
 
+.growth-history-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 640px) {
+  .growth-table-wrap {
+    display: none !important;
+  }
+}
+
+@media (min-width: 641px) {
+  .growth-mobile-cards {
+    display: none !important;
+  }
+}
+
 .bmi-badge {
   display: inline-block;
   padding: 3px 8px;
@@ -2327,6 +2347,12 @@ textarea {
     padding: 6px 10px;
     font-size: 0.85rem;
   }
+
+  .report-source-section,
+  .report-ai-draft-container,
+  .scoring-focus-card {
+    padding: 13px;
+  }
 }
 
 /* ===================================================
@@ -2498,9 +2524,13 @@ textarea {
   margin-bottom: 14px;
   border-bottom: 2px solid var(--color-border);
   padding-bottom: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: nowrap;
 }
 
 .tab-pill {
+  flex: 0 0 auto;
   padding: 8px 16px;
   border-radius: var(--radius-pill);
   background: var(--color-surface-muted);
@@ -3414,6 +3444,81 @@ textarea {
     font-size: 1rem;
   }
 
+  .growth-screening-card {
+    overflow-x: visible;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  .growth-screening-table {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .growth-screening-table thead {
+    display: none;
+  }
+
+  .growth-screening-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .growth-screening-row {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 14px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .screening-col-idx {
+    display: none;
+  }
+
+  .screening-col-student {
+    order: 1;
+    width: 100%;
+    padding: 0;
+    border: none;
+  }
+
+  .screening-col-prev {
+    order: 2;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    background: var(--color-surface-muted);
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+  }
+
+  .screening-col-height {
+    order: 3;
+    width: 100%;
+    padding: 0;
+    border: none;
+  }
+
+  .screening-col-weight {
+    order: 4;
+    width: 100%;
+    padding: 0;
+    border: none;
+  }
+
+  .screening-num-input {
+    max-width: 100%;
+    width: 100%;
+  }
+
   .screening-actions-bar {
     flex-direction: column;
     align-items: stretch;
@@ -3593,6 +3698,15 @@ textarea {
   color: #ffffff;
 }
 
+@media (max-width: 640px) {
+  .student-jump-pill {
+    min-width: 42px;
+    height: 42px;
+    padding: 0 10px;
+    font-size: 0.85rem;
+  }
+}
+
 .scoring-focus-card {
   display: flex;
   flex-direction: column;
@@ -3748,7 +3862,7 @@ textarea {
 
 .results-students-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
   gap: 12px;
 }
 

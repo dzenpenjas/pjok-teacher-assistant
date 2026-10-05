@@ -234,10 +234,8 @@ export function renderStudentDetailModal(studentId, context, onClose) {
     if (growthRecords.length === 0) {
       histSection.append(createElement("p", "empty-copy", "Belum ada riwayat pengukuran pertumbuhan tersimpan."));
     } else {
-      const scrollHint = createElement("p", "screen-copy text-xs text-subtle mb-1 sm:hidden", "👉 Geser tabel untuk melihat IMT & catatan lengkap");
-      histSection.append(scrollHint);
-
-      const tableWrap = createElement("div", "growth-table-wrap");
+      // Desktop / Tablet Table View
+      const tableWrap = createElement("div", "growth-table-wrap hidden sm:block");
       const table = createElement("table", "growth-table");
       const thead = createElement("thead");
       thead.innerHTML = `
@@ -269,6 +267,48 @@ export function renderStudentDetailModal(studentId, context, onClose) {
       table.append(tbody);
       tableWrap.append(table);
       histSection.append(tableWrap);
+
+      // Mobile Card View (<=640px)
+      const mobileCards = createElement("div", "growth-mobile-cards sm:hidden space-y-3 mt-3");
+      growthRecords.forEach((rec) => {
+        const b = calculateBmi(rec.heightCm, rec.weightKg);
+        const card = createElement("div", "growth-history-card");
+
+        const dateHeader = createElement(
+          "div",
+          "growth-card-date font-bold text-sm text-slate-800 dark:text-slate-100 mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-800",
+          rec.date || "-"
+        );
+        card.append(dateHeader);
+
+        const rowsGrid = createElement("div", "growth-card-rows space-y-2 text-xs");
+
+        const makeRow = (label, val, isBadge = false, badgeClass = "") => {
+          const row = createElement("div", "flex justify-between items-center py-0.5");
+          const l = createElement("span", "text-subtle font-medium", label);
+          row.append(l);
+          if (isBadge) {
+            const span = createElement("span", `bmi-badge ${badgeClass}`, val || "-");
+            row.append(span);
+          } else {
+            const v = createElement("span", "font-semibold text-slate-900 dark:text-slate-100", val || "-");
+            row.append(v);
+          }
+          return row;
+        };
+
+        rowsGrid.append(makeRow("Tinggi", rec.heightCm ? `${rec.heightCm} cm` : "-"));
+        rowsGrid.append(makeRow("Berat", rec.weightKg ? `${rec.weightKg} kg` : "-"));
+        rowsGrid.append(makeRow("IMT", b.bmi ? String(b.bmi) : "-"));
+        rowsGrid.append(makeRow("Kategori", b.category || "-", true, `bmi-${(b.category || "").toLowerCase().replace(/\s+/g, "-")}`));
+        if (rec.note) {
+          rowsGrid.append(makeRow("Catatan", rec.note));
+        }
+
+        card.append(rowsGrid);
+        mobileCards.append(card);
+      });
+      histSection.append(mobileCards);
     }
     tabBody.append(histSection);
 

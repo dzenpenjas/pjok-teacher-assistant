@@ -2192,9 +2192,6 @@ export function renderClassesScreen(state, actions) {
     form.append(topBar);
 
     // Table of students
-    const scrollHint = createElement("p", "screen-copy text-xs text-subtle mb-1 sm:hidden", "👉 Geser tabel ke samping untuk mengisi berat badan & melihat data terakhir");
-    form.append(scrollHint);
-
     const tableCard = createElement("div", "growth-screening-card");
     const table = createElement("table", "growth-screening-table");
     const thead = createElement("thead");
@@ -2213,7 +2210,7 @@ export function renderClassesScreen(state, actions) {
     const studentInputs = [];
 
     classStudents.forEach((student, idx) => {
-      const tr = createElement("tr");
+      const tr = createElement("tr", "growth-screening-row");
 
       // Find latest growth record
       const records = (state.growthRecords || [])
@@ -2230,10 +2227,10 @@ export function renderClassesScreen(state, actions) {
             : "Belum ada");
 
       // Col 1: Index
-      const tdIdx = createElement("td", "text-center text-subtle", `${idx + 1}`);
+      const tdIdx = createElement("td", "screening-col-idx text-center text-subtle", `${idx + 1}`);
 
       // Col 2: Student
-      const tdStudent = createElement("td");
+      const tdStudent = createElement("td", "screening-col-student");
       const studentCell = createElement("div", "screening-student-cell");
       const avatar = createStudentAvatar(student, "screening-student-avatar");
       const meta = createElement("div");
@@ -2245,7 +2242,8 @@ export function renderClassesScreen(state, actions) {
       tdStudent.append(studentCell);
 
       // Col 3: Height
-      const tdHeight = createElement("td");
+      const tdHeight = createElement("td", "screening-col-height");
+      const hLabel = createElement("label", "screening-input-label sm:hidden block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1", "Tinggi Badan (cm)");
       const hInput = document.createElement("input");
       hInput.type = "number";
       hInput.step = "0.1";
@@ -2253,10 +2251,11 @@ export function renderClassesScreen(state, actions) {
       hInput.inputMode = "decimal";
       hInput.className = "screening-num-input";
       hInput.placeholder = "TB (cm)";
-      tdHeight.append(hInput);
+      tdHeight.append(hLabel, hInput);
 
       // Col 4: Weight
-      const tdWeight = createElement("td");
+      const tdWeight = createElement("td", "screening-col-weight");
+      const wLabel = createElement("label", "screening-input-label sm:hidden block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1", "Berat Badan (kg)");
       const wInput = document.createElement("input");
       wInput.type = "number";
       wInput.step = "0.1";
@@ -2264,10 +2263,13 @@ export function renderClassesScreen(state, actions) {
       wInput.inputMode = "decimal";
       wInput.className = "screening-num-input";
       wInput.placeholder = "BB (kg)";
-      tdWeight.append(wInput);
+      tdWeight.append(wLabel, wInput);
 
       // Col 5: Last recorded
-      const tdPrev = createElement("td", "text-subtle text-xs", prevInfo);
+      const tdPrev = createElement("td", "screening-col-prev text-subtle text-xs");
+      const prevLabel = createElement("span", "screening-prev-label sm:hidden font-semibold mr-1", "Data terakhir:");
+      const prevVal = createElement("span", "screening-prev-val", prevInfo);
+      tdPrev.append(prevLabel, prevVal);
 
       tr.append(tdIdx, tdStudent, tdHeight, tdWeight, tdPrev);
       tbody.append(tr);
