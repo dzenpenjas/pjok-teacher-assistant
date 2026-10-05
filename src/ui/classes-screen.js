@@ -756,7 +756,7 @@ export function renderClassesScreen(state, actions) {
         const topRow = createElement("div", "report-card-top-row");
         
         // Left Checkbox & Title (wrapped in label for large touch target)
-        const leftBox = createElement("label", "flex items-start gap-3 flex-1 cursor-pointer select-none");
+        const leftBox = createElement("label", "report-source-card-main");
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.className = "report-source-check mt-1";
@@ -908,7 +908,7 @@ export function renderClassesScreen(state, actions) {
         const card = createElement("article", `report-source-card ${isChecked ? "is-selected-source" : ""}`);
 
         const row = createElement("div", "flex items-center justify-between gap-3");
-        const leftBox = createElement("label", "flex items-center gap-3 flex-1 cursor-pointer select-none");
+        const leftBox = createElement("label", "report-source-card-main report-source-card-main-center");
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.className = "report-source-check";
@@ -975,7 +975,7 @@ export function renderClassesScreen(state, actions) {
         const card = createElement("article", `report-source-card ${isChecked ? "is-selected-source" : ""}`);
 
         const row = createElement("div", "flex items-start justify-between gap-3");
-        const leftBox = createElement("label", "flex items-start gap-3 flex-1 cursor-pointer select-none");
+        const leftBox = createElement("label", "report-source-card-main");
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.className = "report-source-check mt-1";
@@ -2243,7 +2243,7 @@ export function renderClassesScreen(state, actions) {
 
       // Col 3: Height
       const tdHeight = createElement("td", "screening-col-height");
-      const hLabel = createElement("label", "screening-input-label sm:hidden block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1", "Tinggi Badan (cm)");
+      const hLabel = createElement("label", "screening-input-label", "Tinggi Badan (cm)");
       const hInput = document.createElement("input");
       hInput.type = "number";
       hInput.step = "0.1";
@@ -2255,7 +2255,7 @@ export function renderClassesScreen(state, actions) {
 
       // Col 4: Weight
       const tdWeight = createElement("td", "screening-col-weight");
-      const wLabel = createElement("label", "screening-input-label sm:hidden block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1", "Berat Badan (kg)");
+      const wLabel = createElement("label", "screening-input-label", "Berat Badan (kg)");
       const wInput = document.createElement("input");
       wInput.type = "number";
       wInput.step = "0.1";
@@ -2266,8 +2266,8 @@ export function renderClassesScreen(state, actions) {
       tdWeight.append(wLabel, wInput);
 
       // Col 5: Last recorded
-      const tdPrev = createElement("td", "screening-col-prev text-subtle text-xs");
-      const prevLabel = createElement("span", "screening-prev-label sm:hidden font-semibold mr-1", "Data terakhir:");
+      const tdPrev = createElement("td", "screening-col-prev");
+      const prevLabel = createElement("span", "screening-prev-label", "Data terakhir:");
       const prevVal = createElement("span", "screening-prev-val", prevInfo);
       tdPrev.append(prevLabel, prevVal);
 

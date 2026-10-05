@@ -235,7 +235,7 @@ export function renderStudentDetailModal(studentId, context, onClose) {
       histSection.append(createElement("p", "empty-copy", "Belum ada riwayat pengukuran pertumbuhan tersimpan."));
     } else {
       // Desktop / Tablet Table View
-      const tableWrap = createElement("div", "growth-table-wrap hidden sm:block");
+      const tableWrap = createElement("div", "growth-table-wrap");
       const table = createElement("table", "growth-table");
       const thead = createElement("thead");
       thead.innerHTML = `
@@ -269,29 +269,25 @@ export function renderStudentDetailModal(studentId, context, onClose) {
       histSection.append(tableWrap);
 
       // Mobile Card View (<=640px)
-      const mobileCards = createElement("div", "growth-mobile-cards sm:hidden space-y-3 mt-3");
+      const mobileCards = createElement("div", "growth-mobile-cards");
       growthRecords.forEach((rec) => {
         const b = calculateBmi(rec.heightCm, rec.weightKg);
         const card = createElement("div", "growth-history-card");
 
-        const dateHeader = createElement(
-          "div",
-          "growth-card-date font-bold text-sm text-slate-800 dark:text-slate-100 mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-800",
-          rec.date || "-"
-        );
+        const dateHeader = createElement("div", "growth-card-date", rec.date || "-");
         card.append(dateHeader);
 
-        const rowsGrid = createElement("div", "growth-card-rows space-y-2 text-xs");
+        const rowsGrid = createElement("div", "growth-card-rows");
 
         const makeRow = (label, val, isBadge = false, badgeClass = "") => {
-          const row = createElement("div", "flex justify-between items-center py-0.5");
-          const l = createElement("span", "text-subtle font-medium", label);
+          const row = createElement("div", "growth-card-row");
+          const l = createElement("span", "growth-row-label", label);
           row.append(l);
           if (isBadge) {
             const span = createElement("span", `bmi-badge ${badgeClass}`, val || "-");
             row.append(span);
           } else {
-            const v = createElement("span", "font-semibold text-slate-900 dark:text-slate-100", val || "-");
+            const v = createElement("span", "growth-row-val", val || "-");
             row.append(v);
           }
           return row;
