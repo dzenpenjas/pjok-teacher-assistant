@@ -3,6 +3,7 @@ import { createStudentAvatar } from "./student-avatar.js";
 import { openCameraModal } from "./camera-modal.js";
 import { ICONS } from "./icons.js";
 import { createField, createSelectField, formToObject } from "./form-controls.js";
+import { showToast } from "./feedback.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -156,7 +157,7 @@ export function renderStudentDetailModal(studentId, context, onClose) {
         gender: data.gender || student.gender,
         birthDate: data.birthDate || ""
       });
-      window.alert("Profil siswa berhasil diperbarui!");
+      showToast("Profil tersimpan");
     }
   });
 

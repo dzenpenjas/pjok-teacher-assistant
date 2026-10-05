@@ -119,3 +119,31 @@ test("Backup inspection verifies structure and counts", () => {
   const badCheck = inspectBackupJson(invalidJson);
   assert.equal(badCheck.valid, false);
 });
+
+import { registerDirtyGuard, unregisterDirtyGuard, isFormDirty, confirmIfDirty } from "../src/ui/feedback.js";
+
+test("Unsaved Form Guard prevents navigation when dirty and allows when confirmed", () => {
+  unregisterDirtyGuard();
+  assert.equal(isFormDirty(), false);
+  assert.equal(confirmIfDirty(), true);
+
+  let dirty = true;
+  registerDirtyGuard(() => dirty);
+  assert.equal(isFormDirty(), true);
+
+  // Mock confirm to cancel
+  let confirmPrompt = null;
+  globalThis.window.confirm = (msg) => {
+    confirmPrompt = msg;
+    return false;
+  };
+
+  assert.equal(confirmIfDirty(), false);
+  assert.match(confirmPrompt, /Ada perubahan yang belum disimpan/);
+  assert.equal(isFormDirty(), true);
+
+  // Mock confirm to proceed
+  globalThis.window.confirm = () => true;
+  assert.equal(confirmIfDirty(), true);
+  assert.equal(isFormDirty(), false);
+});

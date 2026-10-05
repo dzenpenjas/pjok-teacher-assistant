@@ -2786,7 +2786,7 @@ textarea {
 /* Toast */
 .app-toast {
   position: fixed;
-  bottom: 80px;
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   background: #1a202c;
@@ -2795,9 +2795,13 @@ textarea {
   border-radius: var(--radius-pill);
   font-size: 0.9rem;
   font-weight: 600;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   z-index: 9999;
-  animation: fadeInOut 2.5s ease forwards;
+  animation: fadeInOut 2.2s ease forwards;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 90vw;
+  text-align: center;
 }
 
 @keyframes fadeInOut {
@@ -2848,6 +2852,8 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 

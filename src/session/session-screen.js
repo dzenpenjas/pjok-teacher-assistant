@@ -165,7 +165,7 @@ export function renderSessionScreen(session, context) {
   const topNavRow = createElement("div", "session-top-nav-bar");
   const backBtn = createElement("button", "btn-back-nav");
   backBtn.type = "button";
-  backBtn.append(document.createTextNode("← Keluar ke Daftar Kelas"));
+  backBtn.append(document.createTextNode("← Kembali ke Daftar Kelas"));
   backBtn.addEventListener("click", () => {
     if (context.actions?.navigate) {
       context.actions.navigate("classes");

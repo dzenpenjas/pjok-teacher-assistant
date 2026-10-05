@@ -4,6 +4,85 @@ import { createStudentAvatar } from "./student-avatar.js";
 import { ICONS } from "./icons.js";
 import { generateRubricWithAI } from "../services/rubric-ai-service.js";
 import { generateStudentReportWithAI } from "../services/report-ai-service.js";
+import {
+  showToast,
+  registerDirtyGuard,
+  unregisterDirtyGuard,
+  isFormDirty,
+  confirmIfDirty
+} from "./feedback.js";
+
+let isClassHistoryListening = false;
+let currentClassUi = null;
+let currentRenderCallback = null;
+let currentAppScreen = null;
+let lastPushedClassState = null;
+let isNavigatingBackInternal = false;
+
+function pushClassHistory(mode, classId, extra = {}) {
+  if (isNavigatingBackInternal) return;
+  const stateData = { pjokClass: { mode, classId, ...extra } };
+  lastPushedClassState = stateData;
+  try {
+    if (typeof window !== "undefined" && window.history?.pushState) {
+      window.history.pushState(stateData, "");
+    }
+  } catch (_) {}
+}
+
+function initClassHistoryListener() {
+  if (isClassHistoryListening || typeof window === "undefined") return;
+  isClassHistoryListening = true;
+
+  window.addEventListener("popstate", () => {
+    if (currentAppScreen && currentAppScreen !== "classes") {
+      return;
+    }
+
+    if (!currentClassUi) return;
+
+    if (isFormDirty()) {
+      const ok = window.confirm("Ada perubahan yang belum disimpan.\n\nKeluar tanpa menyimpan?");
+      if (!ok) {
+        if (lastPushedClassState && window.history?.pushState) {
+          try {
+            window.history.pushState(lastPushedClassState, "");
+          } catch (_) {}
+        }
+        return;
+      }
+      unregisterDirtyGuard();
+    }
+
+    const currentMode = currentClassUi.mode;
+    isNavigatingBackInternal = true;
+    try {
+      if (currentMode === "scoring") {
+        currentClassUi.activeAssessmentSessionId = null;
+        currentClassUi.mode = "detail";
+        currentClassUi.activeTab = "assessments";
+        currentRenderCallback?.();
+      } else if (currentMode === "report-student") {
+        currentClassUi.reportStudentId = null;
+        currentClassUi.mode = "detail";
+        currentClassUi.activeTab = "reports";
+        currentRenderCallback?.();
+      } else if (currentMode === "growth") {
+        currentClassUi.mode = "detail";
+        currentRenderCallback?.();
+      } else if (currentMode === "create-assessment") {
+        currentClassUi.mode = "detail";
+        currentRenderCallback?.();
+      } else if (currentMode === "detail" || currentClassUi.selectedClassId) {
+        currentClassUi.selectedClassId = null;
+        currentClassUi.mode = "list";
+        currentRenderCallback?.();
+      }
+    } finally {
+      isNavigatingBackInternal = false;
+    }
+  });
+}
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -55,10 +134,15 @@ export function renderClassesScreen(state, actions) {
   let showAddClassModal = false;
   let showAddStudentModal = false;
 
+  currentClassUi = classUi;
+  currentAppScreen = state?.currentScreen || "classes";
+  initClassHistoryListener();
+
   const container = createElement("div", "classes-hub-container");
   screen.append(container);
 
   function render() {
+    currentRenderCallback = render;
     container.replaceChildren();
 
     if (classUi.mode === "growth" && classUi.selectedClassId) {
@@ -77,6 +161,106 @@ export function renderClassesScreen(state, actions) {
       classUi.activeAssessmentSessionId = null;
       classUi.reportStudentId = null;
       renderClassList();
+    }
+  }
+
+  function openClassDetail(classId) {
+    classUi.selectedClassId = classId;
+    classUi.mode = "detail";
+    pushClassHistory("detail", classId);
+    render();
+  }
+
+  function openGrowthScreening(classId) {
+    classUi.selectedClassId = classId;
+    classUi.mode = "growth";
+    pushClassHistory("growth", classId);
+    render();
+  }
+
+  function openCreateAssessment(classId) {
+    classUi.selectedClassId = classId;
+    classUi.mode = "create-assessment";
+    pushClassHistory("create-assessment", classId);
+    render();
+  }
+
+  function openScoring(classId, sessionId) {
+    classUi.selectedClassId = classId;
+    classUi.activeAssessmentSessionId = sessionId;
+    classUi.activeAssessmentStudentIndex = 0;
+    classUi.activeAssessmentItemIndex = 0;
+    classUi.mode = "scoring";
+    pushClassHistory("scoring", classId, { sessionId });
+    render();
+  }
+
+  function openStudentReport(classId, studentId) {
+    if (classUi.reportStudentId !== studentId) {
+      classUi.reportSelection = {
+        assessmentSessionIds: [],
+        growthRecordIds: [],
+        observationIds: []
+      };
+    }
+    classUi.selectedClassId = classId;
+    classUi.reportStudentId = studentId;
+    classUi.mode = "report-student";
+    pushClassHistory("report-student", classId, { studentId });
+    render();
+  }
+
+  function navigateBackToClassList() {
+    if (typeof window !== "undefined" && window.history.state?.pjokClass) {
+      window.history.back();
+    } else {
+      classUi.selectedClassId = null;
+      classUi.mode = "list";
+      classUi.activeAssessmentSessionId = null;
+      render();
+    }
+  }
+
+  function navigateBackToClassDetail(targetTab = null, skipDirtyCheck = false) {
+    if (!skipDirtyCheck && isFormDirty()) {
+      if (!confirmIfDirty()) return;
+    } else {
+      unregisterDirtyGuard();
+    }
+
+    if (typeof window !== "undefined" && window.history.state?.pjokClass) {
+      if (targetTab) {
+        classUi.activeTab = targetTab;
+      }
+      window.history.back();
+    } else {
+      classUi.mode = "detail";
+      if (targetTab) {
+        classUi.activeTab = targetTab;
+      }
+      render();
+    }
+  }
+
+  function navigateBackFromScoring() {
+    if (typeof window !== "undefined" && window.history.state?.pjokClass) {
+      window.history.back();
+    } else {
+      classUi.activeAssessmentSessionId = null;
+      classUi.mode = "detail";
+      classUi.activeTab = "assessments";
+      render();
+    }
+  }
+
+  function navigateBackFromStudentReport() {
+    if (typeof window !== "undefined" && window.history.state?.pjokClass) {
+      window.history.back();
+    } else {
+      classUi.reportStudentId = null;
+      classUi.mode = "detail";
+      classUi.activeTab = "reports";
+      render();
     }
   }
 
@@ -142,6 +326,9 @@ export function renderClassesScreen(state, actions) {
       }).length;
 
       const card = createElement("article", "class-summary-card");
+      card.addEventListener("click", () => {
+        openClassDetail(c.id);
+      });
 
       const topRow = createElement("div", "class-card-top");
       const titleWrap = createElement("div");
@@ -178,11 +365,10 @@ export function renderClassesScreen(state, actions) {
 
       const openBtn = createElement("button", "btn-tool btn-open-class-card");
       openBtn.type = "button";
-      openBtn.append(ICONS.users(16), document.createTextNode(" Buka Siswa"));
-      openBtn.addEventListener("click", () => {
-        classUi.selectedClassId = c.id;
-        classUi.mode = "detail";
-        render();
+      openBtn.append(ICONS.users(16), document.createTextNode(" Buka Kelas"));
+      openBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openClassDetail(c.id);
       });
 
       actionsRow.append(startBtn, openBtn);
@@ -216,10 +402,7 @@ export function renderClassesScreen(state, actions) {
     backBtn.type = "button";
     backBtn.append(document.createTextNode("← Kembali ke Daftar Kelas"));
     backBtn.addEventListener("click", () => {
-      classUi.selectedClassId = null;
-      classUi.mode = "list";
-      classUi.activeAssessmentSessionId = null;
-      render();
+      navigateBackToClassList();
     });
     container.append(backBtn);
 
@@ -246,16 +429,14 @@ export function renderClassesScreen(state, actions) {
     createAssessBtn.type = "button";
     createAssessBtn.append(ICONS.plus(15), document.createTextNode(" Tambah Asesmen"));
     createAssessBtn.addEventListener("click", () => {
-      classUi.mode = "create-assessment";
-      render();
+      openCreateAssessment(classRoom.id);
     });
 
     const growthScreeningBtn = createElement("button", "btn-tool");
     growthScreeningBtn.type = "button";
     growthScreeningBtn.append(ICONS.chart(15), document.createTextNode(" Pemeriksaan Pertumbuhan"));
     growthScreeningBtn.addEventListener("click", () => {
-      classUi.mode = "growth";
-      render();
+      openGrowthScreening(classRoom.id);
     });
 
     const addStudentBtn = createElement("button", "btn-tool");
@@ -606,16 +787,7 @@ export function renderClassesScreen(state, actions) {
         const openBtn = createElement("button", "btn-tool btn-tool-primary", "Buka Rekap");
         openBtn.type = "button";
         openBtn.addEventListener("click", () => {
-          if (classUi.reportStudentId !== student.id) {
-            classUi.reportSelection = {
-              assessmentSessionIds: [],
-              growthRecordIds: [],
-              observationIds: []
-            };
-          }
-          classUi.reportStudentId = student.id;
-          classUi.mode = "report-student";
-          render();
+          openStudentReport(classRoom.id, student.id);
         });
 
         actionsCol.append(openBtn);
@@ -646,10 +818,7 @@ export function renderClassesScreen(state, actions) {
     backBtn.type = "button";
     backBtn.append(document.createTextNode("← Kembali ke Hasil & Laporan"));
     backBtn.addEventListener("click", () => {
-      classUi.reportStudentId = null;
-      classUi.mode = "detail";
-      classUi.activeTab = "reports";
-      render();
+      navigateBackFromStudentReport();
     });
     container.append(backBtn);
 
@@ -2149,8 +2318,7 @@ export function renderClassesScreen(state, actions) {
     backBtn.type = "button";
     backBtn.append(document.createTextNode(`← Kembali ke Detail ${classRoom.name}`));
     backBtn.addEventListener("click", () => {
-      classUi.mode = "detail";
-      render();
+      navigateBackToClassDetail();
     });
     container.append(backBtn);
 
@@ -2293,12 +2461,17 @@ export function renderClassesScreen(state, actions) {
     const cancelBtn = createElement("button", "btn-tool", "Batal");
     cancelBtn.type = "button";
     cancelBtn.addEventListener("click", () => {
-      classUi.mode = "detail";
-      render();
+      navigateBackToClassDetail();
     });
 
     actionsBar.append(saveBtn, cancelBtn);
     form.append(actionsBar);
+
+    let isGrowthDirty = false;
+    form.addEventListener("input", () => {
+      isGrowthDirty = studentInputs.some(({ hInput, wInput }) => hInput.value.trim() !== "" || wInput.value.trim() !== "");
+    });
+    registerDirtyGuard(() => isGrowthDirty);
 
     form.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -2332,9 +2505,10 @@ export function renderClassesScreen(state, actions) {
         actions.createGrowthRecord(recordsToSave);
       }
 
-      window.alert(`Berhasil menyimpan pemeriksaan pertumbuhan untuk ${recordsToSave.length} siswa.`);
-      classUi.mode = "detail";
-      render();
+      isGrowthDirty = false;
+      unregisterDirtyGuard();
+      showToast("Pemeriksaan tersimpan");
+      navigateBackToClassDetail(null, true);
     });
 
     container.append(form);
@@ -2356,8 +2530,7 @@ export function renderClassesScreen(state, actions) {
       addBtn.type = "button";
       addBtn.append(ICONS.plus(15), document.createTextNode(" Tambah Asesmen"));
       addBtn.addEventListener("click", () => {
-        classUi.mode = "create-assessment";
-        render();
+        openCreateAssessment(classRoom.id);
       });
       emptyCard.append(addBtn);
 
@@ -2387,8 +2560,7 @@ export function renderClassesScreen(state, actions) {
     addBtn.type = "button";
     addBtn.append(ICONS.plus(15), document.createTextNode(" Tambah Asesmen"));
     addBtn.addEventListener("click", () => {
-      classUi.mode = "create-assessment";
-      render();
+      openCreateAssessment(classRoom.id);
     });
     listHeader.append(heading, addBtn);
     container.append(listHeader);
@@ -2458,11 +2630,7 @@ export function renderClassesScreen(state, actions) {
       const startBtn = createElement("button", "primary-action compact-action", scoredCount > 0 ? "Lanjutkan Penilaian" : "Mulai Penilaian");
       startBtn.type = "button";
       startBtn.addEventListener("click", () => {
-        classUi.activeAssessmentSessionId = as.id;
-        classUi.activeAssessmentStudentIndex = 0;
-        classUi.activeAssessmentItemIndex = 0;
-        classUi.mode = "scoring";
-        render();
+        openScoring(classRoom.id, as.id);
       });
 
       actionRow.append(startBtn);
@@ -2512,8 +2680,7 @@ export function renderClassesScreen(state, actions) {
     backBtn.type = "button";
     backBtn.append(document.createTextNode(`← Kembali ke Detail ${classRoom.name}`));
     backBtn.addEventListener("click", () => {
-      classUi.mode = "detail";
-      render();
+      navigateBackToClassDetail();
     });
     container.append(backBtn);
 
@@ -2534,6 +2701,20 @@ export function renderClassesScreen(state, actions) {
     container.append(header);
 
     const form = createElement("form", "master-form");
+
+    let isCreateDirty = false;
+    form.addEventListener("input", () => {
+      isCreateDirty = true;
+    });
+    registerDirtyGuard(() => {
+      if (!isCreateDirty) return false;
+      const payload = formToObject(form);
+      return Boolean(
+        (payload.name && payload.name.trim()) ||
+        (payload.material && payload.material.trim()) ||
+        itemsData.some((it) => it.prompt && it.prompt.trim())
+      );
+    });
 
     const nameField = createField({
       label: "Nama Asesmen *",
@@ -2869,6 +3050,7 @@ export function renderClassesScreen(state, actions) {
     addItemBtn.type = "button";
     addItemBtn.append(ICONS.plus(14), document.createTextNode(" Tambah Pertanyaan"));
     addItemBtn.addEventListener("click", () => {
+      isCreateDirty = true;
       itemsData.push({
         prompt: "",
         rubricLevels: getDefaultRubricLevels(currentScale)
@@ -2908,8 +3090,7 @@ export function renderClassesScreen(state, actions) {
     const cancelBtn = createElement("button", "btn-tool", "Batal");
     cancelBtn.type = "button";
     cancelBtn.addEventListener("click", () => {
-      classUi.mode = "detail";
-      render();
+      navigateBackToClassDetail();
     });
 
     btnRow.append(submitBtn, cancelBtn);
@@ -3006,9 +3187,9 @@ export function renderClassesScreen(state, actions) {
         });
       }
 
-      classUi.mode = "detail";
-      classUi.activeTab = "assessments";
-      render();
+      isCreateDirty = false;
+      unregisterDirtyGuard();
+      navigateBackToClassDetail("assessments", true);
     });
 
     container.append(form);
@@ -3031,10 +3212,7 @@ export function renderClassesScreen(state, actions) {
     backBtn.type = "button";
     backBtn.append(document.createTextNode(`← Kembali ke Asesmen ${classRoom.name}`));
     backBtn.addEventListener("click", () => {
-      classUi.activeAssessmentSessionId = null;
-      classUi.mode = "detail";
-      classUi.activeTab = "assessments";
-      render();
+      navigateBackFromScoring();
     });
     container.append(backBtn);
 
@@ -3326,6 +3504,7 @@ export function renderClassesScreen(state, actions) {
               formattedValue,
               note: currentResult?.note || ""
             });
+            showToast("✓ Nilai tersimpan", 1800);
           }
           // Do NOT call render() here because saveAssessmentResult triggers refreshState -> renderApp
         });
@@ -3333,7 +3512,12 @@ export function renderClassesScreen(state, actions) {
         rubricGrid.append(rBtn);
       });
 
-      itemFocusCard.append(rubricGrid, itemNoteField);
+      const rubricHint = createElement(
+        "p",
+        "text-xs text-subtle font-medium mt-3 mb-1",
+        "Ketuk nilai untuk menyimpan dan lanjut otomatis."
+      );
+      itemFocusCard.append(itemNoteField, rubricHint, rubricGrid);
       focusCard.append(itemFocusCard);
 
       // Bottom Prev / Next Nav for items
@@ -3427,13 +3611,19 @@ export function renderClassesScreen(state, actions) {
                 formattedValue: `Skala ${lvl.level} (${lvl.label})`,
                 note: noteInput.value.trim()
               });
+              showToast("✓ Nilai tersimpan", 1800);
             }
           });
 
           rubricGrid.append(rBtn);
         });
 
-        focusCard.append(rubricGrid);
+        const rubricInstruction = createElement(
+          "p",
+          "text-xs text-subtle font-medium mt-3 mb-1",
+          "Ketuk nilai untuk menyimpan dan lanjut otomatis."
+        );
+        focusCard.append(rubricInstruction, rubricGrid);
       } else {
         const numRow = createElement("div", "assess-num-row");
         const valInput = document.createElement("input");

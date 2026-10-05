@@ -276,7 +276,18 @@ export function createAssessmentDefinition(input = {}) {
     materials: Array.isArray(input.materials) ? input.materials : [],
     questions: Array.isArray(input.questions) ? input.questions : [],
     instructions: input.instructions || "",
-    description: input.description || ""
+    description: input.description || "",
+    ...(input.sourceMeta && typeof input.sourceMeta === "object"
+      ? {
+          sourceMeta: {
+            externalCode: input.sourceMeta.externalCode || "",
+            sourceName: input.sourceMeta.sourceName || "",
+            sourceVersion: input.sourceMeta.sourceVersion || "",
+            fingerprint: input.sourceMeta.fingerprint || "",
+            importedAt: input.sourceMeta.importedAt || ""
+          }
+        }
+      : {})
   };
 }
 

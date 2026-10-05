@@ -7,6 +7,7 @@ import { createNavigation } from "./ui/navigation.js";
 import { renderScreen } from "./ui/screens.js";
 import { renderStudentDetailModal } from "./ui/student-detail-modal.js";
 import { createSeedData } from "./data/seed.js";
+import { confirmIfDirty } from "./ui/feedback.js";
 
 const appRoot = document.querySelector("#app");
 let appState = loadState();
@@ -54,6 +55,9 @@ function isKnownScreen(screenId) {
 }
 
 function setScreen(screenId) {
+  if (!confirmIfDirty()) {
+    return;
+  }
   appState = saveState({
     ...appState,
     currentScreen: isKnownScreen(screenId) ? screenId : SCREENS.dashboard
@@ -812,7 +816,7 @@ function createResumeBanner(session) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "text-button";
-  button.textContent = "Buka";
+  button.textContent = "Lanjutkan Sesi";
   button.addEventListener("click", () => setScreen(SCREENS.session));
 
   banner.append(text, button);

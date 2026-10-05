@@ -1,5 +1,6 @@
 import { createField, createSelectField, formToObject } from "./form-controls.js";
 import { ICONS } from "./icons.js";
+import { showToast } from "./feedback.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -124,7 +125,7 @@ export function renderSettingsScreen(state, actions, options = {}) {
       const payload = formToObject(schoolForm);
       if (actions?.saveSchoolProfile) {
         actions.saveSchoolProfile(payload);
-        window.alert("Profil sekolah berhasil disimpan!");
+        showToast("Profil tersimpan");
       }
     });
 
@@ -154,7 +155,7 @@ export function renderSettingsScreen(state, actions, options = {}) {
       const payload = formToObject(teacherForm);
       if (actions?.saveTeacherProfile) {
         actions.saveTeacherProfile(payload);
-        window.alert("Profil guru berhasil disimpan!");
+        showToast("Profil tersimpan");
       }
     });
 
