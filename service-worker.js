@@ -1,10 +1,11 @@
-const CACHE_NAME = "pjok-teacher-assistant-v42";
+const CACHE_NAME = "pjok-teacher-assistant-v43";
 
 const APP_ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./vendor/html2pdf.bundle.min.js",
+  "./vendor/xlsx.full.min.js",
   "./src/app.js",
   "./src/styles.css",
   "./src/data/models.js",
@@ -36,7 +37,10 @@ const APP_ASSETS = [
   "./src/services/camera-service.js",
   "./src/services/rubric-ai-service.js",
   "./src/services/report-ai-service.js",
+  "./src/services/assessment-package-service.js",
+  "./src/services/assessment-xlsx-adapter.js",
   "./src/ui/form-controls.js",
+  "./src/ui/feedback.js",
   "./src/ui/first-run-setup.js",
   "./src/ui/classes-screen.js",
   "./src/ui/students-screen.js",
@@ -45,6 +49,7 @@ const APP_ASSETS = [
   "./src/ui/navigation.js",
   "./src/ui/screens.js",
   "./src/ui/icons.js",
+  "./src/ui/assessment-import-modal.js",
   "./src/ui/student-detail-modal.js",
   "./src/ui/student-avatar.js",
   "./src/ui/student-photo-field.js",

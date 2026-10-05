@@ -1,10 +1,16 @@
 import { ICONS } from "./icons.js";
+import { showToast } from "./feedback.js";
 import {
   validateAssessmentPackage,
   planAssessmentPackageImport,
   executeAssessmentPackageImport,
   DEDUPE_STATUS
 } from "../services/assessment-package-service.js";
+import {
+  getXLSX,
+  parseAssessmentWorkbook,
+  downloadAssessmentPackageTemplate
+} from "../services/assessment-xlsx-adapter.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -32,8 +38,9 @@ const TYPE_LABELS = {
 };
 
 /**
- * Mobile-friendly assessment JSON import modal with file selection, validation,
- * deduplication analysis, preview cards, and single-step batch persistence.
+ * Mobile-friendly assessment Excel & JSON import modal with file selection,
+ * Excel adapter parsing, validation, deduplication analysis, preview cards,
+ * download template option, and single-step batch persistence.
  */
 export function renderAssessmentImportModal({
   classRoom,
@@ -80,21 +87,21 @@ export function renderAssessmentImportModal({
     const body = createElement("div", "assessment-import-body");
 
     if (!parsedPackage && !validationResult) {
-      // Step 1: File selection
+      // Step 1: File selection & Template Download
       const introBox = createElement("div", "assessment-import-upload");
       
       const iconWrap = createElement("div", "assessment-import-upload-icon");
       iconWrap.append(ICONS.book(36));
 
       const heading = createElement("h3", "assessment-import-upload-title", "Pilih file asesmen PJOK");
-      const desc = createElement("p", "assessment-import-upload-desc", "Pilih file paket asesmen berformat JSON (.json) yang diekspor dari aplikasi PJOK.");
+      const desc = createElement("p", "assessment-import-upload-desc", "Pilih file paket asesmen berformat Excel (.xlsx) atau JSON (.json) yang diekspor dari aplikasi PJOK.");
 
       const fileInput = document.createElement("input");
       fileInput.type = "file";
-      fileInput.accept = ".json,application/json";
+      fileInput.accept = ".xlsx,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json";
       fileInput.style.display = "none";
 
-      const selectBtn = createElement("button", "primary-action compact-action assessment-import-select-btn", "Pilih File JSON");
+      const selectBtn = createElement("button", "primary-action compact-action assessment-import-select-btn", "Pilih File");
       selectBtn.type = "button";
       selectBtn.addEventListener("click", () => fileInput.click());
 
@@ -108,11 +115,19 @@ export function renderAssessmentImportModal({
       const noteBox = createElement("div", "assessment-import-format-note");
       noteBox.append(
         createElement("strong", "", "Format tersedia:"),
-        document.createTextNode("• JSON (.json)"),
-        createElement("em", "", "Excel akan ditambahkan pada tahap berikutnya.")
+        createElement("div", "", "• Excel (.xlsx)"),
+        createElement("div", "", "• JSON (.json)")
       );
 
-      introBox.append(iconWrap, heading, desc, fileInput, selectBtn, noteBox);
+      const templateBtn = createElement("button", "btn-tool compact-action w-full mt-2 flex items-center justify-center gap-2", "Download Template Excel");
+      templateBtn.type = "button";
+      templateBtn.append(ICONS.download(16));
+      templateBtn.addEventListener("click", () => {
+        downloadAssessmentPackageTemplate("Template_Import_Asesmen_PJOK.xlsx");
+        showToast("✓ Template Excel berhasil diunduh.");
+      });
+
+      introBox.append(iconWrap, heading, desc, fileInput, selectBtn, noteBox, templateBtn);
       body.append(introBox);
 
       modalContainer.append(body);
@@ -128,7 +143,11 @@ export function renderAssessmentImportModal({
       const errList = createElement("ul", "assessment-import-error-list");
       (validationResult.errors || []).forEach((err) => {
         let prefix = "";
-        if (err.assessmentIndex !== undefined && err.itemIndex !== undefined) {
+        if (err.sheet && err.row) {
+          prefix = `${err.sheet} baris ${err.row}: `;
+        } else if (err.sheet) {
+          prefix = `Sheet ${err.sheet}: `;
+        } else if (err.assessmentIndex !== undefined && err.itemIndex !== undefined) {
           prefix = `Asesmen ${err.assessmentIndex + 1}, Butir ${err.itemIndex + 1}: `;
         } else if (err.assessmentIndex !== undefined) {
           prefix = `Asesmen ${err.assessmentIndex + 1}: `;
@@ -137,7 +156,7 @@ export function renderAssessmentImportModal({
         errList.append(li);
       });
 
-      const reselectBtn = createElement("button", "btn-tool compact-action", "Pilih File Lain");
+      const reselectBtn = createElement("button", "btn-tool compact-action mt-2", "Pilih File Lain");
       reselectBtn.type = "button";
       reselectBtn.addEventListener("click", () => {
         parsedPackage = null;
@@ -227,7 +246,7 @@ export function renderAssessmentImportModal({
         const topRow = createElement("div", "assessment-import-card-header");
         const titleText = createElement("h4", "assessment-import-card-title");
         titleText.append(
-          isImportable ? createElement("span", "text-success font-bold", "✓") : createElement("span", "text-warning font-bold", "•"),
+          isImportable ? createElement("span", "text-success font-bold", "✓ ") : createElement("span", "text-warning font-bold", "• "),
           document.createTextNode(canonical.name || "Asesmen")
         );
 
@@ -304,8 +323,78 @@ export function renderAssessmentImportModal({
 
   function handleFileSelected(file) {
     currentFile = file;
-    const reader = new FileReader();
+    const filename = file.name || "";
+    const isXlsx = filename.endsWith(".xlsx") || filename.endsWith(".xls") || file.type.includes("sheet") || file.type.includes("excel");
 
+    if (isXlsx) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const buffer = e.target?.result;
+          const XLSX = getXLSX();
+          const data = new Uint8Array(buffer);
+          const workbook = XLSX.read(data, { type: "array" });
+
+          const parseResult = parseAssessmentWorkbook(workbook);
+          if (!parseResult.success) {
+            parsedPackage = null;
+            validationResult = parseResult;
+            importPlan = null;
+            renderContent();
+            return;
+          }
+
+          const pkg = parseResult.package;
+          const validation = validateAssessmentPackage(pkg);
+          if (!validation.valid) {
+            parsedPackage = null;
+            validationResult = validation;
+            importPlan = null;
+            renderContent();
+            return;
+          }
+
+          parsedPackage = pkg;
+          validationResult = validation;
+          importPlan = planAssessmentPackageImport(pkg, existingDefinitions);
+          renderContent();
+        } catch (err) {
+          parsedPackage = null;
+          validationResult = {
+            valid: false,
+            errors: [
+              {
+                sheet: "Excel",
+                message: `Gagal membaca file Excel: ${err?.message || "Format file tidak didukung."}`
+              }
+            ]
+          };
+          importPlan = null;
+          renderContent();
+        }
+      };
+
+      reader.onerror = () => {
+        parsedPackage = null;
+        validationResult = {
+          valid: false,
+          errors: [
+            {
+              sheet: "File",
+              message: "Gagal membaca file dari perangkat."
+            }
+          ]
+        };
+        importPlan = null;
+        renderContent();
+      };
+
+      reader.readAsArrayBuffer(file);
+      return;
+    }
+
+    // JSON file path
+    const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const text = e.target?.result;

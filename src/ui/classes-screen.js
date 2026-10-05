@@ -6,6 +6,7 @@ import { generateRubricWithAI } from "../services/rubric-ai-service.js";
 import { generateStudentReportWithAI } from "../services/report-ai-service.js";
 import { renderAssessmentImportModal } from "./assessment-import-modal.js";
 import { exportAssessmentSessionToJsonFile } from "../services/assessment-package-service.js";
+import { exportAssessmentSessionToExcelFile } from "../services/assessment-xlsx-adapter.js";
 import {
   showToast,
   registerDirtyGuard,
@@ -2677,25 +2678,49 @@ export function renderClassesScreen(state, actions) {
         openScoring(classRoom.id, as.id);
       });
 
-      // ⋯ menu for card actions (Export Asesmen)
+      // ⋯ menu for card actions (Export Asesmen Choice)
       const menuWrap = createElement("div", "relative assessment-card-menu");
       const menuBtn = createElement("button", "btn-tool compact-action min-h-[44px] min-w-[44px] flex items-center justify-center");
       menuBtn.type = "button";
       menuBtn.setAttribute("aria-label", "Menu opsi asesmen");
       menuBtn.append(ICONS.moreHorizontal(18));
 
-      const dropdown = createElement("div", "hidden absolute right-0 bottom-full mb-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-30");
-      const exportItem = createElement("button", "w-full text-left px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 flex items-center gap-2 cursor-pointer");
-      exportItem.type = "button";
-      exportItem.append(ICONS.download(16), document.createTextNode("Export Asesmen"));
-      exportItem.addEventListener("click", (e) => {
+      const dropdown = createElement("div", "hidden absolute right-0 bottom-full mb-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-30 space-y-1");
+      
+      const menuTitle = createElement("p", "text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1", "Export Asesmen");
+      
+      const exportExcelBtn = createElement("button", "w-full text-left px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-emerald-50 hover:text-emerald-800 rounded flex items-center gap-2 cursor-pointer");
+      exportExcelBtn.type = "button";
+      exportExcelBtn.append(ICONS.download(16), document.createTextNode("Excel (.xlsx)"));
+      exportExcelBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         dropdown.classList.add("hidden");
+        dropdown.classList.remove("dropdown-open");
+        const expResult = exportAssessmentSessionToExcelFile(as, def);
+        showToast(`✓ Asesmen diekspor: ${expResult.filename}`);
+      });
+
+      const exportJsonBtn = createElement("button", "w-full text-left px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-800 rounded flex items-center gap-2 cursor-pointer");
+      exportJsonBtn.type = "button";
+      exportJsonBtn.append(ICONS.download(16), document.createTextNode("JSON (.json)"));
+      exportJsonBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        dropdown.classList.add("hidden");
+        dropdown.classList.remove("dropdown-open");
         const expResult = exportAssessmentSessionToJsonFile(as, def);
         showToast(`✓ Asesmen diekspor: ${expResult.filename}`);
       });
 
-      dropdown.append(exportItem);
+      const cancelMenuBtn = createElement("button", "w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded cursor-pointer");
+      cancelMenuBtn.type = "button";
+      cancelMenuBtn.textContent = "Batal";
+      cancelMenuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        dropdown.classList.add("hidden");
+        dropdown.classList.remove("dropdown-open");
+      });
+
+      dropdown.append(menuTitle, exportExcelBtn, exportJsonBtn, cancelMenuBtn);
       menuBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         const isHidden = dropdown.classList.contains("hidden");
