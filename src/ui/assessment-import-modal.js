@@ -1,4 +1,3 @@
-import { createElement } from "./form-controls.js";
 import { ICONS } from "./icons.js";
 import {
   validateAssessmentPackage,
@@ -6,6 +5,15 @@ import {
   executeAssessmentPackageImport,
   DEDUPE_STATUS
 } from "../services/assessment-package-service.js";
+
+function createElement(tagName, className, textContent) {
+  const element = document.createElement(tagName);
+  if (className) element.className = className;
+  if (textContent !== undefined && textContent !== null) {
+    element.textContent = textContent;
+  }
+  return element;
+}
 
 const PURPOSE_LABELS = {
   pretest: "Pretest / Asesmen Awal",
@@ -38,7 +46,7 @@ export function renderAssessmentImportModal({
   modalOverlay.setAttribute("role", "dialog");
   modalOverlay.setAttribute("aria-modal", "true");
 
-  const modalContainer = createElement("div", "modal-dialog modal-dialog-lg assessment-import-dialog");
+  const modalContainer = createElement("div", "assessment-import-dialog");
 
   let parsedPackage = null;
   let validationResult = null;
@@ -49,14 +57,14 @@ export function renderAssessmentImportModal({
     modalContainer.replaceChildren();
 
     // Modal Header
-    const header = createElement("div", "modal-header flex items-center justify-between pb-3 border-b border-gray-200");
+    const header = createElement("div", "assessment-import-header");
     const titleGroup = createElement("div");
     titleGroup.append(
-      createElement("h2", "modal-title font-bold text-lg text-gray-900", "Import Asesmen"),
-      createElement("p", "text-subtle text-xs mt-0.5", `Pilih file asesmen dari Korwil, sekolah, atau perangkat lain untuk ${classRoom?.name || "kelas"}.`)
+      createElement("h2", "assessment-import-title", "Import Asesmen"),
+      createElement("p", "assessment-import-sub", `Pilih file asesmen dari Korwil, sekolah, atau perangkat lain untuk ${classRoom?.name || "kelas"}.`)
     );
 
-    const closeBtn = createElement("button", "btn-icon-close text-gray-500 hover:text-gray-800 p-1");
+    const closeBtn = createElement("button", "assessment-import-close-btn");
     closeBtn.type = "button";
     closeBtn.setAttribute("aria-label", "Tutup");
     closeBtn.append(ICONS.close(20));
@@ -69,25 +77,24 @@ export function renderAssessmentImportModal({
     modalContainer.append(header);
 
     // Modal Body
-    const body = createElement("div", "modal-body py-4 space-y-4 max-h-[75vh] overflow-y-auto");
+    const body = createElement("div", "assessment-import-body");
 
     if (!parsedPackage && !validationResult) {
       // Step 1: File selection
-      const introBox = createElement("div", "import-upload-container text-center py-6 px-4 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 space-y-3");
+      const introBox = createElement("div", "assessment-import-upload");
       
-      const iconWrap = createElement("div", "mx-auto text-primary-600 flex justify-center");
+      const iconWrap = createElement("div", "assessment-import-upload-icon");
       iconWrap.append(ICONS.book(36));
 
-      const heading = createElement("h3", "font-semibold text-gray-800 text-base", "Pilih file asesmen PJOK");
-      const desc = createElement("p", "text-xs text-gray-600 max-w-sm mx-auto", "Pilih file paket asesmen berformat JSON (.json) yang diekspor dari aplikasi PJOK.");
+      const heading = createElement("h3", "assessment-import-upload-title", "Pilih file asesmen PJOK");
+      const desc = createElement("p", "assessment-import-upload-desc", "Pilih file paket asesmen berformat JSON (.json) yang diekspor dari aplikasi PJOK.");
 
       const fileInput = document.createElement("input");
       fileInput.type = "file";
       fileInput.accept = ".json,application/json";
-      fileInput.className = "hidden";
       fileInput.style.display = "none";
 
-      const selectBtn = createElement("button", "primary-action compact-action font-semibold cursor-pointer", "Pilih File JSON");
+      const selectBtn = createElement("button", "primary-action compact-action assessment-import-select-btn", "Pilih File JSON");
       selectBtn.type = "button";
       selectBtn.addEventListener("click", () => fileInput.click());
 
@@ -98,11 +105,11 @@ export function renderAssessmentImportModal({
         }
       });
 
-      const noteBox = createElement("div", "text-xs text-gray-500 bg-white p-3 rounded-lg border border-gray-200 mt-3 text-left space-y-1");
+      const noteBox = createElement("div", "assessment-import-format-note");
       noteBox.append(
-        createElement("p", "font-medium text-gray-700", "Format tersedia:"),
-        createElement("p", "", "• JSON (.json)"),
-        createElement("p", "text-gray-400 italic text-[11px] mt-1", "Excel akan ditambahkan pada tahap berikutnya.")
+        createElement("strong", "", "Format tersedia:"),
+        document.createTextNode("• JSON (.json)"),
+        createElement("em", "", "Excel akan ditambahkan pada tahap berikutnya.")
       );
 
       introBox.append(iconWrap, heading, desc, fileInput, selectBtn, noteBox);
@@ -114,11 +121,11 @@ export function renderAssessmentImportModal({
 
     if (validationResult && !validationResult.valid) {
       // Validation error state
-      const errBox = createElement("div", "import-error-box bg-red-50 border border-red-200 rounded-xl p-4 space-y-3");
-      const errHeader = createElement("div", "flex items-start gap-2 text-red-800 font-semibold");
+      const errBox = createElement("div", "assessment-import-error");
+      const errHeader = createElement("div", "assessment-import-error-title");
       errHeader.append(ICONS.alert(20), createElement("span", "", "Import belum dapat dilanjutkan."));
 
-      const errList = createElement("ul", "list-disc pl-5 text-xs text-red-700 space-y-1 mt-2");
+      const errList = createElement("ul", "assessment-import-error-list");
       (validationResult.errors || []).forEach((err) => {
         let prefix = "";
         if (err.assessmentIndex !== undefined && err.itemIndex !== undefined) {
@@ -130,7 +137,7 @@ export function renderAssessmentImportModal({
         errList.append(li);
       });
 
-      const reselectBtn = createElement("button", "btn-tool mt-2", "Pilih File Lain");
+      const reselectBtn = createElement("button", "btn-tool compact-action", "Pilih File Lain");
       reselectBtn.type = "button";
       reselectBtn.addEventListener("click", () => {
         parsedPackage = null;
@@ -151,14 +158,14 @@ export function renderAssessmentImportModal({
       const pkgSource = parsedPackage.source?.name || "Asesmen PJOK";
       const totalAssessments = parsedPackage.assessments?.length || 0;
 
-      const summaryHeader = createElement("div", "import-summary-banner bg-blue-50 border border-blue-200 rounded-xl p-3.5 flex items-center justify-between flex-wrap gap-2");
+      const summaryHeader = createElement("div", "assessment-import-summary");
       const summaryLeft = createElement("div");
       summaryLeft.append(
-        createElement("h4", "font-bold text-blue-950 text-sm", `Paket: ${pkgSource}`),
-        createElement("p", "text-xs text-blue-700", `${totalAssessments} asesmen ditemukan dalam file`)
+        createElement("h4", "assessment-import-summary-title", `Paket: ${pkgSource}`),
+        createElement("p", "assessment-import-summary-sub", `${totalAssessments} asesmen ditemukan dalam file`)
       );
 
-      const changeFileBtn = createElement("button", "text-xs font-semibold text-blue-700 hover:text-blue-900 underline");
+      const changeFileBtn = createElement("button", "assessment-import-change-file-btn");
       changeFileBtn.type = "button";
       changeFileBtn.textContent = "Ganti File";
       changeFileBtn.addEventListener("click", () => {
@@ -172,16 +179,16 @@ export function renderAssessmentImportModal({
       summaryHeader.append(summaryLeft, changeFileBtn);
       body.append(summaryHeader);
 
-      const previewList = createElement("div", "import-preview-cards-list space-y-3");
+      const previewList = createElement("div", "assessment-import-preview-list");
 
       let importableCount = 0;
 
       importPlan.items.forEach((item) => {
         const canonical = item.assessment;
-        const card = createElement("article", "import-preview-card bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm space-y-2.5");
+        const card = createElement("article", "assessment-import-preview-card");
 
         // Status badge
-        let badgeClass = "bg-gray-100 text-gray-700";
+        let badgeModifier = "badge-new";
         let badgeText = "Baru";
         let isImportable = true;
         let noteText = "";
@@ -191,60 +198,60 @@ export function renderAssessmentImportModal({
           (existingSessions || []).some((s) => s.classId === classRoom?.id && s.definitionId === item.existingDefinition?.id);
 
         if (item.classification === DEDUPE_STATUS.NEW) {
-          badgeClass = "bg-green-100 text-green-800 border border-green-200";
+          badgeModifier = "badge-new";
           badgeText = "Baru";
           importableCount++;
         } else if (item.classification === DEDUPE_STATUS.NEW_VERSION) {
-          badgeClass = "bg-purple-100 text-purple-800 border border-purple-200";
+          badgeModifier = "badge-new-version";
           badgeText = "Versi baru";
           importableCount++;
         } else if (item.classification === DEDUPE_STATUS.EXACT_MATCH) {
           if (alreadyInClass) {
-            badgeClass = "bg-gray-100 text-gray-600 border border-gray-200";
+            badgeModifier = "badge-active";
             badgeText = "Sudah di kelas";
             isImportable = false;
             noteText = "Asesmen ini sudah aktif di kelas ini (dilewati).";
           } else {
-            badgeClass = "bg-blue-100 text-blue-800 border border-blue-200";
+            badgeModifier = "badge-master";
             badgeText = "Sudah tersedia (Master)";
             noteText = "Definisi master akan digunakan untuk membuat sesi kelas baru.";
             importableCount++;
           }
         } else if (item.classification === DEDUPE_STATUS.CONFLICT) {
-          badgeClass = "bg-amber-100 text-amber-900 border border-amber-300";
+          badgeModifier = "badge-conflict";
           badgeText = "Konflik";
           isImportable = false;
           noteText = "Versi yang sama sudah tersedia, tetapi isi berbeda. Import dibatalkan untuk asesmen ini.";
         }
 
-        const topRow = createElement("div", "flex items-start justify-between gap-2");
-        const titleText = createElement("h4", "font-bold text-gray-900 text-sm flex items-center gap-1.5");
+        const topRow = createElement("div", "assessment-import-card-header");
+        const titleText = createElement("h4", "assessment-import-card-title");
         titleText.append(
-          isImportable ? createElement("span", "text-green-600 font-bold", "✓") : createElement("span", "text-amber-500 font-bold", "•"),
+          isImportable ? createElement("span", "text-success font-bold", "✓") : createElement("span", "text-warning font-bold", "•"),
           document.createTextNode(canonical.name || "Asesmen")
         );
 
-        const badge = createElement("span", `text-[11px] font-semibold px-2 py-0.5 rounded-full ${badgeClass}`, badgeText);
+        const badge = createElement("span", `assessment-import-badge ${badgeModifier}`, badgeText);
         topRow.append(titleText, badge);
 
         // Metadata row
         const pLabel = PURPOSE_LABELS[canonical.purpose] || canonical.purpose || "Asesmen";
         const tLabel = TYPE_LABELS[canonical.assessmentType] || canonical.assessmentType || "Praktik";
-        const metaLine = createElement("p", "text-xs text-gray-600 font-medium", `${pLabel} • ${tLabel}`);
+        const metaLine = createElement("p", "assessment-import-card-meta", `${pLabel} • ${tLabel}`);
 
         // Materials & items info
         const materialsStr = Array.isArray(canonical.materials) && canonical.materials.length > 0 ? canonical.materials.join(", ") : "Umum";
         const itemsCount = Array.isArray(canonical.items) ? canonical.items.length : 0;
         const scale = canonical.rubricScale || 5;
-        const detailLine = createElement("p", "text-xs text-gray-500", `Materi: ${materialsStr} • ${itemsCount} butir • Skala ${scale}`);
+        const detailLine = createElement("p", "assessment-import-card-detail", `Materi: ${materialsStr} • ${itemsCount} butir • Skala ${scale}`);
 
         // Source & Version info
-        const sourceLine = createElement("p", "text-[11px] text-gray-400", `Sumber: ${pkgSource} • Versi: ${canonical.sourceVersion || "1.0"}`);
+        const sourceLine = createElement("p", "assessment-import-card-source", `Sumber: ${pkgSource} • Versi: ${canonical.sourceVersion || "1.0"}`);
 
         card.append(topRow, metaLine, detailLine, sourceLine);
 
         if (noteText) {
-          const noteEl = createElement("p", `text-[11px] rounded p-1.5 ${item.classification === DEDUPE_STATUS.CONFLICT ? "bg-amber-50 text-amber-800" : "bg-gray-50 text-gray-600"}`, noteText);
+          const noteEl = createElement("p", `assessment-import-card-note ${item.classification === DEDUPE_STATUS.CONFLICT ? "note-conflict" : ""}`, noteText);
           card.append(noteEl);
         }
 
@@ -255,19 +262,20 @@ export function renderAssessmentImportModal({
       modalContainer.append(body);
 
       // Modal Footer Actions
-      const footer = createElement("div", "modal-footer flex items-center justify-end gap-2 pt-3 border-t border-gray-200");
-      const cancelBtn = createElement("button", "btn-tool compact-action", "Batal");
+      const footer = createElement("div", "assessment-import-footer");
+      const cancelBtn = createElement("button", "btn-tool compact-action assessment-import-btn-cancel", "Batal");
       cancelBtn.type = "button";
       cancelBtn.addEventListener("click", () => {
         modalOverlay.remove();
         if (onClose) onClose();
       });
 
-      const confirmBtn = createElement("button", "primary-action compact-action", `Import ke Kelas ${classRoom?.name || ""}`);
+      const confirmBtn = createElement("button", "primary-action compact-action assessment-import-btn-confirm", `Import ke Kelas ${classRoom?.name || ""}`);
       confirmBtn.type = "button";
       if (importableCount === 0) {
         confirmBtn.disabled = true;
-        confirmBtn.classList.add("opacity-50", "cursor-not-allowed");
+        confirmBtn.style.opacity = "0.5";
+        confirmBtn.style.cursor = "not-allowed";
       }
 
       confirmBtn.addEventListener("click", () => {
