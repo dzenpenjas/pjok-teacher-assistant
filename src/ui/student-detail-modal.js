@@ -234,6 +234,10 @@ export function renderStudentDetailModal(studentId, context, onClose) {
     if (growthRecords.length === 0) {
       histSection.append(createElement("p", "empty-copy", "Belum ada riwayat pengukuran pertumbuhan tersimpan."));
     } else {
+      const scrollHint = createElement("p", "screen-copy text-xs text-subtle mb-1 sm:hidden", "👉 Geser tabel untuk melihat IMT & catatan lengkap");
+      histSection.append(scrollHint);
+
+      const tableWrap = createElement("div", "growth-table-wrap");
       const table = createElement("table", "growth-table");
       const thead = createElement("thead");
       thead.innerHTML = `
@@ -263,7 +267,8 @@ export function renderStudentDetailModal(studentId, context, onClose) {
         tbody.append(tr);
       });
       table.append(tbody);
-      histSection.append(table);
+      tableWrap.append(table);
+      histSection.append(tableWrap);
     }
     tabBody.append(histSection);
 

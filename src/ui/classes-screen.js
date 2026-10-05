@@ -755,8 +755,8 @@ export function renderClassesScreen(state, actions) {
         // Card Top Row
         const topRow = createElement("div", "report-card-top-row");
         
-        // Left Checkbox & Title
-        const leftBox = createElement("div", "flex items-start gap-3 flex-1");
+        // Left Checkbox & Title (wrapped in label for large touch target)
+        const leftBox = createElement("label", "flex items-start gap-3 flex-1 cursor-pointer select-none");
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.className = "report-source-check mt-1";
@@ -908,7 +908,7 @@ export function renderClassesScreen(state, actions) {
         const card = createElement("article", `report-source-card ${isChecked ? "is-selected-source" : ""}`);
 
         const row = createElement("div", "flex items-center justify-between gap-3");
-        const leftBox = createElement("div", "flex items-center gap-3");
+        const leftBox = createElement("label", "flex items-center gap-3 flex-1 cursor-pointer select-none");
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.className = "report-source-check";
@@ -975,7 +975,7 @@ export function renderClassesScreen(state, actions) {
         const card = createElement("article", `report-source-card ${isChecked ? "is-selected-source" : ""}`);
 
         const row = createElement("div", "flex items-start justify-between gap-3");
-        const leftBox = createElement("div", "flex items-start gap-3 flex-1");
+        const leftBox = createElement("label", "flex items-start gap-3 flex-1 cursor-pointer select-none");
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.className = "report-source-check mt-1";
@@ -1612,13 +1612,15 @@ export function renderClassesScreen(state, actions) {
 
       const closeBtn = createElement("button", "modal-close-btn text-base", "✕");
       closeBtn.type = "button";
-      closeBtn.addEventListener("click", () => {
-        modalBackdrop.remove();
-      });
 
       toolbarRight.append(downloadPdfBtn, closeBtn);
       modalToolbar.append(toolbarLeft, toolbarRight);
       modalCard.append(modalToolbar);
+
+      // A4 Preview Viewport & Scaler for Mobile Responsiveness
+      const previewViewport = createElement("div", "a4-preview-viewport");
+      const previewScaler = createElement("div", "a4-preview-scaler");
+      previewScaler.id = "a4-preview-scaler";
 
       // A4 Document Paper Container
       const a4Paper = createElement("article", "a4-document-paper");
@@ -1811,9 +1813,34 @@ export function renderClassesScreen(state, actions) {
       footerSection.append(leftFooter, rightFooter);
       a4Paper.append(footerSection);
 
-      modalCard.append(a4Paper);
+      previewScaler.append(a4Paper);
+      previewViewport.append(previewScaler);
+      modalCard.append(previewViewport);
       modalBackdrop.append(modalCard);
       document.body.append(modalBackdrop);
+
+      let isExportingPdf = false;
+
+      function updatePreviewScale() {
+        if (!a4Paper || !previewViewport || !previewScaler || isExportingPdf) return;
+        const availableWidth = previewViewport.clientWidth;
+        const paperWidth = a4Paper.offsetWidth || 794;
+        const paperHeight = a4Paper.offsetHeight || 1123;
+
+        if (availableWidth > 0 && availableWidth < paperWidth) {
+          const scale = availableWidth / paperWidth;
+          previewScaler.style.transform = `scale(${scale})`;
+          previewScaler.style.transformOrigin = "top center";
+          previewScaler.style.width = `${paperWidth}px`;
+          previewScaler.style.height = `${paperHeight}px`;
+          previewViewport.style.height = `${Math.ceil(paperHeight * scale + 8)}px`;
+        } else {
+          previewScaler.style.transform = "none";
+          previewScaler.style.width = "auto";
+          previewScaler.style.height = "auto";
+          previewViewport.style.height = "auto";
+        }
+      }
 
       // Verify whether content exceeds the actual A4 element height and apply compact mode if needed
       requestAnimationFrame(() => {
@@ -1826,6 +1853,26 @@ export function renderClassesScreen(state, actions) {
           a4Paper.classList.add("a4-compact");
           // 4. measure again
           void a4Paper.scrollHeight;
+        }
+
+        // 5. scale visually for mobile viewport
+        updatePreviewScale();
+      });
+
+      const onResize = () => {
+        requestAnimationFrame(updatePreviewScale);
+      };
+      window.addEventListener("resize", onResize);
+
+      const closeModal = () => {
+        window.removeEventListener("resize", onResize);
+        modalBackdrop.remove();
+      };
+
+      closeBtn.addEventListener("click", closeModal);
+      modalBackdrop.addEventListener("click", (e) => {
+        if (e.target === modalBackdrop) {
+          closeModal();
         }
       });
 
@@ -1842,6 +1889,18 @@ export function renderClassesScreen(state, actions) {
 
         downloadPdfBtn.disabled = true;
         downloadPdfBtn.textContent = "⏳ Memproses PDF...";
+
+        isExportingPdf = true;
+        const prevTransform = previewScaler.style.transform;
+        const prevViewportHeight = previewViewport.style.height;
+        const prevScalerWidth = previewScaler.style.width;
+        const prevScalerHeight = previewScaler.style.height;
+
+        // Reset visual transform during PDF export so html2pdf renders unscaled 210mm A4
+        previewScaler.style.transform = "none";
+        previewScaler.style.width = "auto";
+        previewScaler.style.height = "auto";
+        previewViewport.style.height = "auto";
 
         const opt = {
           margin: 0,
@@ -1874,6 +1933,12 @@ export function renderClassesScreen(state, actions) {
           downloadPdfBtn.disabled = false;
           downloadPdfBtn.textContent = "📥 Unduh PDF";
           window.alert("PDF gagal dibuat. Silakan coba kembali.");
+        }).finally(() => {
+          isExportingPdf = false;
+          previewScaler.style.transform = prevTransform;
+          previewScaler.style.width = prevScalerWidth;
+          previewScaler.style.height = prevScalerHeight;
+          previewViewport.style.height = prevViewportHeight;
         });
       });
     }
@@ -2127,6 +2192,9 @@ export function renderClassesScreen(state, actions) {
     form.append(topBar);
 
     // Table of students
+    const scrollHint = createElement("p", "screen-copy text-xs text-subtle mb-1 sm:hidden", "👉 Geser tabel ke samping untuk mengisi berat badan & melihat data terakhir");
+    form.append(scrollHint);
+
     const tableCard = createElement("div", "growth-screening-card");
     const table = createElement("table", "growth-screening-table");
     const thead = createElement("thead");
@@ -2134,9 +2202,9 @@ export function renderClassesScreen(state, actions) {
       <tr>
         <th style="width: 44px; text-align: center;">No</th>
         <th>Nama Siswa</th>
-        <th style="width: 170px;">Tinggi Badan (cm)</th>
-        <th style="width: 170px;">Berat Badan (kg)</th>
-        <th style="width: 170px;">Data Terakhir</th>
+        <th style="min-width: 130px;">Tinggi Badan (cm)</th>
+        <th style="min-width: 130px;">Berat Badan (kg)</th>
+        <th style="min-width: 140px;">Data Terakhir</th>
       </tr>
     `;
     table.append(thead);
@@ -2182,6 +2250,7 @@ export function renderClassesScreen(state, actions) {
       hInput.type = "number";
       hInput.step = "0.1";
       hInput.min = "0";
+      hInput.inputMode = "decimal";
       hInput.className = "screening-num-input";
       hInput.placeholder = "TB (cm)";
       tdHeight.append(hInput);
@@ -2192,6 +2261,7 @@ export function renderClassesScreen(state, actions) {
       wInput.type = "number";
       wInput.step = "0.1";
       wInput.min = "0";
+      wInput.inputMode = "decimal";
       wInput.className = "screening-num-input";
       wInput.placeholder = "BB (kg)";
       tdWeight.append(wInput);

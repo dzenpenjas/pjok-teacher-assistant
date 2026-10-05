@@ -1504,14 +1504,21 @@ textarea {
 }
 
 .modal-close-btn {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 50%;
   background: var(--color-surface-muted);
   color: var(--color-muted);
   font-size: 1.1rem;
   font-weight: 700;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .modal-close-btn:hover {
@@ -1527,10 +1534,11 @@ textarea {
   margin-bottom: 16px;
   border-bottom: 1px solid var(--color-border-subtle);
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .modal-tab-btn {
-  min-height: 38px;
+  min-height: 42px;
   padding: 0 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
@@ -1539,6 +1547,11 @@ textarea {
   font-size: 0.82rem;
   font-weight: 700;
   white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
 }
 
 .modal-tab-btn.is-active {
@@ -1550,6 +1563,55 @@ textarea {
 .modal-tab-body {
   display: grid;
   gap: 14px;
+}
+
+.growth-summary-card .stats-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 640px) {
+  .growth-summary-card .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  }
+}
+
+.growth-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  margin-top: 8px;
+  scrollbar-width: thin;
+}
+
+.growth-table {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+.growth-table th {
+  padding: 10px 12px;
+  background: var(--color-surface-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.growth-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.growth-table tr:last-child td {
+  border-bottom: none;
 }
 
 .bmi-badge {
@@ -2854,10 +2916,15 @@ textarea {
   gap: 8px;
   border-bottom: 2px solid var(--color-border);
   padding-bottom: 2px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: nowrap;
+  scrollbar-width: thin;
+  -ms-overflow-style: -ms-autohiding-scrollbar;
 }
 
 .subnav-tab {
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 16px;
   background: none;
   border: none;
@@ -2868,6 +2935,11 @@ textarea {
   cursor: pointer;
   margin-bottom: -2px;
   touch-action: manipulation;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .subnav-tab.is-active {
@@ -3238,27 +3310,31 @@ textarea {
 }
 
 .screening-date-input {
-  min-height: 38px;
-  padding: 6px 12px;
+  min-height: 44px;
+  padding: 8px 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 1rem;
   background: var(--color-surface);
   color: var(--color-text);
+  touch-action: manipulation;
 }
 
 .growth-screening-card {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
   margin-bottom: 16px;
+  scrollbar-width: thin;
 }
 
 .growth-screening-table {
   width: 100%;
+  min-width: 580px;
   border-collapse: collapse;
   text-align: left;
 }
@@ -3270,6 +3346,7 @@ textarea {
   font-weight: 800;
   color: var(--color-muted);
   border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
 }
 
 .growth-screening-table td {
@@ -3297,14 +3374,15 @@ textarea {
 .screening-num-input {
   width: 100%;
   max-width: 130px;
-  min-height: 38px;
-  padding: 6px 10px;
+  min-height: 44px;
+  padding: 8px 10px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 700;
   background: var(--color-surface);
   color: var(--color-text);
+  touch-action: manipulation;
 }
 
 .screening-actions-bar {
@@ -3313,6 +3391,39 @@ textarea {
   gap: 12px;
   flex-wrap: wrap;
   padding: 8px 0 24px;
+}
+
+@media (max-width: 640px) {
+  .growth-screening-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .screening-date-field {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .screening-date-input {
+    width: 100%;
+    min-height: 44px;
+    font-size: 1rem;
+  }
+
+  .screening-actions-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .screening-actions-bar button {
+    width: 100%;
+    min-height: 44px;
+  }
 }
 
 /* CLASS ASSESSMENTS WORKFLOW */
@@ -3761,10 +3872,13 @@ textarea {
 
 .report-source-checkbox,
 .report-source-check {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
   cursor: pointer;
   accent-color: var(--color-primary, #116149);
+  touch-action: manipulation;
 }
 
 .report-card-top-row {
@@ -3892,6 +4006,7 @@ textarea {
   align-items: flex-start;
   padding: 20px 12px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .final-report-modal-card {
@@ -3902,6 +4017,44 @@ textarea {
   padding: 16px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   overflow-x: auto;
+}
+
+.a4-preview-viewport {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  margin: 0 auto;
+}
+
+.a4-preview-scaler {
+  transform-origin: top center;
+  display: flex;
+  justify-content: center;
+  will-change: transform;
+}
+
+@media (max-width: 640px) {
+  .final-report-modal-backdrop {
+    padding: 8px 6px;
+  }
+
+  .final-report-modal-card {
+    padding: 10px 8px;
+    border-radius: 12px;
+    overflow-x: hidden;
+  }
+
+  .final-report-modal-card .modal-header-row {
+    position: sticky;
+    top: -10px;
+    background: #ffffff;
+    z-index: 30;
+    padding-top: 6px;
+    margin-bottom: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  }
 }
 
 .a4-document-paper {
