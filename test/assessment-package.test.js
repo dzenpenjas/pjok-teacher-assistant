@@ -14,7 +14,12 @@ import {
   createCanonicalAssessmentPackage,
   validateAssessmentPackage,
   classifyAssessment,
-  planAssessmentPackageImport
+  planAssessmentPackageImport,
+  generateSafeExportFilename,
+  exportAssessmentSessionToJsonFile,
+  createDefinitionFromCanonicalAssessment,
+  createSessionSnapshotForClass,
+  executeAssessmentPackageImport
 } from "../src/services/assessment-package-service.js";
 
 test("AssessmentDefinition supports optional sourceMeta without breaking existing definitions", () => {
@@ -673,4 +678,252 @@ test("planAssessmentPackageImport returns structured plan with correct summary c
   assert.equal(plan.items[1].action, IMPORT_ACTION.CREATE);
   assert.equal(plan.items[2].action, IMPORT_ACTION.NEW_VERSION);
   assert.equal(plan.items[3].action, IMPORT_ACTION.CONFLICT);
+});
+
+test("exportAssessmentSessionToJsonFile produces canonical package without local IDs and generates safe filename", () => {
+  const session = createAssessmentSession({
+    id: "sess-secret-local-id-888",
+    classId: "class-secret-local-999",
+    definitionId: "def-secret-local-777",
+    title: "UTS PJOK / Kelas 1 : Praktik",
+    purpose: "midterm",
+    materials: ["Senam Ketangkasan"],
+    instructions: "Lakukan rangkaian gerak berurutan.",
+    itemsSnapshot: [
+      {
+        id: "item-snap-1",
+        number: 1,
+        prompt: "Keseimbangan satu kaki",
+        rubricScale: 3,
+        rubricLevels: [
+          { level: 1, label: "L1", desc: "Belum mampu seimbang" },
+          { level: 2, label: "L2", desc: "Mampu bertahan 3 detik" },
+          { level: 3, label: "L3", desc: "Mampu bertahan > 5 detik" }
+        ]
+      }
+    ]
+  });
+
+  const definition = createAssessmentDefinition({
+    id: "def-secret-local-777",
+    name: "UTS PJOK / Kelas 1 : Praktik",
+    assessmentType: "practice",
+    method: "rubric",
+    rubricScale: 3,
+    sourceMeta: {
+      externalCode: "UTS-SD-01",
+      sourceVersion: "2026.1"
+    }
+  });
+
+  const filename = generateSafeExportFilename(session.title);
+  assert.equal(filename, "UTS_PJOK_Kelas_1_Praktik.json");
+
+  const exportResult = exportAssessmentSessionToJsonFile(session, definition, {
+    sourceName: "Korwil Tangerang"
+  });
+
+  assert.equal(exportResult.filename, "UTS_PJOK_Kelas_1_Praktik.json");
+  assert.equal(exportResult.package.format, ASSESSMENT_PACKAGE_FORMAT);
+  assert.equal(exportResult.package.formatVersion, 1);
+  assert.equal(exportResult.package.source.name, "Korwil Tangerang");
+  assert.equal(exportResult.package.assessments.length, 1);
+
+  const exportedAssessment = exportResult.package.assessments[0];
+  assert.equal(exportedAssessment.externalCode, "UTS-SD-01");
+  assert.equal(exportedAssessment.sourceVersion, "2026.1");
+  assert.equal(exportedAssessment.name, "UTS PJOK / Kelas 1 : Praktik");
+  assert.equal(exportedAssessment.purpose, "midterm");
+  assert.equal(exportedAssessment.assessmentType, "practice");
+
+  // Verify json string does not leak secret local database IDs or class IDs
+  assert.equal(exportResult.jsonString.includes("sess-secret-local-id-888"), false);
+  assert.equal(exportResult.jsonString.includes("class-secret-local-999"), false);
+  assert.equal(exportResult.jsonString.includes("def-secret-local-777"), false);
+});
+
+test("executeAssessmentPackageImport blocks writes on invalid package and performs correct batch importing", () => {
+  const targetClassId = "class-target-101";
+
+  // 1. Invalid package validation failure blocks import
+  const invalidPackage = {
+    format: "invalid-format",
+    formatVersion: 1,
+    assessments: []
+  };
+
+  const failResult = executeAssessmentPackageImport({
+    packageData: invalidPackage,
+    targetClassId,
+    existingDefinitions: [],
+    existingSessions: []
+  });
+
+  assert.equal(failResult.success, false);
+  assert.equal(failResult.importedCount, 0);
+  assert.equal(failResult.newDefinitions.length, 0);
+  assert.equal(failResult.newSessions.length, 0);
+
+  // 2. Valid package with mixed NEW, EXACT_MATCH (new to class), EXACT_MATCH (already in class), NEW_VERSION, CONFLICT
+  const existingDef1 = createAssessmentDefinition({
+    id: "def-exist-1",
+    name: "Lari 50m",
+    purpose: "formative",
+    assessmentType: "practice",
+    method: "rubric",
+    materials: ["Sprint"],
+    rubricScale: 3,
+    sourceMeta: {
+      externalCode: "SPRINT-50M",
+      sourceVersion: "1.0"
+    },
+    items: [
+      {
+        number: 1,
+        prompt: "Start sprint",
+        rubricScale: 3,
+        rubricLevels: [
+          { level: 1, label: "L1", desc: "Kurang" },
+          { level: 2, label: "L2", desc: "Cukup" },
+          { level: 3, label: "L3", desc: "Baik" }
+        ]
+      }
+    ]
+  });
+  existingDef1.sourceMeta.fingerprint = calculateAssessmentFingerprint(existingDef1);
+
+  const existingDef2 = createAssessmentDefinition({
+    id: "def-exist-2",
+    name: "Lompat Jauh",
+    purpose: "formative",
+    assessmentType: "practice",
+    method: "rubric",
+    materials: ["Bak Pasir"],
+    rubricScale: 3,
+    sourceMeta: {
+      externalCode: "LOMPAT-JAUH",
+      sourceVersion: "1.0"
+    },
+    items: [
+      {
+        number: 1,
+        prompt: "Tolakan",
+        rubricScale: 3,
+        rubricLevels: [
+          { level: 1, label: "L1", desc: "D1" },
+          { level: 2, label: "L2", desc: "D2" },
+          { level: 3, label: "L3", desc: "D3" }
+        ]
+      }
+    ]
+  });
+  existingDef2.sourceMeta.fingerprint = calculateAssessmentFingerprint(existingDef2);
+
+  // Suppose existingDef1 is ALREADY attached to targetClassId as an active session
+  const existingSessionForClass = createAssessmentSession({
+    id: "sess-existing-class-1",
+    classId: targetClassId,
+    definitionId: existingDef1.id,
+    title: "Lari 50m"
+  });
+
+  const validBatchPackage = createCanonicalAssessmentPackage({
+    sourceName: "Korwil Jakarta",
+    assessments: [
+      // 1. EXACT_MATCH but already in target class -> should be skipped to prevent duplication
+      {
+        externalCode: "SPRINT-50M",
+        sourceVersion: "1.0",
+        name: "Lari 50m",
+        purpose: "formative",
+        assessmentType: "practice",
+        method: "rubric",
+        materials: ["Sprint"],
+        rubricScale: 3,
+        items: existingDef1.items
+      },
+      // 2. EXACT_MATCH and NOT yet in target class -> should reuse definition and create new session
+      {
+        externalCode: "LOMPAT-JAUH",
+        sourceVersion: "1.0",
+        name: "Lompat Jauh",
+        purpose: "formative",
+        assessmentType: "practice",
+        method: "rubric",
+        materials: ["Bak Pasir"],
+        rubricScale: 3,
+        items: existingDef2.items
+      },
+      // 3. NEW assessment -> creates new definition and new session
+      {
+        externalCode: "RENANG-DADA",
+        sourceVersion: "1.0",
+        name: "Renang Gaya Dada",
+        purpose: "formative",
+        assessmentType: "practice",
+        method: "rubric",
+        materials: ["Kolam"],
+        rubricScale: 3,
+        items: [
+          {
+            number: 1,
+            prompt: "Pernapasan renang",
+            rubricScale: 3,
+            rubricLevels: [
+              { level: 1, label: "L1", desc: "Belum teratur" },
+              { level: 2, label: "L2", desc: "Cukup teratur" },
+              { level: 3, label: "L3", desc: "Sangat teratur" }
+            ]
+          }
+        ]
+      },
+      // 4. NEW_VERSION -> creates new definition with sourceMeta and new session
+      {
+        externalCode: "SPRINT-50M",
+        sourceVersion: "2.0",
+        name: "Lari 50m Edisi 2",
+        purpose: "formative",
+        assessmentType: "practice",
+        method: "rubric",
+        materials: ["Sprint 50m"],
+        rubricScale: 3,
+        items: existingDef1.items
+      },
+      // 5. CONFLICT (same version 1.0, modified content) -> skipped
+      {
+        externalCode: "LOMPAT-JAUH",
+        sourceVersion: "1.0",
+        name: "Lompat Jauh Isi Berubah",
+        purpose: "formative",
+        assessmentType: "practice",
+        method: "rubric",
+        materials: ["Bak Pasir Berbeda"],
+        rubricScale: 3,
+        items: existingDef2.items
+      }
+    ]
+  });
+
+  const batchResult = executeAssessmentPackageImport({
+    packageData: validBatchPackage,
+    targetClassId,
+    existingDefinitions: [existingDef1, existingDef2],
+    existingSessions: [existingSessionForClass]
+  });
+
+  assert.equal(batchResult.success, true);
+  // Item 1: skipped duplicate in class (0 new sessions)
+  // Item 2: EXACT_MATCH reused definition (1 new session, 0 new defs)
+  // Item 3: NEW (1 new session, 1 new def)
+  // Item 4: NEW_VERSION (1 new session, 1 new def)
+  // Item 5: CONFLICT (0 new sessions, 0 new defs)
+  assert.equal(batchResult.importedCount, 3);
+  assert.equal(batchResult.newDefinitions.length, 2);
+  assert.equal(batchResult.newSessions.length, 3);
+
+  // Verify all new sessions belong to targetClassId and have 0 student score records
+  batchResult.newSessions.forEach((sess) => {
+    assert.equal(sess.classId, targetClassId);
+    assert.ok(sess.itemsSnapshot.length > 0);
+  });
 });

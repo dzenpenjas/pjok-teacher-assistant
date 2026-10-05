@@ -537,6 +537,16 @@ function createCrudActions() {
       refreshState();
       return Array.isArray(res) ? res.at(-1) : res;
     },
+    batchImportAssessmentPackage: ({ newDefinitions = [], newSessions = [] }) => {
+      const curDefs = appState.assessmentDefinitions || [];
+      const curSess = appState.assessmentSessions || [];
+      appState = saveState({
+        ...appState,
+        assessmentDefinitions: [...curDefs, ...newDefinitions],
+        assessmentSessions: [...curSess, ...newSessions]
+      });
+      refreshState();
+    },
     saveAssessmentResult: (input) => {
       if (input.sessionId) {
         const session = repositories.sessions.findById(input.sessionId);

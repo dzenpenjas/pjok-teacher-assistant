@@ -4,6 +4,8 @@ import { createStudentAvatar } from "./student-avatar.js";
 import { ICONS } from "./icons.js";
 import { generateRubricWithAI } from "../services/rubric-ai-service.js";
 import { generateStudentReportWithAI } from "../services/report-ai-service.js";
+import { renderAssessmentImportModal } from "./assessment-import-modal.js";
+import { exportAssessmentSessionToJsonFile } from "../services/assessment-package-service.js";
 import {
   showToast,
   registerDirtyGuard,
@@ -2515,6 +2517,26 @@ export function renderClassesScreen(state, actions) {
   }
 
   function renderClassAssessmentsList(assessments, classRoom, students) {
+    function openImportAssessment(targetClass) {
+      const modal = renderAssessmentImportModal({
+        classRoom: targetClass,
+        existingDefinitions: state.assessmentDefinitions || [],
+        existingSessions: state.assessmentSessions || [],
+        onImport: ({ newDefinitions, newSessions, count }) => {
+          if (count > 0 || (newDefinitions && newDefinitions.length > 0)) {
+            if (actions?.batchImportAssessmentPackage) {
+              actions.batchImportAssessmentPackage({ newDefinitions, newSessions });
+            }
+            showToast(`✓ ${count} asesmen berhasil ditambahkan.`);
+            render();
+          } else {
+            showToast("Tidak ada asesmen baru yang diimport.");
+          }
+        }
+      });
+      container.append(modal);
+    }
+
     if (assessments.length === 0) {
       const emptyCard = createElement("div", "empty-state-card");
       emptyCard.append(
@@ -2522,17 +2544,28 @@ export function renderClassesScreen(state, actions) {
         createElement(
           "p",
           "screen-copy",
-          "Tambahkan instrumen dan rubrik penilaian langsung untuk mulai mengukur capaian pembelajaran siswa di kelas ini."
+          "Tambahkan instrumen dan rubrik penilaian langsung atau import paket asesmen untuk mulai mengukur capaian pembelajaran siswa di kelas ini."
         )
       );
 
-      const addBtn = createElement("button", "primary-action compact-action");
+      const actionGroup = createElement("div", "flex flex-wrap gap-2 justify-center mt-3");
+
+      const addBtn = createElement("button", "primary-action compact-action min-h-[44px]");
       addBtn.type = "button";
-      addBtn.append(ICONS.plus(15), document.createTextNode(" Tambah Asesmen"));
+      addBtn.append(ICONS.plus(16), document.createTextNode(" + Buat Asesmen"));
       addBtn.addEventListener("click", () => {
         openCreateAssessment(classRoom.id);
       });
-      emptyCard.append(addBtn);
+
+      const importBtn = createElement("button", "btn-tool compact-action min-h-[44px]");
+      importBtn.type = "button";
+      importBtn.append(ICONS.download(16), document.createTextNode(" ↓ Import Asesmen"));
+      importBtn.addEventListener("click", () => {
+        openImportAssessment(classRoom);
+      });
+
+      actionGroup.append(addBtn, importBtn);
+      emptyCard.append(actionGroup);
 
       container.append(emptyCard);
       return;
@@ -2554,15 +2587,26 @@ export function renderClassesScreen(state, actions) {
       observation: "Observasi"
     };
 
-    const listHeader = createElement("div", "flex items-center justify-between mb-4");
-    const heading = createElement("h3", "section-title", `Daftar Asesmen (${assessments.length})`);
-    const addBtn = createElement("button", "primary-action compact-action");
-    addBtn.type = "button";
-    addBtn.append(ICONS.plus(15), document.createTextNode(" Tambah Asesmen"));
-    addBtn.addEventListener("click", () => {
+    const listHeader = createElement("div", "flex items-center justify-between flex-wrap gap-2 mb-4");
+    const heading = createElement("h3", "section-title font-bold text-base", `Daftar Asesmen (${assessments.length})`);
+
+    const headerActions = createElement("div", "flex items-center flex-wrap gap-2");
+    const createBtn = createElement("button", "primary-action compact-action min-h-[44px]");
+    createBtn.type = "button";
+    createBtn.append(ICONS.plus(16), document.createTextNode(" + Buat Asesmen"));
+    createBtn.addEventListener("click", () => {
       openCreateAssessment(classRoom.id);
     });
-    listHeader.append(heading, addBtn);
+
+    const importBtn = createElement("button", "btn-tool compact-action min-h-[44px]");
+    importBtn.type = "button";
+    importBtn.append(ICONS.download(16), document.createTextNode(" ↓ Import Asesmen"));
+    importBtn.addEventListener("click", () => {
+      openImportAssessment(classRoom);
+    });
+
+    headerActions.append(createBtn, importBtn);
+    listHeader.append(heading, headerActions);
     container.append(listHeader);
 
     const grid = createElement("div", "assessment-sessions-grid");
@@ -2626,14 +2670,50 @@ export function renderClassesScreen(state, actions) {
       progressSection.append(progWrap);
       card.append(progressSection);
 
-      const actionRow = createElement("div", "assessment-card-actions");
-      const startBtn = createElement("button", "primary-action compact-action", scoredCount > 0 ? "Lanjutkan Penilaian" : "Mulai Penilaian");
+      const actionRow = createElement("div", "assessment-card-actions flex items-center justify-between gap-2 pt-2");
+      const startBtn = createElement("button", "primary-action compact-action flex-1 min-h-[44px]", scoredCount > 0 ? "Lanjutkan Penilaian" : "Mulai Penilaian");
       startBtn.type = "button";
       startBtn.addEventListener("click", () => {
         openScoring(classRoom.id, as.id);
       });
 
-      actionRow.append(startBtn);
+      // ⋯ menu for card actions (Export Asesmen)
+      const menuWrap = createElement("div", "relative assessment-card-menu");
+      const menuBtn = createElement("button", "btn-tool compact-action min-h-[44px] min-w-[44px] flex items-center justify-center");
+      menuBtn.type = "button";
+      menuBtn.setAttribute("aria-label", "Menu opsi asesmen");
+      menuBtn.append(ICONS.moreHorizontal(18));
+
+      const dropdown = createElement("div", "hidden absolute right-0 bottom-full mb-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-30");
+      const exportItem = createElement("button", "w-full text-left px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 flex items-center gap-2 cursor-pointer");
+      exportItem.type = "button";
+      exportItem.append(ICONS.download(16), document.createTextNode("Export Asesmen"));
+      exportItem.addEventListener("click", (e) => {
+        e.stopPropagation();
+        dropdown.classList.add("hidden");
+        const expResult = exportAssessmentSessionToJsonFile(as, def);
+        showToast(`✓ Asesmen diekspor: ${expResult.filename}`);
+      });
+
+      dropdown.append(exportItem);
+      menuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isHidden = dropdown.classList.contains("hidden");
+        document.querySelectorAll(".assessment-card-menu .dropdown-open").forEach((el) => {
+          el.classList.add("hidden");
+          el.classList.remove("dropdown-open");
+        });
+        if (isHidden) {
+          dropdown.classList.remove("hidden");
+          dropdown.classList.add("dropdown-open");
+        } else {
+          dropdown.classList.add("hidden");
+          dropdown.classList.remove("dropdown-open");
+        }
+      });
+
+      menuWrap.append(menuBtn, dropdown);
+      actionRow.append(startBtn, menuWrap);
       card.append(actionRow);
 
       grid.append(card);

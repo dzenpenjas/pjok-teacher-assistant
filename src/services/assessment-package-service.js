@@ -3,6 +3,8 @@
  * Canonical schema, export mapping, validation, fingerprinting, deduplication, and import planning.
  */
 
+import { createAssessmentDefinition, createAssessmentSession } from "../data/models.js";
+
 export const ASSESSMENT_PACKAGE_FORMAT = "pjok-assessment-package";
 export const ASSESSMENT_PACKAGE_FORMAT_VERSION = 1;
 
@@ -574,5 +576,267 @@ export function planAssessmentPackageImport(validatedPackage, existingDefinition
   return {
     summary,
     items
+  };
+}
+
+/**
+ * Builds a safe and readable file name for exporting an assessment package.
+ */
+export function generateSafeExportFilename(title = "Asesmen_PJOK") {
+  const sanitized = String(title || "Asesmen_PJOK")
+    .trim()
+    .replace(/[^a-zA-Z0-9_\-\.]+/g, "_")
+    .replace(/_{2,}/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return `${sanitized || "Asesmen_PJOK"}.json`;
+}
+
+/**
+ * Exports one canonical Assessment Package to a JSON file download in the browser.
+ * Only includes assessment instruments, omitting class/student/results/local database IDs.
+ */
+export function exportAssessmentSessionToJsonFile(assessmentSession, assessmentDefinition, options = {}) {
+  const canonicalAssessment = buildCanonicalAssessmentFromSession(assessmentSession, assessmentDefinition, options);
+  const canonicalPackage = createCanonicalAssessmentPackage({
+    sourceName: options.sourceName || "PJOK Assistant",
+    assessments: [canonicalAssessment]
+  });
+
+  const jsonStr = JSON.stringify(canonicalPackage, null, 2);
+  const rawTitle = canonicalAssessment.name || assessmentSession?.title || "Asesmen_PJOK";
+  const filename = generateSafeExportFilename(rawTitle);
+
+  if (typeof window !== "undefined" && typeof document !== "undefined" && typeof Blob !== "undefined") {
+    const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  return {
+    filename,
+    package: canonicalPackage,
+    jsonString: jsonStr
+  };
+}
+
+/**
+ * Converts a canonical assessment from an imported package into a new local AssessmentDefinition.
+ * Generates fresh local IDs and maps all fields + sourceMeta.
+ */
+export function createDefinitionFromCanonicalAssessment(canonicalAssessment, sourceName = "PJOK Package") {
+  const items = (Array.isArray(canonicalAssessment.items) ? canonicalAssessment.items : []).map((it, idx) => ({
+    prompt: it.prompt || "",
+    rubricScale: Number(it.rubricScale) || Number(canonicalAssessment.rubricScale) || 5,
+    rubricLevels: Array.isArray(it.rubricLevels)
+      ? it.rubricLevels.map((lvl) => ({
+          level: Number(lvl.level),
+          label: lvl.label || `Level ${lvl.level}`,
+          desc: lvl.desc || ""
+        }))
+      : []
+  }));
+
+  const questions = items.map((it) => it.prompt).filter(Boolean);
+  const fingerprint = calculateAssessmentFingerprint(canonicalAssessment);
+
+  return createAssessmentDefinition({
+    name: canonicalAssessment.name || "",
+    category: canonicalAssessment.category || "keterampilan",
+    purpose: canonicalAssessment.purpose || "formative",
+    assessmentType: canonicalAssessment.assessmentType || "practice",
+    method: canonicalAssessment.method || "rubric",
+    materials: Array.isArray(canonicalAssessment.materials) ? canonicalAssessment.materials : [],
+    instructions: canonicalAssessment.instructions || "",
+    description: canonicalAssessment.description || "",
+    rubricScale: Number(canonicalAssessment.rubricScale) || 5,
+    unit: canonicalAssessment.unit || "",
+    direction: canonicalAssessment.direction || "higher_better",
+    questions,
+    items,
+    sourceMeta: {
+      externalCode: canonicalAssessment.externalCode || `LOCAL-${fingerprint}`,
+      sourceName: normalizeString(sourceName),
+      sourceVersion: canonicalAssessment.sourceVersion || "1.0",
+      fingerprint,
+      importedAt: new Date().toISOString()
+    }
+  });
+}
+
+/**
+ * Creates a clean AssessmentSession snapshot for a target class from a definition and canonical assessment.
+ * Ensures 0 students are scored and no progress/grades are carried over.
+ */
+export function createSessionSnapshotForClass({ targetClassId, definition, canonicalAssessment }) {
+  const items = Array.isArray(definition.items) && definition.items.length > 0
+    ? definition.items
+    : (Array.isArray(canonicalAssessment?.items) ? canonicalAssessment.items : []);
+
+  const itemsSnapshot = items.map((it) => ({
+    id: it.id || "",
+    prompt: it.prompt || "",
+    rubricScale: Number(it.rubricScale) || Number(definition.rubricScale) || 5,
+    rubricLevels: Array.isArray(it.rubricLevels)
+      ? it.rubricLevels.map((lvl) => ({
+          level: Number(lvl.level),
+          label: lvl.label || `Level ${lvl.level}`,
+          desc: lvl.desc || ""
+        }))
+      : []
+  }));
+
+  const rubricSnapshot = {
+    scale: Number(definition.rubricScale) || 5,
+    levels: Array.isArray(definition.rubricLevels) && definition.rubricLevels.length > 0
+      ? definition.rubricLevels.map((lvl) => ({
+          level: Number(lvl.level),
+          label: lvl.label || `Level ${lvl.level}`,
+          desc: lvl.desc || ""
+        }))
+      : []
+  };
+
+  const questions = Array.isArray(definition.questions) && definition.questions.length > 0
+    ? definition.questions
+    : items.map((it) => it.prompt).filter(Boolean);
+
+  return createAssessmentSession({
+    classId: targetClassId,
+    definitionId: definition.id,
+    title: canonicalAssessment?.name || definition.name || "",
+    purpose: canonicalAssessment?.purpose || definition.purpose || "formative",
+    materials: Array.isArray(canonicalAssessment?.materials) && canonicalAssessment.materials.length > 0
+      ? canonicalAssessment.materials
+      : (Array.isArray(definition.materials) ? definition.materials : []),
+    instructions: canonicalAssessment?.instructions || definition.instructions || "",
+    questions,
+    itemsSnapshot,
+    rubricSnapshot
+  });
+}
+
+/**
+ * Executes batch assessment package import logic.
+ * Validates before any mutation and produces the list of new definitions and sessions to persist.
+ * Pure function: performs NO database writes.
+ */
+export function executeAssessmentPackageImport({
+  packageData,
+  targetClassId,
+  existingDefinitions = [],
+  existingSessions = []
+}) {
+  const validation = validateAssessmentPackage(packageData);
+  if (!validation.valid) {
+    return {
+      success: false,
+      validation,
+      newDefinitions: [],
+      newSessions: [],
+      results: [],
+      importedCount: 0
+    };
+  }
+
+  const plan = planAssessmentPackageImport(packageData, existingDefinitions);
+  const sourceName = packageData?.source?.name || "PJOK Package";
+
+  const newDefinitions = [];
+  const newSessions = [];
+  const results = [];
+
+  plan.items.forEach((item) => {
+    const canonical = item.assessment;
+
+    if (item.classification === DEDUPE_STATUS.CONFLICT) {
+      results.push({
+        index: item.index,
+        assessment: canonical,
+        classification: DEDUPE_STATUS.CONFLICT,
+        action: IMPORT_ACTION.CONFLICT,
+        status: "conflict",
+        reason: "Versi yang sama sudah tersedia, tetapi isi berbeda. Import dibatalkan untuk asesmen ini."
+      });
+      return;
+    }
+
+    if (item.classification === DEDUPE_STATUS.NEW || item.classification === DEDUPE_STATUS.NEW_VERSION) {
+      const newDef = createDefinitionFromCanonicalAssessment(canonical, sourceName);
+      newDefinitions.push(newDef);
+
+      const newSess = createSessionSnapshotForClass({
+        targetClassId,
+        definition: newDef,
+        canonicalAssessment: canonical
+      });
+      newSessions.push(newSess);
+
+      results.push({
+        index: item.index,
+        assessment: canonical,
+        classification: item.classification,
+        action: item.classification === DEDUPE_STATUS.NEW ? IMPORT_ACTION.CREATE : IMPORT_ACTION.NEW_VERSION,
+        status: "imported",
+        definitionId: newDef.id,
+        sessionId: newSess.id,
+        reason: item.classification === DEDUPE_STATUS.NEW ? "Asesmen baru berhasil dibuat." : "Versi baru asesmen berhasil dibuat."
+      });
+      return;
+    }
+
+    if (item.classification === DEDUPE_STATUS.EXACT_MATCH) {
+      const reusedDef = item.existingDefinition;
+
+      // Check if target class already has an AssessmentSession for this definitionId
+      const alreadyInClass = [...existingSessions, ...newSessions].some(
+        (s) => s.classId === targetClassId && s.definitionId === reusedDef?.id
+      );
+
+      if (alreadyInClass) {
+        results.push({
+          index: item.index,
+          assessment: canonical,
+          classification: DEDUPE_STATUS.EXACT_MATCH,
+          action: IMPORT_ACTION.REUSE,
+          status: "skipped_duplicate",
+          definitionId: reusedDef?.id,
+          reason: "Asesmen sudah aktif di kelas ini (dilewati untuk mencegah duplikasi)."
+        });
+      } else {
+        const newSess = createSessionSnapshotForClass({
+          targetClassId,
+          definition: reusedDef,
+          canonicalAssessment: canonical
+        });
+        newSessions.push(newSess);
+
+        results.push({
+          index: item.index,
+          assessment: canonical,
+          classification: DEDUPE_STATUS.EXACT_MATCH,
+          action: IMPORT_ACTION.REUSE,
+          status: "imported",
+          definitionId: reusedDef?.id,
+          sessionId: newSess.id,
+          reason: "Definisi asesmen digunakan kembali dan sesi baru ditambahkan ke kelas."
+        });
+      }
+    }
+  });
+
+  return {
+    success: true,
+    validation,
+    plan,
+    newDefinitions,
+    newSessions,
+    results,
+    importedCount: newSessions.length
   };
 }
