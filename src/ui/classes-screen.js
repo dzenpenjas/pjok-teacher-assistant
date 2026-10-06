@@ -1430,11 +1430,6 @@ export function renderClassesScreen(state, actions) {
                 actions.requestAppRender();
               }
 
-              if (!classUi.reportDrafts) classUi.reportDrafts = {};
-              classUi.reportDrafts[student.id] = draft;
-              if (!classUi.reportContexts) classUi.reportContexts = {};
-              classUi.reportContexts[student.id] = reportContext;
-
               const key = getPendingKey(student.id, classRoom.id, state.activeAcademicYearId, state.activeSemesterId);
               pendingReports.set(key, { draft, reportContext });
 
@@ -1709,8 +1704,6 @@ export function renderClassesScreen(state, actions) {
           reportStatusPill = createElement("span", "results-stat-pill bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold", "Draf Belum Tersimpan");
         } else if (studentSavedReport) {
           reportStatusPill = createElement("span", "results-stat-pill bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold", "✨ Laporan AI Tersimpan");
-        } else if (classUi.reportDrafts?.[student.id]) {
-          reportStatusPill = createElement("span", "results-stat-pill bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold", "Draf Belum Tersimpan");
         }
 
         if (reportStatusPill) {
@@ -1805,11 +1798,11 @@ export function renderClassesScreen(state, actions) {
 
     let activeReportContext = pendingReport 
       ? pendingReport.reportContext 
-      : (savedReport ? savedReport.reportContext : (classUi.reportContexts?.[student.id] || null));
+      : (savedReport ? savedReport.reportContext : null);
 
     let reportAiDraft = pendingReport 
       ? pendingReport.draft 
-      : (savedReport ? savedReport.draft : (classUi.reportDrafts?.[student.id] || null));
+      : (savedReport ? savedReport.draft : null);
 
     let isAiDraftLoading = false;
 
@@ -3173,10 +3166,6 @@ export function renderClassesScreen(state, actions) {
         });
         reportAiDraft = draft;
         activeReportContext = reportContext;
-        if (!classUi.reportDrafts) classUi.reportDrafts = {};
-        classUi.reportDrafts[student.id] = draft;
-        if (!classUi.reportContexts) classUi.reportContexts = {};
-        classUi.reportContexts[student.id] = reportContext;
 
         const key = getPendingKey(student.id, classRoom.id, state.activeAcademicYearId || null, state.activeSemesterId || null);
         pendingReports.set(key, { draft, reportContext });
