@@ -1820,8 +1820,8 @@ export function renderClassesScreen(state, actions) {
       return false;
     });
 
-    async function handleSaveReport(saveBtn, isManual = false) {
-      if (!actions?.saveStudentReport) return;
+    async function persistCurrentDraft({ manual = false } = {}, saveBtn = null) {
+      if (!actions?.saveStudentReport) return { success: false };
       
       const contextToSave = activeReportContext;
       const draftToSave = deepClone(reportAiDraft);
@@ -1856,85 +1856,26 @@ export function renderClassesScreen(state, actions) {
             reportAiDraft = deepClone(res.report.draft);
             activeReportContext = deepClone(res.report.reportContext);
           }
-          if (isManual) showToast("Laporan berhasil disimpan");
+          if (manual) showToast("Laporan berhasil disimpan");
+          return res;
         } else {
           showToast("Belum tersimpan — gagal menyimpan");
+          return { success: false, error: res?.error };
         }
       } catch (err) {
         console.error("Error saving report:", err);
         showToast("Belum tersimpan — gagal menyimpan");
+        return { success: false, error: err };
       } finally {
         if (saveBtn) {
           saveBtn.disabled = false;
           saveBtn.textContent = originalText;
         }
-        if (actions?.requestAppRender) {
-          actions.requestAppRender();
-        }
       }
     }
 
-    let isSaving = false;
-    async function handleSaveReport(saveBtn1, saveBtn2) {
-      if (isSaving) return;
-      isSaving = true;
-
-      const originalText = "💾 Simpan Laporan";
-      if (saveBtn1) {
-        saveBtn1.disabled = true;
-        saveBtn1.textContent = "⏳ Menyimpan...";
-      }
-      if (saveBtn2) {
-        saveBtn2.disabled = true;
-        saveBtn2.textContent = "⏳ Menyimpan...";
-      }
-
-      const inputs = aiDraftContainer.querySelectorAll("textarea");
-      inputs.forEach((input) => {
-        input.disabled = true;
-      });
-
-      try {
-        const contextToSave = activeReportContext || savedReport?.reportContext;
-        const result = await actions.saveStudentReport({
-          id: savedReport?.id,
-          studentId: student.id,
-          classId: classId,
-          academicYearId: activeAcademicYearId,
-          semesterId: activeSemesterId,
-          reportContext: contextToSave,
-          draft: reportAiDraft
-        });
-
-        if (result && result.success) {
-          const key = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
-          pendingReports.delete(key);
-          showToast("Laporan berhasil disimpan");
-        } else {
-          console.error("[MANUAL SAVE REPORT FAILED]", result?.error);
-          window.alert("Gagal menyimpan laporan.");
-        }
-      } catch (e) {
-        console.error("Error saving student report:", e);
-        window.alert("Gagal menyimpan laporan.");
-      } finally {
-        isSaving = false;
-        if (saveBtn1) {
-          saveBtn1.disabled = false;
-          saveBtn1.textContent = originalText;
-        }
-        if (saveBtn2) {
-          saveBtn2.disabled = false;
-          saveBtn2.textContent = originalText;
-        }
-        inputs.forEach((input) => {
-          input.disabled = false;
-        });
-        if (actions?.requestAppRender) {
-          actions.requestAppRender();
-        }
-        render();
-      }
+    async function handleSaveReport(saveBtn) {
+      await persistCurrentDraft({ manual: true }, saveBtn);
     }
 
     // Build Data Sets
@@ -2870,7 +2811,7 @@ export function renderClassesScreen(state, actions) {
       homeTextarea.placeholder = "Rekomendasi aktivitas gerak di rumah...";
       homeTextarea.addEventListener("input", (e) => {
         reportAiDraft.homeActivity = e.target.value;
-        handleSaveReport();
+        persistCurrentDraft();
       });
       homeBox.append(homeLabel, homeTextarea);
       sectionsList.append(homeBox);
@@ -2886,7 +2827,7 @@ export function renderClassesScreen(state, actions) {
         nutritionTextarea.placeholder = "Saran makanan sehat dan kebiasaan gizi...";
         nutritionTextarea.addEventListener("input", (e) => {
           reportAiDraft.nutritionAdvice = e.target.value;
-          handleSaveReport();
+          persistCurrentDraft();
         });
         nutritionBox.append(nutritionLabel, nutritionTextarea);
         sectionsList.append(nutritionBox);
@@ -2903,7 +2844,7 @@ export function renderClassesScreen(state, actions) {
         followUpTextarea.placeholder = "Rencana tindak lanjut bimbingan guru...";
         followUpTextarea.addEventListener("input", (e) => {
           reportAiDraft.followUp = e.target.value;
-          handleSaveReport();
+          persistCurrentDraft();
         });
         followUpBox.append(followUpLabel, followUpTextarea);
         sectionsList.append(followUpBox);
