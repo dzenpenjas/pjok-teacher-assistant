@@ -103,8 +103,10 @@ export function calculateHeightForAge({ sex, ageMonths, heightCm }) {
   }
 
   const zScore = computeZScore(heightCm, lms);
-  const pct = Math.round(normalCdf(zScore) * 1000) / 10;
-  const percentile = Math.min(99.9, Math.max(0.1, pct));
+  let percentile = null;
+  if (zScore >= -3 && zScore <= 3) {
+    percentile = Math.round(normalCdf(zScore) * 1000) / 10;
+  }
 
   return {
     applicable: true,
@@ -147,8 +149,10 @@ export function calculateBmiForAge({ sex, ageMonths, bmi }) {
   }
 
   const zScore = computeZScore(bmi, lms);
-  const pct = Math.round(normalCdf(zScore) * 1000) / 10;
-  const percentile = Math.min(99.9, Math.max(0.1, pct));
+  let percentile = null;
+  if (zScore >= -3 && zScore <= 3) {
+    percentile = Math.round(normalCdf(zScore) * 1000) / 10;
+  }
 
   return {
     applicable: true,
@@ -191,8 +195,10 @@ export function calculateWeightForAge({ sex, ageMonths, weightKg }) {
   }
 
   const zScore = computeZScore(weightKg, lms);
-  const pct = Math.round(normalCdf(zScore) * 1000) / 10;
-  const percentile = Math.min(99.9, Math.max(0.1, pct));
+  let percentile = null;
+  if (zScore >= -3 && zScore <= 3) {
+    percentile = Math.round(normalCdf(zScore) * 1000) / 10;
+  }
 
   return {
     applicable: true,
@@ -246,7 +252,25 @@ export const VERIFICATION_FIXTURES = [
     expectedZScore: 0.0,
     expectedPercentile: 50.0
   },
-  // 5. WFA: GIRLS month = 120 (upper age boundary for WFA), weight = 31.8578 (Z ~ 0)
+  // 5. BFA: GIRLS month = 120, BMI = 16.6133 (Z ~ 0)
+  {
+    sex: "female",
+    ageMonths: 120,
+    indicator: "BMI-for-age",
+    value: 16.6133,
+    expectedZScore: 0.0,
+    expectedPercentile: 50.0
+  },
+  // 6. WFA: BOYS month = 120, weight = 31.1586 (Z ~ 0)
+  {
+    sex: "male",
+    ageMonths: 120,
+    indicator: "weight-for-age",
+    value: 31.1586,
+    expectedZScore: 0.0,
+    expectedPercentile: 50.0
+  },
+  // 7. WFA: GIRLS month = 120 (upper age boundary for WFA), weight = 31.8578 (Z ~ 0)
   {
     sex: "female",
     ageMonths: 120,
@@ -255,7 +279,7 @@ export const VERIFICATION_FIXTURES = [
     expectedZScore: 0.0,
     expectedPercentile: 50.0
   },
-  // 6. Out of range: HFA month = 60
+  // 8. Out of range: HFA month = 60
   {
     sex: "male",
     ageMonths: 60,
@@ -264,7 +288,7 @@ export const VERIFICATION_FIXTURES = [
     expectedApplicable: false,
     expectedReason: "AGE_OUT_OF_RANGE"
   },
-  // 7. Out of range: HFA month = 229
+  // 9. Out of range: HFA month = 229
   {
     sex: "male",
     ageMonths: 229,
@@ -273,7 +297,7 @@ export const VERIFICATION_FIXTURES = [
     expectedApplicable: false,
     expectedReason: "AGE_OUT_OF_RANGE"
   },
-  // 8. Out of range: WFA month = 121
+  // 10. Out of range: WFA month = 121
   {
     sex: "male",
     ageMonths: 121,
@@ -282,7 +306,7 @@ export const VERIFICATION_FIXTURES = [
     expectedApplicable: false,
     expectedReason: "AGE_OUT_OF_RANGE"
   },
-  // 9. Sex invalid behavior
+  // 11. Sex invalid behavior
   {
     sex: "invalid",
     ageMonths: 88,
@@ -290,6 +314,24 @@ export const VERIFICATION_FIXTURES = [
     value: 120.0,
     expectedApplicable: false,
     expectedReason: "SEX_REQUIRED"
+  },
+  // 12. Extreme value Z > 3 (Percentile must be null)
+  {
+    sex: "female",
+    ageMonths: 88,
+    indicator: "height-for-age",
+    value: 180.0,
+    expectedZScore: null,
+    expectedPercentile: null
+  },
+  // 13. Extreme value Z < -3 (Percentile must be null)
+  {
+    sex: "female",
+    ageMonths: 88,
+    indicator: "height-for-age",
+    value: 80.0,
+    expectedZScore: null,
+    expectedPercentile: null
   }
 ];
 
@@ -325,9 +367,14 @@ export function verifyFixtures() {
     if (fixture.expectedApplicable === false) {
       passed = result.applicable === false && result.reason === fixture.expectedReason;
     } else {
-      passed = result.applicable === true &&
-               Math.abs(result.zScore - fixture.expectedZScore) < 0.1 &&
-               Math.abs(result.percentile - fixture.expectedPercentile) < 2.0;
+      const zPassed = fixture.expectedZScore === null || Math.abs(result.zScore - fixture.expectedZScore) < 0.1;
+      let pctPassed = false;
+      if (fixture.expectedPercentile === null) {
+        pctPassed = result.percentile === null;
+      } else {
+        pctPassed = result.percentile !== null && Math.abs(result.percentile - fixture.expectedPercentile) < 2.0;
+      }
+      passed = result.applicable === true && zPassed && pctPassed;
     }
 
     results.push({
@@ -340,11 +387,4 @@ export function verifyFixtures() {
   const allPassed = results.every(r => r.passed);
   console.log(`[WHO 2007 Fixture Verification] ${allPassed ? "PASSED" : "FAILED"}: ${results.filter(r => r.passed).length}/${results.length} fixtures passed.`);
   return { allPassed, results };
-}
-
-// Automatically trigger self-test on load in console for transparency
-try {
-  verifyFixtures();
-} catch (e) {
-  console.error("Failed to run WHO growth reference fixtures", e);
 }
