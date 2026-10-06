@@ -29,6 +29,33 @@ import {
   formatClassName
 } from "./final-report-page-builder.js";
 
+const pendingReports = new Map();
+
+function getPendingKey(studentId, classId, academicYearId, semesterId) {
+  return `${studentId}_${classId}_${academicYearId || "null"}_${semesterId || "null"}`;
+}
+
+function isDraftUnsaved(currentDraft, savedDraft) {
+  if (!currentDraft) return false;
+  if (!savedDraft) return true;
+  const fields = ['summary', 'understanding', 'attitude', 'growth', 'homeActivity', 'nutritionAdvice', 'followUp'];
+  for (const f of fields) {
+    if ((currentDraft[f] || "").trim() !== (savedDraft[f] || "").trim()) {
+      return true;
+    }
+  }
+  const currentLearning = currentDraft.learning || [];
+  const savedLearning = savedDraft.learning || [];
+  if (currentLearning.length !== savedLearning.length) return true;
+  for (let i = 0; i < currentLearning.length; i++) {
+    if (currentLearning[i].assessmentSessionId !== savedLearning[i].assessmentSessionId) return true;
+    if ((currentLearning[i].description || "").trim() !== (savedLearning[i].description || "").trim()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 let isClassHistoryListening = false;
 let currentClassUi = null;
 let currentRenderCallback = null;
@@ -50,6 +77,14 @@ function pushClassHistory(mode, classId, extra = {}) {
 function initClassHistoryListener() {
   if (isClassHistoryListening || typeof window === "undefined") return;
   isClassHistoryListening = true;
+
+  window.addEventListener("beforeunload", (e) => {
+    if (isFormDirty()) {
+      e.preventDefault();
+      e.returnValue = "Ada perubahan yang belum disimpan.";
+      return "Ada perubahan yang belum disimpan.";
+    }
+  });
 
   window.addEventListener("popstate", () => {
     if (currentAppScreen && currentAppScreen !== "classes") {
@@ -182,6 +217,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function openClassDetail(classId) {
+    if (!confirmIfDirty()) return;
     classUi.selectedClassId = classId;
     classUi.mode = "detail";
     pushClassHistory("detail", classId);
@@ -189,6 +225,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function openGrowthScreening(classId) {
+    if (!confirmIfDirty()) return;
     classUi.selectedClassId = classId;
     classUi.mode = "growth";
     pushClassHistory("growth", classId);
@@ -196,6 +233,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function openCreateAssessment(classId) {
+    if (!confirmIfDirty()) return;
     classUi.selectedClassId = classId;
     classUi.mode = "create-assessment";
     pushClassHistory("create-assessment", classId);
@@ -203,6 +241,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function openScoring(classId, sessionId) {
+    if (!confirmIfDirty()) return;
     classUi.selectedClassId = classId;
     classUi.activeAssessmentSessionId = sessionId;
     classUi.activeAssessmentStudentIndex = 0;
@@ -213,6 +252,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function openStudentReport(classId, studentId) {
+    if (!confirmIfDirty()) return;
     if (classUi.reportStudentId !== studentId) {
       classUi.reportSelection = {
         assessmentSessionIds: [],
@@ -228,6 +268,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function navigateBackToClassList() {
+    if (!confirmIfDirty()) return;
     if (typeof window !== "undefined" && window.history.state?.pjokClass) {
       window.history.back();
     } else {
@@ -271,6 +312,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function navigateBackFromStudentReport() {
+    if (!confirmIfDirty()) return;
     if (typeof window !== "undefined" && window.history.state?.pjokClass) {
       window.history.back();
     } else {
@@ -870,7 +912,7 @@ export function renderClassesScreen(state, actions) {
     }
 
     runBatchBtn.addEventListener("click", () => {
-      runBatchReportGeneration(students);
+      runBatchReportGeneration(students, false);
     });
 
     batchActionRow.append(runBatchBtn);
@@ -880,7 +922,7 @@ export function renderClassesScreen(state, actions) {
       retryBtn.type = "button";
       retryBtn.addEventListener("click", () => {
         const failedStudents = students.filter((s) => classUi.batchState.failedStudentIds.includes(s.id));
-        runBatchReportGeneration(failedStudents);
+        runBatchReportGeneration(failedStudents, true);
       });
       batchActionRow.append(retryBtn);
     }
@@ -890,20 +932,35 @@ export function renderClassesScreen(state, actions) {
 
     const readyStudentsWithReports = students
       .map((student) => {
-        const savedReport = (state.studentReports || []).find(
-          (r) =>
-            r &&
-            r.studentId === student.id &&
-            r.classId === classRoom.id &&
-            (r.academicYearId || null) === activeAcademicYearId &&
-            (r.semesterId || null) === activeSemesterId &&
-            r.draft &&
-            typeof r.draft === "object" &&
-            r.reportContext &&
-            typeof r.reportContext === "object"
-        );
-        if (!savedReport) return null;
-        return { student, savedReport };
+        const pendingKey = getPendingKey(student.id, classRoom.id, activeAcademicYearId, activeSemesterId);
+        const pending = pendingReports.get(pendingKey);
+        
+        let reportToUse = null;
+        if (pending && pending.draft && pending.reportContext) {
+          reportToUse = {
+            draft: pending.draft,
+            reportContext: pending.reportContext
+          };
+        } else {
+          const savedReport = (state.studentReports || []).find(
+            (r) =>
+              r &&
+              r.studentId === student.id &&
+              r.classId === classRoom.id &&
+              (r.academicYearId || null) === activeAcademicYearId &&
+              (r.semesterId || null) === activeSemesterId &&
+              r.draft &&
+              typeof r.draft === "object" &&
+              r.reportContext &&
+              typeof r.reportContext === "object"
+          );
+          if (savedReport) {
+            reportToUse = savedReport;
+          }
+        }
+        
+        if (!reportToUse) return null;
+        return { student, savedReport: reportToUse };
       })
       .filter(Boolean);
 
@@ -1109,7 +1166,7 @@ export function renderClassesScreen(state, actions) {
 
     container.append(batchPanel);
 
-    async function runBatchReportGeneration(targetStudents) {
+    async function runBatchReportGeneration(targetStudents, isRetry = false) {
       let apiKey = "";
       try {
         apiKey = (window.sessionStorage.getItem("pjok_gemini_api_key") || "").trim();
@@ -1122,23 +1179,32 @@ export function renderClassesScreen(state, actions) {
 
       if (classUi.batchState.isBatchGenerating) return;
 
-      let frozenScoringConfig = { enabled: false };
-      if (classUi.batchScoringConfig && classUi.batchScoringConfig.enabled) {
-        const minStr = String(classUi.batchScoringConfig.minScore ?? "").trim();
-        const maxStr = String(classUi.batchScoringConfig.maxScore ?? "").trim();
-        if (!minStr || !maxStr) {
-          window.alert("Rentang konversi tidak boleh kosong. Masukkan nilai minimum dan maksimum.");
+      let frozenScoringConfig;
+      if (isRetry) {
+        if (classUi.batchState.classId !== classRoom.id || !classUi.batchState.frozenScoringConfig) {
+          window.alert("Snapshot batch awal tidak tersedia atau milik kelas lain. Tidak dapat melakukan retry.");
           return;
         }
-        const minNum = Number(minStr);
-        const maxNum = Number(maxStr);
-        if (!Number.isFinite(minNum) || !Number.isFinite(maxNum) || minNum < 0 || maxNum > 100 || minNum >= maxNum) {
-          window.alert("Rentang konversi tidak valid (0 ≤ minimum < maksimum ≤ 100).");
-          return;
+        frozenScoringConfig = classUi.batchState.frozenScoringConfig;
+      } else {
+        frozenScoringConfig = { enabled: false };
+        if (classUi.batchScoringConfig && classUi.batchScoringConfig.enabled) {
+          const minStr = String(classUi.batchScoringConfig.minScore ?? "").trim();
+          const maxStr = String(classUi.batchScoringConfig.maxScore ?? "").trim();
+          if (!minStr || !maxStr) {
+            window.alert("Rentang konversi tidak boleh kosong. Masukkan nilai minimum dan maksimum.");
+            return;
+          }
+          const minNum = Number(minStr);
+          const maxNum = Number(maxStr);
+          if (!Number.isFinite(minNum) || !Number.isFinite(maxNum) || minNum < 0 || maxNum > 100 || minNum >= maxNum) {
+            window.alert("Rentang konversi tidak valid (0 ≤ minimum < maksimum ≤ 100).");
+            return;
+          }
+          frozenScoringConfig = { enabled: true, minScore: minNum, maxScore: maxNum };
         }
-        frozenScoringConfig = { enabled: true, minScore: minNum, maxScore: maxNum };
+        classUi.batchState.frozenScoringConfig = frozenScoringConfig;
       }
-      classUi.batchState.frozenScoringConfig = frozenScoringConfig;
 
       const runId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const startedAt = new Date().toISOString();
@@ -1312,6 +1378,9 @@ export function renderClassesScreen(state, actions) {
               if (!classUi.reportContexts) classUi.reportContexts = {};
               classUi.reportContexts[student.id] = reportContext;
 
+              const key = getPendingKey(student.id, classRoom.id, state.activeAcademicYearId, state.activeSemesterId);
+              pendingReports.set(key, { draft, reportContext });
+
               let saveResult = { success: false, error: new Error("saveStudentReport is not defined") };
               if (actions?.saveStudentReport) {
                 saveResult = actions.saveStudentReport({
@@ -1325,6 +1394,7 @@ export function renderClassesScreen(state, actions) {
               }
 
               if (saveResult && saveResult.success) {
+                pendingReports.delete(key);
                 classUi.batchState.successCount++;
                 classUi.batchState.studentStatuses[student.id] = "Berhasil";
                 updateDiag(BATCH_STAGES.STUDENT_DONE);
@@ -1554,6 +1624,10 @@ export function renderClassesScreen(state, actions) {
 
         const activeAcademicYearId = state.activeAcademicYearId || null;
         const activeSemesterId = state.activeSemesterId || null;
+        
+        const pendingKey = getPendingKey(student.id, classRoom.id, activeAcademicYearId, activeSemesterId);
+        const pendingReport = pendingReports.get(pendingKey);
+
         const studentSavedReport = (state.studentReports || []).find(
           (r) =>
             r &&
@@ -1574,6 +1648,8 @@ export function renderClassesScreen(state, actions) {
             `results-stat-pill ${isOk ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold" : isSkip ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold" : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 font-semibold"}`,
             st
           );
+        } else if (pendingReport) {
+          reportStatusPill = createElement("span", "results-stat-pill bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold", "Draf Belum Tersimpan");
         } else if (studentSavedReport) {
           reportStatusPill = createElement("span", "results-stat-pill bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold", "✨ Laporan AI Tersimpan");
         } else if (classUi.reportDrafts?.[student.id]) {
@@ -1665,24 +1741,126 @@ export function renderClassesScreen(state, actions) {
         (r.semesterId || null) === activeSemesterId
     );
 
-    let activeReportContext = savedReport ? savedReport.reportContext : (classUi.reportContexts?.[student.id] || null);
-    let reportAiDraft = savedReport ? savedReport.draft : (classUi.reportDrafts?.[student.id] || null);
+    const pendingKey = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
+    const pendingReport = pendingReports.get(pendingKey);
+
+    let activeReportContext = pendingReport 
+      ? pendingReport.reportContext 
+      : (savedReport ? savedReport.reportContext : (classUi.reportContexts?.[student.id] || null));
+
+    let reportAiDraft = pendingReport 
+      ? pendingReport.draft 
+      : (savedReport ? savedReport.draft : (classUi.reportDrafts?.[student.id] || null));
+
     let isAiDraftLoading = false;
+
+    registerDirtyGuard(() => {
+      const pKey = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
+      if (pendingReports.has(pKey)) {
+        return true;
+      }
+      if (reportAiDraft) {
+        const savedDraft = savedReport ? savedReport.draft : null;
+        if (isDraftUnsaved(reportAiDraft, savedDraft)) {
+          return true;
+        }
+      }
+      return false;
+    });
 
     function persistCurrentDraft() {
       if (actions?.saveStudentReport && reportAiDraft && (activeReportContext || savedReport?.reportContext)) {
+        const contextToSave = activeReportContext || savedReport?.reportContext;
+        const key = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
+        pendingReports.set(key, { draft: reportAiDraft, reportContext: contextToSave });
+
         const res = actions.saveStudentReport({
           id: savedReport?.id,
           studentId: student.id,
           classId: classId,
           academicYearId: activeAcademicYearId,
           semesterId: activeSemesterId,
-          reportContext: activeReportContext || savedReport?.reportContext,
+          reportContext: contextToSave,
           draft: reportAiDraft
         });
+
+        Promise.resolve(res).then((saveResult) => {
+          if (saveResult && saveResult.success) {
+            pendingReports.delete(key);
+            if (actions?.requestAppRender) {
+              actions.requestAppRender();
+            }
+          }
+        }).catch((err) => {
+          console.error("Error in persistCurrentDraft:", err);
+        });
+
         return res;
       }
       return { success: false };
+    }
+
+    let isSaving = false;
+    async function handleSaveReport(saveBtn1, saveBtn2) {
+      if (isSaving) return;
+      isSaving = true;
+
+      const originalText = "💾 Simpan Laporan";
+      if (saveBtn1) {
+        saveBtn1.disabled = true;
+        saveBtn1.textContent = "⏳ Menyimpan...";
+      }
+      if (saveBtn2) {
+        saveBtn2.disabled = true;
+        saveBtn2.textContent = "⏳ Menyimpan...";
+      }
+
+      const inputs = aiDraftContainer.querySelectorAll("textarea");
+      inputs.forEach((input) => {
+        input.disabled = true;
+      });
+
+      try {
+        const contextToSave = activeReportContext || savedReport?.reportContext;
+        const result = await actions.saveStudentReport({
+          id: savedReport?.id,
+          studentId: student.id,
+          classId: classId,
+          academicYearId: activeAcademicYearId,
+          semesterId: activeSemesterId,
+          reportContext: contextToSave,
+          draft: reportAiDraft
+        });
+
+        if (result && result.success) {
+          const key = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
+          pendingReports.delete(key);
+          showToast("Laporan berhasil disimpan");
+        } else {
+          console.error("[MANUAL SAVE REPORT FAILED]", result?.error);
+          window.alert("Gagal menyimpan laporan.");
+        }
+      } catch (e) {
+        console.error("Error saving student report:", e);
+        window.alert("Gagal menyimpan laporan.");
+      } finally {
+        isSaving = false;
+        if (saveBtn1) {
+          saveBtn1.disabled = false;
+          saveBtn1.textContent = originalText;
+        }
+        if (saveBtn2) {
+          saveBtn2.disabled = false;
+          saveBtn2.textContent = originalText;
+        }
+        inputs.forEach((input) => {
+          input.disabled = false;
+        });
+        if (actions?.requestAppRender) {
+          actions.requestAppRender();
+        }
+        render();
+      }
     }
 
     // Build Data Sets
@@ -2360,6 +2538,8 @@ export function renderClassesScreen(state, actions) {
 
       aiDraftContainer.style.display = "block";
 
+      let saveReportBtnFinal = null;
+
       // Header
       const draftHeader = createElement("div", "report-ai-draft-header flex items-center justify-between flex-wrap gap-2");
       const leftHeader = createElement("div");
@@ -2373,6 +2553,14 @@ export function renderClassesScreen(state, actions) {
         createElement("p", "text-subtle text-xs mt-0.5", "Hasil interpretasi data oleh AI. Guru dapat mengedit seluruh teks di bawah ini.")
       );
       draftHeader.append(leftHeader);
+
+      const saveReportBtn = createElement("button", "btn-tool btn-tool-primary text-xs font-bold flex items-center gap-1.5", "💾 Simpan Laporan");
+      saveReportBtn.type = "button";
+      saveReportBtn.addEventListener("click", () => {
+        handleSaveReport(saveReportBtn, saveReportBtnFinal);
+      });
+      draftHeader.append(saveReportBtn);
+
       aiDraftContainer.append(draftHeader);
 
       const sectionsList = createElement("div", "space-y-4");
@@ -2579,6 +2767,12 @@ export function renderClassesScreen(state, actions) {
       const finalActionPanel = createElement("div", "mt-6 pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl");
       const finalNote = createElement("p", "text-xs text-subtle flex-1", "💡 Setelah memeriksa dan mengedit narasi di atas, klik 'Lihat Laporan Akhir' untuk membuka pratinjau dokumen 1 lembar A4 dan mengunduh PDF.");
       
+      saveReportBtnFinal = createElement("button", "btn-tool btn-tool-primary flex items-center gap-2 text-sm font-bold", "💾 Simpan Laporan");
+      saveReportBtnFinal.type = "button";
+      saveReportBtnFinal.addEventListener("click", () => {
+        handleSaveReport(saveReportBtn, saveReportBtnFinal);
+      });
+
       const openFinalReportBtn = createElement("button", "primary-action flex items-center gap-2 text-sm font-bold");
       openFinalReportBtn.type = "button";
       openFinalReportBtn.append(ICONS.book(16), document.createTextNode("Lihat Laporan Akhir"));
@@ -2587,7 +2781,7 @@ export function renderClassesScreen(state, actions) {
         openFinalReportPreviewModal();
       });
 
-      finalActionPanel.append(finalNote, openFinalReportBtn);
+      finalActionPanel.append(finalNote, saveReportBtnFinal, openFinalReportBtn);
       sectionsList.append(finalActionPanel);
 
       aiDraftContainer.append(sectionsList);
@@ -2853,9 +3047,12 @@ export function renderClassesScreen(state, actions) {
         if (!classUi.reportContexts) classUi.reportContexts = {};
         classUi.reportContexts[student.id] = reportContext;
 
+        const key = getPendingKey(student.id, classRoom.id, state.activeAcademicYearId || null, state.activeSemesterId || null);
+        pendingReports.set(key, { draft, reportContext });
+
         let saveResult = { success: false, error: new Error("saveStudentReport is not defined") };
         if (actions?.saveStudentReport) {
-          saveResult = actions.saveStudentReport({
+          saveResult = await actions.saveStudentReport({
             studentId: student.id,
             classId: classRoom.id,
             academicYearId: state.activeAcademicYearId || null,
@@ -2864,7 +3061,9 @@ export function renderClassesScreen(state, actions) {
             draft
           });
         }
-        if (!saveResult?.success) {
+        if (saveResult && saveResult.success) {
+          pendingReports.delete(key);
+        } else {
           console.error("[SINGLE STUDENT REPORT SAVE FAILED]", saveResult?.error);
           window.alert("Draf AI berhasil dibuat tetapi gagal disimpan ke penyimpanan lokal. Draf masih tampil di layar.");
         }
