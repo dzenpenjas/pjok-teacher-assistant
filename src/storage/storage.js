@@ -308,21 +308,117 @@ export function saveState(state) {
   return nextState;
 }
 
+export function verifyPersistedIntegrity(candidate, readBack) {
+  if (!candidate || !readBack) {
+    return { valid: false, error: "Data kandidat atau data tersimpan kosong." };
+  }
+
+  if (candidate.schemaVersion !== readBack.schemaVersion) {
+    return {
+      valid: false,
+      error: `Versi skema tidak sesuai: kandidat ${candidate.schemaVersion}, tersimpan ${readBack.schemaVersion}`
+    };
+  }
+
+  const collectionsToCheck = Object.values(COLLECTIONS);
+  for (const col of collectionsToCheck) {
+    const candidateList = Array.isArray(candidate[col]) ? candidate[col] : [];
+    const readBackList = Array.isArray(readBack[col]) ? readBack[col] : [];
+    if (candidateList.length !== readBackList.length) {
+      return {
+        valid: false,
+        error: `Jumlah data pada koleksi ${col} tidak sesuai: kandidat ${candidateList.length}, tersimpan ${readBackList.length}`
+      };
+    }
+  }
+
+  const idChecks = [
+    { name: "students", list: candidate.students },
+    { name: "classes", list: candidate.classes },
+    { name: "assessmentResults", list: candidate.assessmentResults },
+    { name: "growthRecords", list: candidate.growthRecords },
+    { name: "attendanceRecords", list: candidate.attendanceRecords }
+  ];
+
+  for (const check of idChecks) {
+    const candidateList = Array.isArray(check.list) ? check.list : [];
+    const readBackList = Array.isArray(readBack[check.name]) ? readBack[check.name] : [];
+    const readBackIdSet = new Set(readBackList.map((item) => item.id).filter(Boolean));
+
+    for (const item of candidateList) {
+      if (item && item.id && !readBackIdSet.has(item.id)) {
+        return {
+          valid: false,
+          error: `ID entitas ${item.id} pada ${check.name} tidak ditemukan dalam data tersimpan.`
+        };
+      }
+    }
+  }
+
+  return { valid: true };
+}
+
 export function replaceState(state) {
-  const nextState = normalizeState(state);
+  let previousRaw = null;
+  try {
+    previousRaw = window.localStorage.getItem(STORAGE_KEY);
+  } catch (_) {}
+
+  let nextState;
+  try {
+    nextState = normalizeState(state);
+  } catch (normError) {
+    return {
+      success: false,
+      state: null,
+      error: normError
+    };
+  }
+
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+
+    // Read back after write
+    const rawReadBack = window.localStorage.getItem(STORAGE_KEY);
+    if (!rawReadBack) {
+      throw new Error("Penyimpanan lokal kosong setelah penulisan data.");
+    }
+
+    const parsedReadBack = JSON.parse(rawReadBack);
+    const normalizedReadBack = normalizeState(parsedReadBack);
+
+    const isVerified = verifyPersistedIntegrity(nextState, normalizedReadBack);
+    if (!isVerified.valid) {
+      throw new Error(isVerified.error || "Verifikasi integritas data tersimpan gagal.");
+    }
+
+    return {
+      success: true,
+      state: normalizedReadBack,
+      error: null
+    };
   } catch (error) {
+    // Attempt rollback to previous raw state if available
+    if (previousRaw !== null) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, previousRaw);
+      } catch (rollbackError) {
+        console.error("Gagal mengembalikan state penyimpanan lokal sebelumnya:", rollbackError);
+      }
+    }
+
     if (error.name === "QuotaExceededError" || error.code === 22) {
       console.error("Local Storage kuota hampir penuh saat memulihkan data.", error);
-      if (typeof window !== "undefined" && typeof window.alert === "function") {
-        window.alert("Peringatan: Penyimpanan lokal browser hampir penuh. Data tidak dapat disimpan sepenuhnya.");
-      }
     } else {
       console.error("Gagal memperbarui data ke Local Storage:", error);
     }
+
+    return {
+      success: false,
+      state: null,
+      error
+    };
   }
-  return nextState;
 }
 
 export function getStorageKey() {

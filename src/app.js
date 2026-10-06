@@ -749,12 +749,26 @@ function importData(fileOrText) {
         return;
       }
 
-      appState = importStateFromJson(text);
+      const result = importStateFromJson(text);
+      if (!result || !result.success) {
+        window.alert(
+          "Pemulihan data gagal.\n\n" +
+          "Data cadangan dapat dibaca, tetapi tidak berhasil disimpan ke perangkat.\n" +
+          "Kemungkinan penyimpanan browser penuh atau tidak tersedia."
+        );
+        return;
+      }
+
+      appState = result.state || loadState();
       refreshState();
       window.alert("Data cadangan berhasil dipulihkan.");
     })
     .catch((error) => {
-      window.alert("File backup tidak dapat diproses.");
+      window.alert(
+        "Pemulihan data gagal.\n\n" +
+        "Data cadangan dapat dibaca, tetapi tidak berhasil disimpan ke perangkat.\n" +
+        "Kemungkinan penyimpanan browser penuh atau tidak tersedia."
+      );
       console.warn("Import data gagal.", error);
     });
 }
