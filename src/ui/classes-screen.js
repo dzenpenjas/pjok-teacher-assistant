@@ -1796,13 +1796,13 @@ export function renderClassesScreen(state, actions) {
     const pendingKey = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
     const pendingReport = pendingReports.get(pendingKey);
 
-    let activeReportContext = pendingReport 
+    let activeReportContext = deepClone(pendingReport 
       ? pendingReport.reportContext 
-      : (savedReport ? savedReport.reportContext : null);
+      : (savedReport ? savedReport.reportContext : null));
 
-    let reportAiDraft = pendingReport 
+    let reportAiDraft = deepClone(pendingReport 
       ? pendingReport.draft 
-      : (savedReport ? savedReport.draft : null);
+      : (savedReport ? savedReport.draft : null));
 
     let isAiDraftLoading = false;
 
@@ -1820,36 +1820,58 @@ export function renderClassesScreen(state, actions) {
       return false;
     });
 
-    function persistCurrentDraft() {
-      if (actions?.saveStudentReport && reportAiDraft && (activeReportContext || savedReport?.reportContext)) {
-        const contextToSave = activeReportContext || savedReport?.reportContext;
-        const key = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
-        pendingReports.set(key, { draft: reportAiDraft, reportContext: contextToSave });
+    async function handleSaveReport(saveBtn, isManual = false) {
+      if (!actions?.saveStudentReport) return;
+      
+      const contextToSave = activeReportContext;
+      const draftToSave = deepClone(reportAiDraft);
+      const key = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
+      
+      pendingReports.set(key, { draft: draftToSave, reportContext: contextToSave });
+      
+      let originalText = "";
+      if (saveBtn) {
+        originalText = saveBtn.textContent;
+        saveBtn.disabled = true;
+        saveBtn.textContent = "⏳ Menyimpan...";
+      }
 
-        const res = actions.saveStudentReport({
+      try {
+        const res = await actions.saveStudentReport({
           id: savedReport?.id,
           studentId: student.id,
           classId: classId,
           academicYearId: activeAcademicYearId,
           semesterId: activeSemesterId,
           reportContext: contextToSave,
-          draft: reportAiDraft
+          draft: draftToSave
         });
 
-        Promise.resolve(res).then((saveResult) => {
-          if (saveResult && saveResult.success) {
+        if (res && res.success) {
+          if (pendingReports.get(key)?.draft === draftToSave) {
             pendingReports.delete(key);
-            if (actions?.requestAppRender) {
-              actions.requestAppRender();
-            }
           }
-        }).catch((err) => {
-          console.error("Error in persistCurrentDraft:", err);
-        });
-
-        return res;
+          if (res.report) {
+            // Update baseline
+            reportAiDraft = deepClone(res.report.draft);
+            activeReportContext = deepClone(res.report.reportContext);
+          }
+          if (isManual) showToast("Laporan berhasil disimpan");
+        } else {
+          showToast("Belum tersimpan — gagal menyimpan");
+        }
+      } catch (err) {
+        console.error("Error saving report:", err);
+        showToast("Belum tersimpan — gagal menyimpan");
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = originalText;
+        }
+        if (actions?.requestAppRender) {
+          actions.requestAppRender();
+        }
       }
-      return { success: false };
     }
 
     let isSaving = false;
@@ -2689,7 +2711,7 @@ export function renderClassesScreen(state, actions) {
       summaryTextarea.placeholder = "Tuliskan ringkasan perkembangan umum siswa...";
       summaryTextarea.addEventListener("input", (e) => {
         reportAiDraft.summary = e.target.value;
-        persistCurrentDraft();
+        handleSaveReport();
       });
       summaryBox.append(summaryLabel, summaryTextarea);
       sectionsList.append(summaryBox);
@@ -2777,7 +2799,7 @@ export function renderClassesScreen(state, actions) {
             descTextarea.placeholder = "Deskripsi capaian belajar siswa...";
             descTextarea.addEventListener("input", (e) => {
               item.description = e.target.value;
-              persistCurrentDraft();
+              handleSaveReport();
             });
 
             itemCard.append(itemHeader, descTextarea);
@@ -2798,7 +2820,7 @@ export function renderClassesScreen(state, actions) {
         understandTextarea.placeholder = "Deskripsi pemahaman konsep materi...";
         understandTextarea.addEventListener("input", (e) => {
           reportAiDraft.understanding = e.target.value;
-          persistCurrentDraft();
+          handleSaveReport();
         });
         understandBox.append(understandLabel, understandTextarea);
         sectionsList.append(understandBox);
@@ -2815,7 +2837,7 @@ export function renderClassesScreen(state, actions) {
         attitudeTextarea.placeholder = "Deskripsi sikap dan partisipasi siswa...";
         attitudeTextarea.addEventListener("input", (e) => {
           reportAiDraft.attitude = e.target.value;
-          persistCurrentDraft();
+          handleSaveReport();
         });
         attitudeBox.append(attitudeLabel, attitudeTextarea);
         sectionsList.append(attitudeBox);
@@ -2832,7 +2854,7 @@ export function renderClassesScreen(state, actions) {
         growthTextarea.placeholder = "Deskripsi pertumbuhan fisik siswa...";
         growthTextarea.addEventListener("input", (e) => {
           reportAiDraft.growth = e.target.value;
-          persistCurrentDraft();
+          handleSaveReport();
         });
         growthBox.append(growthLabel, growthTextarea);
         sectionsList.append(growthBox);
@@ -2848,7 +2870,7 @@ export function renderClassesScreen(state, actions) {
       homeTextarea.placeholder = "Rekomendasi aktivitas gerak di rumah...";
       homeTextarea.addEventListener("input", (e) => {
         reportAiDraft.homeActivity = e.target.value;
-        persistCurrentDraft();
+        handleSaveReport();
       });
       homeBox.append(homeLabel, homeTextarea);
       sectionsList.append(homeBox);
@@ -2864,7 +2886,7 @@ export function renderClassesScreen(state, actions) {
         nutritionTextarea.placeholder = "Saran makanan sehat dan kebiasaan gizi...";
         nutritionTextarea.addEventListener("input", (e) => {
           reportAiDraft.nutritionAdvice = e.target.value;
-          persistCurrentDraft();
+          handleSaveReport();
         });
         nutritionBox.append(nutritionLabel, nutritionTextarea);
         sectionsList.append(nutritionBox);
@@ -2881,7 +2903,7 @@ export function renderClassesScreen(state, actions) {
         followUpTextarea.placeholder = "Rencana tindak lanjut bimbingan guru...";
         followUpTextarea.addEventListener("input", (e) => {
           reportAiDraft.followUp = e.target.value;
-          persistCurrentDraft();
+          handleSaveReport();
         });
         followUpBox.append(followUpLabel, followUpTextarea);
         sectionsList.append(followUpBox);
