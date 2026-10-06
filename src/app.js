@@ -712,6 +712,38 @@ function createCrudActions() {
       refreshState();
     },
 
+    // STUDENT REPORTS PERSISTENCE
+    saveStudentReport: (report) => {
+      if (!report || !report.studentId || !report.classId) return null;
+      const existing = Array.isArray(appState.studentReports) ? [...appState.studentReports] : [];
+      const idx = existing.findIndex(
+        (r) => r.studentId === report.studentId && r.classId === report.classId
+      );
+      const now = new Date().toISOString();
+      const record = {
+        id: report.id || (idx >= 0 ? existing[idx].id : `report-${report.studentId}-${Date.now()}`),
+        studentId: report.studentId,
+        classId: report.classId,
+        reportContext: report.reportContext,
+        draft: report.draft,
+        academicYearId: report.academicYearId || appState.activeAcademicYearId || null,
+        semesterId: report.semesterId || appState.activeSemesterId || null,
+        generatedAt: report.generatedAt || (idx >= 0 ? existing[idx].generatedAt : now),
+        updatedAt: now
+      };
+      if (idx >= 0) {
+        existing[idx] = record;
+      } else {
+        existing.push(record);
+      }
+      appState = saveState({
+        ...appState,
+        studentReports: existing
+      });
+      refreshState();
+      return record;
+    },
+
     // TEACHING SESSION LIFECYCLE
     createSession: (input) => {
       const created = sessionManager.createSession(input);

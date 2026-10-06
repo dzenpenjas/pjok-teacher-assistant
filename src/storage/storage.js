@@ -213,6 +213,11 @@ function migrateState(rawState) {
     state.schemaVersion = 7;
   }
 
+  if (currentVersion < 8) {
+    state.studentReports = Array.isArray(state.studentReports) ? state.studentReports : [];
+    state.schemaVersion = 8;
+  }
+
   return state;
 }
 

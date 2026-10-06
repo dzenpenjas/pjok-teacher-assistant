@@ -54,7 +54,8 @@ export function inspectBackupJson(jsonText) {
     assessmentSessions: getArrayCount("assessmentSessions"),
     assessmentResults: getArrayCount("assessmentResults"),
     growthRecords: getArrayCount("growthRecords"),
-    studentObservations: getArrayCount("studentObservations")
+    studentObservations: getArrayCount("studentObservations"),
+    studentReports: getArrayCount("studentReports")
   };
 
   // Check for orphan references (report warnings only, do not delete)
@@ -67,7 +68,8 @@ export function inspectBackupJson(jsonText) {
     { key: "growthRecords", label: "Catatan Pertumbuhan (growthRecords)" },
     { key: "attendanceRecords", label: "Rekap Presensi (attendanceRecords)" },
     { key: "assessmentResults", label: "Hasil Asesmen (assessmentResults)" },
-    { key: "studentObservations", label: "Observasi Siswa (studentObservations)" }
+    { key: "studentObservations", label: "Observasi Siswa (studentObservations)" },
+    { key: "studentReports", label: "Laporan Siswa (studentReports)" }
   ];
 
   orphanChecks.forEach(({ key, label }) => {

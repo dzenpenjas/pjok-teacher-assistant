@@ -19,6 +19,15 @@ import {
   confirmIfDirty
 } from "./feedback.js";
 
+function formatClassName(name) {
+  if (!name) return "Kelas";
+  const str = String(name).trim();
+  if (str.toLowerCase().startsWith("kelas")) {
+    return str;
+  }
+  return `Kelas ${str}`;
+}
+
 let isClassHistoryListening = false;
 let currentClassUi = null;
 let currentRenderCallback = null;
@@ -933,6 +942,16 @@ export function renderClassesScreen(state, actions) {
           if (draft && typeof draft === "object") {
             if (!classUi.reportDrafts) classUi.reportDrafts = {};
             classUi.reportDrafts[student.id] = draft;
+
+            if (actions?.saveStudentReport) {
+              actions.saveStudentReport({
+                studentId: student.id,
+                classId: classRoom.id,
+                reportContext,
+                draft
+              });
+            }
+
             classUi.batchState.successCount++;
             classUi.batchState.studentStatuses[student.id] = "Berhasil";
           } else {
@@ -1158,8 +1177,26 @@ export function renderClassesScreen(state, actions) {
     const expandedAssessmentIds = new Set();
     let isPreviewOpen = false;
     let isRcJsonOpen = false;
-    let reportAiDraft = classUi.reportDrafts?.[student.id] || null;
+
+    const savedReport = (state.studentReports || []).find(
+      (r) => r.studentId === student.id && r.classId === classId
+    );
+
+    let activeReportContext = savedReport ? savedReport.reportContext : null;
+    let reportAiDraft = savedReport ? savedReport.draft : (classUi.reportDrafts?.[student.id] || null);
     let isAiDraftLoading = false;
+
+    function persistCurrentDraft() {
+      if (actions?.saveStudentReport && reportAiDraft && (activeReportContext || savedReport?.reportContext)) {
+        actions.saveStudentReport({
+          id: savedReport?.id,
+          studentId: student.id,
+          classId: classId,
+          reportContext: activeReportContext || savedReport.reportContext,
+          draft: reportAiDraft
+        });
+      }
+    }
 
     // Build Data Sets
     // 1. Assessments
@@ -1762,6 +1799,7 @@ export function renderClassesScreen(state, actions) {
       summaryTextarea.placeholder = "Tuliskan ringkasan perkembangan umum siswa...";
       summaryTextarea.addEventListener("input", (e) => {
         reportAiDraft.summary = e.target.value;
+        persistCurrentDraft();
       });
       summaryBox.append(summaryLabel, summaryTextarea);
       sectionsList.append(summaryBox);
@@ -1777,7 +1815,7 @@ export function renderClassesScreen(state, actions) {
         (classUi.reportSelection.observationIds || []).includes(o.id)
       );
 
-      const currentContext = buildSelectedReportContext({
+      const currentContext = activeReportContext || savedReport?.reportContext || buildSelectedReportContext({
         student,
         classRoom,
         assessmentSelections: currentSelectedAssessments,
@@ -1837,6 +1875,7 @@ export function renderClassesScreen(state, actions) {
             descTextarea.placeholder = "Deskripsi capaian belajar siswa...";
             descTextarea.addEventListener("input", (e) => {
               item.description = e.target.value;
+              persistCurrentDraft();
             });
 
             itemCard.append(itemHeader, descTextarea);
@@ -1857,6 +1896,7 @@ export function renderClassesScreen(state, actions) {
         understandTextarea.placeholder = "Deskripsi pemahaman konsep materi...";
         understandTextarea.addEventListener("input", (e) => {
           reportAiDraft.understanding = e.target.value;
+          persistCurrentDraft();
         });
         understandBox.append(understandLabel, understandTextarea);
         sectionsList.append(understandBox);
@@ -1873,6 +1913,7 @@ export function renderClassesScreen(state, actions) {
         attitudeTextarea.placeholder = "Deskripsi sikap dan partisipasi siswa...";
         attitudeTextarea.addEventListener("input", (e) => {
           reportAiDraft.attitude = e.target.value;
+          persistCurrentDraft();
         });
         attitudeBox.append(attitudeLabel, attitudeTextarea);
         sectionsList.append(attitudeBox);
@@ -1889,6 +1930,7 @@ export function renderClassesScreen(state, actions) {
         growthTextarea.placeholder = "Deskripsi pertumbuhan fisik siswa...";
         growthTextarea.addEventListener("input", (e) => {
           reportAiDraft.growth = e.target.value;
+          persistCurrentDraft();
         });
         growthBox.append(growthLabel, growthTextarea);
         sectionsList.append(growthBox);
@@ -1904,6 +1946,7 @@ export function renderClassesScreen(state, actions) {
       homeTextarea.placeholder = "Rekomendasi aktivitas gerak di rumah...";
       homeTextarea.addEventListener("input", (e) => {
         reportAiDraft.homeActivity = e.target.value;
+        persistCurrentDraft();
       });
       homeBox.append(homeLabel, homeTextarea);
       sectionsList.append(homeBox);
@@ -1919,6 +1962,7 @@ export function renderClassesScreen(state, actions) {
         nutritionTextarea.placeholder = "Saran makanan sehat dan kebiasaan gizi...";
         nutritionTextarea.addEventListener("input", (e) => {
           reportAiDraft.nutritionAdvice = e.target.value;
+          persistCurrentDraft();
         });
         nutritionBox.append(nutritionLabel, nutritionTextarea);
         sectionsList.append(nutritionBox);
@@ -1935,6 +1979,7 @@ export function renderClassesScreen(state, actions) {
         followUpTextarea.placeholder = "Rencana tindak lanjut bimbingan guru...";
         followUpTextarea.addEventListener("input", (e) => {
           reportAiDraft.followUp = e.target.value;
+          persistCurrentDraft();
         });
         followUpBox.append(followUpLabel, followUpTextarea);
         sectionsList.append(followUpBox);
@@ -1969,7 +2014,7 @@ export function renderClassesScreen(state, actions) {
         (classUi.reportSelection.observationIds || []).includes(o.id)
       );
 
-      const currentContext = buildSelectedReportContext({
+      const currentContext = activeReportContext || savedReport?.reportContext || buildSelectedReportContext({
         student,
         classRoom,
         assessmentSelections: currentSelectedAssessments,
@@ -2093,7 +2138,7 @@ export function renderClassesScreen(state, actions) {
       headerSection.append(
         createElement("p", "a4-doc-type", "Laporan Belajar dan Pertumbuhan"),
         createElement("h1", "a4-student-name", finalReportData.studentName),
-        createElement("p", "a4-meta-row", `Kelas ${finalReportData.className} • Usia ${finalReportData.studentAge} • ${finalReportData.genderText}`),
+        createElement("p", "a4-meta-row", `${formatClassName(finalReportData.className)} • Usia ${finalReportData.studentAge} • ${finalReportData.genderText}`),
         createElement("p", "a4-date-row", `Tanggal laporan: ${finalReportData.reportDate}`)
       );
       a4Paper.append(headerSection);
@@ -2444,8 +2489,18 @@ export function renderClassesScreen(state, actions) {
           reportContext
         });
         reportAiDraft = draft;
+        activeReportContext = reportContext;
         if (!classUi.reportDrafts) classUi.reportDrafts = {};
         classUi.reportDrafts[student.id] = draft;
+
+        if (actions?.saveStudentReport) {
+          actions.saveStudentReport({
+            studentId: student.id,
+            classId: classRoom.id,
+            reportContext,
+            draft
+          });
+        }
       } catch (err) {
         console.error("[AI REPORT GENERATION ERROR]", err);
         if (err?.isApiKeyError || (err?.message && (err.message.includes("API key") || err.message.includes("API_KEY")))) {
