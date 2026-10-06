@@ -24,15 +24,10 @@ import {
   getDiagnosticStageLabel,
   formatAiDiagnosticText
 } from "../services/ai-diagnostic-service.js";
-
-function formatClassName(name) {
-  if (!name) return "Kelas";
-  const str = String(name).trim();
-  if (str.toLowerCase().startsWith("kelas")) {
-    return str;
-  }
-  return `Kelas ${str}`;
-}
+import {
+  createFinalReportPage,
+  formatClassName
+} from "./final-report-page-builder.js";
 
 let isClassHistoryListening = false;
 let currentClassUi = null;
@@ -836,6 +831,155 @@ export function renderClassesScreen(state, actions) {
       });
       batchActionRow.append(retryBtn);
     }
+
+    const savedStudents = students.filter((student) => {
+      const savedReport = (state.studentReports || []).find(
+        (r) => r.studentId === student.id && r.classId === classRoom.id && r.draft
+      );
+      return Boolean(savedReport || classUi.reportDrafts?.[student.id]);
+    });
+
+    const downloadAllBtn = createElement(
+      "button",
+      "btn-tool btn-tool-primary text-xs flex items-center gap-1.5 font-bold",
+      `📥 Unduh Semua Laporan (${savedStudents.length}/${students.length})`
+    );
+    downloadAllBtn.type = "button";
+    downloadAllBtn.disabled = classUi.batchState.isBatchGenerating || savedStudents.length === 0;
+    if (downloadAllBtn.disabled) {
+      downloadAllBtn.classList.add("opacity-50", "cursor-not-allowed");
+    }
+
+    downloadAllBtn.addEventListener("click", async () => {
+      if (!window.html2pdf) {
+        window.alert("Mesin PDF belum tersedia. Muat ulang aplikasi lalu coba lagi.");
+        return;
+      }
+      if (savedStudents.length === 0) {
+        window.alert("Belum ada laporan yang disimpan untuk kelas ini.");
+        return;
+      }
+
+      const cleanClassName = (classRoom.name || "Kelas").replace(/[^a-zA-Z0-9]/g, "_");
+      const pdfFilename = `Laporan_PJOK_${cleanClassName}.pdf`;
+
+      downloadAllBtn.disabled = true;
+      downloadAllBtn.textContent = `⏳ Menyiapkan PDF (${savedStudents.length} siswa)...`;
+
+      const exportContainer = document.createElement("div");
+      exportContainer.className = "batch-pdf-export-container";
+      exportContainer.style.position = "fixed";
+      exportContainer.style.left = "-9999px";
+      exportContainer.style.top = "0";
+      exportContainer.style.width = "210mm";
+      exportContainer.style.background = "#ffffff";
+      document.body.appendChild(exportContainer);
+
+      try {
+        for (let i = 0; i < savedStudents.length; i++) {
+          const student = savedStudents[i];
+          const savedReport = (state.studentReports || []).find(
+            (r) => r.studentId === student.id && r.classId === classRoom.id && r.draft
+          );
+          const draft = savedReport?.draft || classUi.reportDrafts?.[student.id];
+          let reportContext = savedReport?.reportContext;
+
+          if (!reportContext) {
+            const studentAssessments = (state.assessmentResults || [])
+              .filter((r) => r.studentId === student.id)
+              .map((r) => {
+                const sess = (state.assessmentSessions || []).find((s) => s.id === r.assessmentSessionId);
+                return { result: r, assessmentSession: sess };
+              })
+              .filter((item) => item.assessmentSession && item.assessmentSession.classId === classRoom.id);
+
+            const studentGrowth = (state.growthRecords || [])
+              .filter((g) => g.studentId === student.id)
+              .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+            const studentObservations = (state.studentObservations || [])
+              .filter((o) => o.studentId === student.id)
+              .sort((a, b) => (b.recordedAt || "").localeCompare(a.recordedAt || ""));
+
+            const selAssessments = (classUi.batchReportSelection?.assessmentSessionIds?.length > 0)
+              ? studentAssessments.filter(({ assessmentSession: sess }) => classUi.batchReportSelection.assessmentSessionIds.includes(sess.id))
+              : studentAssessments;
+
+            const selGrowth = classUi.batchReportSelection?.includeGrowth ? studentGrowth : [];
+            const selObs = classUi.batchReportSelection?.includeObservations ? studentObservations : [];
+
+            reportContext = buildSelectedReportContext({
+              student,
+              classRoom,
+              assessmentSelections: selAssessments,
+              growthSelections: selGrowth,
+              observationSelections: selObs,
+              allGrowthRecords: state.growthRecords || []
+            });
+          }
+
+          const pageEl = createFinalReportPage({
+            student,
+            classRoom,
+            draft,
+            reportContext,
+            school: state.school || { name: state.schoolName, address: state.schoolAddress }
+          });
+
+          if (i > 0) {
+            pageEl.style.pageBreakBefore = "always";
+            pageEl.style.breakBefore = "page";
+          }
+          pageEl.style.pageBreakInside = "avoid";
+          pageEl.style.breakInside = "avoid";
+          pageEl.style.marginBottom = "0";
+
+          exportContainer.appendChild(pageEl);
+
+          if (pageEl.scrollHeight > pageEl.clientHeight) {
+            pageEl.classList.add("a4-compact");
+          }
+        }
+
+        const opt = {
+          margin: 0,
+          filename: pdfFilename,
+          image: {
+            type: "jpeg",
+            quality: 0.98
+          },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            backgroundColor: "#ffffff"
+          },
+          jsPDF: {
+            unit: "mm",
+            format: "a4",
+            orientation: "portrait"
+          },
+          pagebreak: {
+            mode: ["css", "legacy"]
+          }
+        };
+
+        downloadAllBtn.textContent = `⏳ Mengekspor PDF (${savedStudents.length} siswa)...`;
+        await window.html2pdf().set(opt).from(exportContainer).save();
+        showToast(`Berhasil mengunduh semua laporan kelas (${savedStudents.length} siswa)`);
+      } catch (pdfErr) {
+        console.error("[BATCH PDF GENERATION ERROR]", pdfErr);
+        window.alert("Terjadi kendala saat membuat PDF gabungan kelas: " + (pdfErr?.message || ""));
+      } finally {
+        if (exportContainer && exportContainer.parentNode) {
+          exportContainer.parentNode.removeChild(exportContainer);
+        }
+        downloadAllBtn.disabled = false;
+        downloadAllBtn.textContent = `📥 Unduh Semua Laporan (${savedStudents.length}/${students.length})`;
+      }
+    });
+
+    batchActionRow.append(downloadAllBtn);
 
     batchPanel.append(batchActionRow);
 
@@ -2272,76 +2416,14 @@ export function renderClassesScreen(state, actions) {
         allGrowthRecords: state.growthRecords || []
       });
 
-      const validLearningItems = (reportAiDraft?.learning || [])
-        .map((item) => {
-          const matchSource = (currentContext.assessments || []).find(
-            (a) => a.assessmentSessionId === item.assessmentSessionId
-          );
-          if (!matchSource) return null;
-          return {
-            assessmentSessionId: matchSource.assessmentSessionId,
-            title: matchSource.title,
-            numericScore: matchSource.numericScore,
-            description: item.description || ""
-          };
-        })
-        .filter(Boolean);
-
-      const scoresWithVal = (currentContext.assessments || [])
-        .map((a) => a.numericScore)
-        .filter((s) => s !== null && s !== undefined && !isNaN(Number(s)));
-
-      const overallScore =
-        scoresWithVal.length > 0
-          ? Math.round(scoresWithVal.reduce((acc, curr) => acc + curr, 0) / scoresWithVal.length)
-          : null;
-
-      const latestGrowthRecord = currentContext.growth?.[0] || null;
-
-      let studentAgeText = "-";
-      if (student.birthDate) {
-        const birthYear = new Date(student.birthDate).getFullYear();
-        const currentYear = new Date().getFullYear();
-        if (!isNaN(birthYear) && birthYear > 1990 && currentYear >= birthYear) {
-          studentAgeText = `${currentYear - birthYear} Tahun`;
-        }
-      }
-
-      const schoolName = state.school?.name || state.schoolName || "SD NEGERI PJOK";
-      const schoolAddress = state.school?.address ? state.school.address.trim() : "";
-      const formattedToday = new Date().toLocaleDateString("id-ID", {
-        day: "numeric",
-        month: "long",
-        year: "numeric"
+      const a4Paper = createFinalReportPage({
+        student,
+        classRoom,
+        draft: reportAiDraft,
+        reportContext: currentContext,
+        school: state.school || { name: state.schoolName, address: state.schoolAddress }
       });
-
-      const finalReportData = {
-        schoolName,
-        schoolAddress,
-        studentName: student.name,
-        studentNumber: student.studentNumber || "-",
-        className: classRoom.name,
-        studentAge: studentAgeText,
-        genderText: student.gender === "female" ? "Perempuan" : "Laki-laki",
-        reportDate: formattedToday,
-        overallScore,
-
-        learning: validLearningItems,
-        summary: reportAiDraft?.summary || "",
-        understanding: reportAiDraft?.understanding || "",
-        attitude: reportAiDraft?.attitude || "",
-
-        growth: {
-          date: latestGrowthRecord?.date || formattedToday,
-          heightCm: latestGrowthRecord?.heightCm || "-",
-          weightKg: latestGrowthRecord?.weightKg || "-",
-          interpretation: reportAiDraft?.growth || "",
-          nutritionAdvice: reportAiDraft?.nutritionAdvice || "",
-          followUp: reportAiDraft?.followUp || ""
-        },
-
-        homeActivity: reportAiDraft?.homeActivity || ""
-      };
+      a4Paper.id = "a4-report-preview-document";
 
       const modalBackdrop = createElement("div", "final-report-modal-backdrop");
       const modalCard = createElement("div", "final-report-modal-card");
@@ -2371,207 +2453,6 @@ export function renderClassesScreen(state, actions) {
       const previewViewport = createElement("div", "a4-preview-viewport");
       const previewScaler = createElement("div", "a4-preview-scaler");
       previewScaler.id = "a4-preview-scaler";
-
-      // A4 Document Paper Container
-      const a4Paper = createElement("article", "a4-document-paper");
-      a4Paper.id = "a4-report-preview-document";
-
-      // HEADER
-      const headerSection = createElement("header", "a4-header");
-      const schoolNameEl = createElement("p", "a4-header-school", finalReportData.schoolName);
-      headerSection.append(schoolNameEl);
-
-      if (finalReportData.schoolAddress) {
-        headerSection.append(createElement("p", "a4-header-location", finalReportData.schoolAddress));
-      }
-
-      headerSection.append(
-        createElement("p", "a4-doc-type", "Laporan Belajar dan Pertumbuhan"),
-        createElement("h1", "a4-student-name", finalReportData.studentName),
-        createElement("p", "a4-meta-row", `${formatClassName(finalReportData.className)} • Usia ${finalReportData.studentAge} • ${finalReportData.genderText}`),
-        createElement("p", "a4-date-row", `Tanggal laporan: ${finalReportData.reportDate}`)
-      );
-      a4Paper.append(headerSection);
-
-      const {
-        learning: isLearningActive,
-        understanding: isUnderstandingActive,
-        attitude: isAttitudeActive,
-        growth: isGrowthActive
-      } = currentContext.selectedSections || {};
-
-      // NILAI PJOK TENGAH SEMESTER HERO (JIKA ADA & LEARNING SELECTION ACTIVE)
-      if (isLearningActive && finalReportData.overallScore !== null && finalReportData.overallScore !== undefined) {
-        const scoreHero = createElement("section", "a4-score-hero");
-        const heroLabel = createElement("span", "a4-score-hero-label", "NILAI PJOK TENGAH SEMESTER");
-        
-        const heroScoreWrap = createElement("div", "a4-score-hero-num");
-        const heroScoreVal = createElement("span", "a4-score-hero-val", String(finalReportData.overallScore));
-        const heroScoreDenom = createElement("span", "a4-score-hero-denom", "/100");
-        heroScoreWrap.append(heroScoreVal, heroScoreDenom);
-
-        const heroNote = createElement("p", "a4-score-hero-note", "Nilai dari asesmen yang dipilih guru.");
-        scoreHero.append(heroLabel, heroScoreWrap, heroNote);
-        a4Paper.append(scoreHero);
-      }
-
-      // GAMBARAN PERKEMBANGAN (SUMMARY)
-      if (finalReportData.summary && finalReportData.summary.trim()) {
-        const summarySection = createElement("section", "a4-section");
-        summarySection.append(
-          createElement("h2", "a4-section-title", "Gambaran Perkembangan"),
-          createElement("p", "a4-section-text text-xs leading-relaxed text-slate-800 dark:text-slate-200", finalReportData.summary.trim())
-        );
-        a4Paper.append(summarySection);
-      }
-
-      // TABEL HASIL BELAJAR
-      if (isLearningActive && finalReportData.learning.length > 0) {
-        const learningSection = createElement("section", "a4-section");
-        learningSection.append(
-          createElement("h2", "a4-section-title", `${finalReportData.studentName} sudah bisa apa`)
-        );
-
-        const table = createElement("table", "a4-table");
-        const thead = document.createElement("thead");
-        thead.innerHTML = `
-          <tr>
-            <th style="width: 28%;">Yang Dipelajari</th>
-            <th style="width: 14%; text-align: center;">Nilai</th>
-            <th style="width: 58%;">Hasil Belajar</th>
-          </tr>
-        `;
-        const tbody = document.createElement("tbody");
-        finalReportData.learning.forEach((item) => {
-          const tr = createElement("tr");
-
-          // Col 1: Material / Title
-          const tdMat = createElement("td", "a4-td-mat");
-          tdMat.textContent = item.title || "Asesmen PJOK";
-
-          // Col 2: Score
-          const tdScore = createElement("td", "a4-td-score");
-          const scoreBox = createElement("div", "a4-cell-score-box");
-          const hasScore = item.numericScore !== null && item.numericScore !== undefined;
-          const scoreNum = createElement("span", "a4-cell-score-num", hasScore ? String(item.numericScore) : "-");
-          scoreBox.append(scoreNum);
-          if (hasScore) {
-            const scoreDenom = createElement("span", "a4-cell-score-denom", "/100");
-            scoreBox.append(scoreDenom);
-          }
-          tdScore.append(scoreBox);
-
-          // Col 3: Description
-          const tdDesc = createElement("td", "a4-td-desc");
-          tdDesc.textContent = item.description || "-";
-
-          tr.append(tdMat, tdScore, tdDesc);
-          tbody.append(tr);
-        });
-        table.append(thead, tbody);
-        learningSection.append(table);
-        a4Paper.append(learningSection);
-      }
-
-      // PEMAHAMAN DAN SIKAP
-      const showUnderstand = isUnderstandingActive && Boolean(finalReportData.understanding);
-      const showAttitude = isAttitudeActive && Boolean(finalReportData.attitude);
-
-      if (showUnderstand) {
-        const understandSection = createElement("section", "a4-section");
-        understandSection.append(
-          createElement("h2", "a4-section-title", "Pemahaman"),
-          createElement("p", "a4-body-text", finalReportData.understanding)
-        );
-        a4Paper.append(understandSection);
-      }
-
-      if (showAttitude) {
-        const attitudeSection = createElement("section", "a4-section");
-        attitudeSection.append(
-          createElement("h2", "a4-section-title", "Sikap & Observasi"),
-          createElement("p", "a4-body-text", finalReportData.attitude)
-        );
-        a4Paper.append(attitudeSection);
-      }
-
-      // PERTUMBUHAN & GROWTH INTERPRETATION
-      if (isGrowthActive) {
-        const growthSection = createElement("section", "a4-section");
-        growthSection.append(
-          createElement("h2", "a4-section-title", `Bagaimana pertumbuhan ${finalReportData.studentName}`)
-        );
-
-        const cardsRow = createElement("div", "a4-growth-cards-row");
-
-        const hCard = createElement("div", "a4-growth-card");
-        const hVal = finalReportData.growth.heightCm && finalReportData.growth.heightCm !== "-"
-          ? `${finalReportData.growth.heightCm} cm`
-          : "-";
-        hCard.append(
-          createElement("span", "a4-growth-card-label", "TINGGI BADAN"),
-          createElement("span", "a4-growth-card-value", hVal)
-        );
-
-        const wCard = createElement("div", "a4-growth-card");
-        const wVal = finalReportData.growth.weightKg && finalReportData.growth.weightKg !== "-"
-          ? `${finalReportData.growth.weightKg} kg`
-          : "-";
-        wCard.append(
-          createElement("span", "a4-growth-card-label", "BERAT BADAN"),
-          createElement("span", "a4-growth-card-value", wVal)
-        );
-
-        cardsRow.append(hCard, wCard);
-        growthSection.append(cardsRow);
-
-        const dateNote = createElement("p", "a4-growth-date-note", `Diukur pada ${finalReportData.growth.date}`);
-        growthSection.append(dateNote);
-
-        if (finalReportData.growth.interpretation) {
-          growthSection.append(createElement("p", "a4-body-text mb-1", finalReportData.growth.interpretation));
-        }
-
-        if (finalReportData.growth.nutritionAdvice) {
-          const p = createElement("p", "a4-body-text mb-1");
-          p.append(createElement("strong", "", "Saran Pola Makan & Kebiasaan Sehat: "), document.createTextNode(finalReportData.growth.nutritionAdvice));
-          growthSection.append(p);
-        }
-
-        if (finalReportData.growth.followUp) {
-          const p = createElement("p", "a4-body-text");
-          p.append(createElement("strong", "", "Tindak Lanjut Pembelajaran: "), document.createTextNode(finalReportData.growth.followUp));
-          growthSection.append(p);
-        }
-
-        a4Paper.append(growthSection);
-      }
-
-      // AYO BERMAIN BERSAMA DI RUMAH (HOME ACTIVITY)
-      if (finalReportData.homeActivity) {
-        const homeSection = createElement("section", "a4-section");
-        homeSection.append(
-          createElement("h2", "a4-section-title", "Ayo bermain bersama di rumah"),
-          createElement("p", "a4-body-text", finalReportData.homeActivity)
-        );
-        a4Paper.append(homeSection);
-      }
-
-      // FOOTER
-      const footerSection = createElement("footer", "a4-footer-row");
-      const leftFooter = createElement("div", "a4-footer-left");
-      leftFooter.append(
-        createElement("p", "a4-footer-disclaimer", "Pengukuran ini membantu pemantauan awal dan bukan diagnosis medis.")
-      );
-
-      const rightFooter = createElement("div", "a4-footer-right");
-      rightFooter.append(
-        createElement("p", "a4-footer-sign-title", "Guru PJOK"),
-        createElement("div", "a4-footer-sign-line")
-      );
-
-      footerSection.append(leftFooter, rightFooter);
-      a4Paper.append(footerSection);
 
       previewScaler.append(a4Paper);
       previewViewport.append(previewScaler);
@@ -2638,7 +2519,7 @@ export function renderClassesScreen(state, actions) {
 
       // Download PDF Handler
       downloadPdfBtn.addEventListener("click", () => {
-        const cleanStudentName = (finalReportData.studentName || "Siswa").replace(/[^a-zA-Z0-9]/g, "_");
+        const cleanStudentName = (student?.name || "Siswa").replace(/[^a-zA-Z0-9]/g, "_");
         const formattedDateKey = new Date().toISOString().slice(0, 10);
         const pdfFilename = `Laporan_PJOK_${cleanStudentName}_${formattedDateKey}.pdf`;
 
