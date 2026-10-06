@@ -3858,6 +3858,149 @@ textarea {
   padding-top: 8px;
 }
 
+/* Item Focus Card & Active Question (C2) */
+.item-focus-card {
+  margin-top: 12px;
+  padding: 16px;
+  border-radius: var(--radius-xl, 16px);
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-surface, #ffffff);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.05));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--color-border-subtle, #f1f5f9);
+  padding-bottom: 8px;
+}
+
+.item-meta-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle, #64748b);
+}
+
+.item-meta-scale {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--color-surface-muted, #f8fafc);
+  color: var(--color-text-subtle, #64748b);
+}
+
+.item-prompt-text {
+  font-size: 1.18rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--color-text-main, #0f172a);
+  margin: 0;
+}
+
+/* Compact Rubric Bar (C3) */
+.compact-rubric-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.compact-rubric-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+@media (max-width: 480px) {
+  .compact-rubric-bar {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+  }
+}
+
+.compact-rubric-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  min-height: 52px;
+  border-radius: var(--radius-lg, 12px);
+  border: 2px solid var(--color-border, #cbd5e1);
+  background: var(--color-surface, #ffffff);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.compact-rubric-btn:hover {
+  border-color: var(--color-primary, #059669);
+  background: var(--color-surface-muted, #f8fafc);
+}
+
+.compact-rubric-btn.is-selected {
+  border-color: var(--color-primary, #059669);
+  background: var(--color-primary, #059669);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
+}
+
+.compact-rubric-num {
+  font-size: 1.25rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.compact-rubric-short-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-top: 3px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  line-height: 1.1;
+}
+
+/* Compact Rubric Description Help Box (C4) */
+.compact-rubric-help-box {
+  background: var(--color-surface-muted, #f8fafc);
+  border: 1px solid var(--color-border-subtle, #e2e8f0);
+  border-radius: var(--radius-md, 8px);
+  padding: 8px 12px;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+}
+
+/* Item Note Disclosure (C5) */
+.item-note-disclosure {
+  border-top: 1px dashed var(--color-border-subtle, #e2e8f0);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.item-note-summary {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-subtle, #64748b);
+  user-select: none;
+}
+
+.item-note-summary:hover {
+  color: var(--color-primary, #059669);
+}
+
 /* Student Completion Panel Styles */
 .student-completion-panel {
   display: flex;
