@@ -3,7 +3,7 @@
  * strictly interprets data from ReportContext without inventing facts.
  */
 
-export async function generateStudentReportWithAI({ apiKey, reportContext }) {
+export async function generateStudentReportWithAI({ apiKey, reportContext, onDiagnosticStage }) {
   if (!apiKey || !apiKey.trim()) {
     const error = new Error("API key is required");
     error.isApiKeyError = true;
@@ -123,6 +123,16 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
 
   const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent";
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, 60000);
+
+  if (typeof onDiagnosticStage === "function") {
+    onDiagnosticStage("API_REQUEST_START");
+    onDiagnosticStage("API_WAITING");
+  }
+
   let response;
   try {
     response = await fetch(endpoint, {
@@ -131,10 +141,22 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
         "Content-Type": "application/json",
         "x-goog-api-key": apiKey.trim()
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
     });
   } catch (networkErr) {
+    if (networkErr.name === "AbortError" || controller.signal.aborted) {
+      const timeoutError = new Error("AI request timed out after 60 seconds");
+      timeoutError.code = "AI_REQUEST_TIMEOUT";
+      throw timeoutError;
+    }
     throw new Error(`Network error: ${networkErr.message}`);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (typeof onDiagnosticStage === "function") {
+    onDiagnosticStage("API_RESPONSE_RECEIVED", { httpStatus: response.status });
   }
 
   if (!response.ok) {
@@ -155,6 +177,10 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
       error.isApiKeyError = true;
     }
     throw error;
+  }
+
+  if (typeof onDiagnosticStage === "function") {
+    onDiagnosticStage("RESPONSE_PARSING");
   }
 
   const data = await response.json();

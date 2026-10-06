@@ -19,6 +19,11 @@ import {
   isFormDirty,
   confirmIfDirty
 } from "./feedback.js";
+import {
+  BATCH_STAGES,
+  getDiagnosticStageLabel,
+  formatAiDiagnosticText
+} from "../services/ai-diagnostic-service.js";
 
 function formatClassName(name) {
   if (!name) return "Kelas";
@@ -693,7 +698,8 @@ export function renderClassesScreen(state, actions) {
         skippedCount: 0,
         failedStudentIds: [],
         statusSummary: null,
-        studentStatuses: {}
+        studentStatuses: {},
+        diagnostic: null
       };
     }
     if (!classUi.batchReportSelection) {
@@ -834,17 +840,30 @@ export function renderClassesScreen(state, actions) {
     batchPanel.append(batchActionRow);
 
     // Batch Status / Progress Indicator Box
-    if (classUi.batchState.isBatchGenerating || classUi.batchState.statusSummary) {
+    const hasDiagError = Boolean(
+      classUi.batchState.diagnostic?.errorCode ||
+      classUi.batchState.diagnostic?.errorMessage ||
+      (classUi.batchState.failedCount && classUi.batchState.failedCount > 0)
+    );
+    const showProgressBox = Boolean(classUi.batchState.isBatchGenerating || classUi.batchState.statusSummary || hasDiagError);
+
+    if (showProgressBox) {
+      const isGenerating = Boolean(classUi.batchState.isBatchGenerating);
       const progressBox = createElement("div", "p-3 rounded-lg border text-xs space-y-2 mt-2 " +
-        (classUi.batchState.isBatchGenerating
+        (isGenerating
           ? "bg-blue-50 border-blue-200 text-blue-900 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-200"
-          : "bg-slate-50 border-slate-200 text-slate-800 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200")
+          : (hasDiagError && classUi.batchState.failedCount > 0
+              ? "bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200"
+              : "bg-slate-50 border-slate-200 text-slate-800 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"))
       );
 
-      if (classUi.batchState.isBatchGenerating) {
-        const progressP = createElement("p", "font-bold", `Membuat laporan ${classUi.batchState.currentStudentIndex} dari ${classUi.batchState.totalStudents}`);
-        const currentStudentP = createElement("p", "text-subtle", `Sedang diproses: ${classUi.batchState.currentStudentName}`);
+      if (isGenerating) {
+        const progressP = createElement("p", "font-bold", `Membuat laporan ${classUi.batchState.currentStudentIndex || 0} dari ${classUi.batchState.totalStudents || 0}`);
+        const currentStudentP = createElement("p", "text-subtle", `Sedang diproses: ${classUi.batchState.currentStudentName || "-"}`);
         
+        const stageLabel = getDiagnosticStageLabel(classUi.batchState.diagnostic?.stage);
+        const stageP = stageLabel ? createElement("p", "font-medium text-xs text-primary flex items-center gap-1", `⏳ ${stageLabel}`) : null;
+
         const progressBarWrap = createElement("div", "w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden mt-1");
         const pct = classUi.batchState.totalStudents > 0
           ? Math.round((classUi.batchState.currentStudentIndex / classUi.batchState.totalStudents) * 100)
@@ -853,10 +872,44 @@ export function renderClassesScreen(state, actions) {
         progressBarFill.style.width = `${pct}%`;
         progressBarWrap.append(progressBarFill);
 
-        progressBox.append(progressP, currentStudentP, progressBarWrap);
+        progressBox.append(progressP, currentStudentP);
+        if (stageP) progressBox.append(stageP);
+        progressBox.append(progressBarWrap);
       } else if (classUi.batchState.statusSummary) {
         const summaryP = createElement("p", "font-semibold", classUi.batchState.statusSummary);
         progressBox.append(summaryP);
+      }
+
+      // Copy Diagnostic Button: Tampil saat batch berjalan atau batch gagal/ada diagnostic error
+      if (isGenerating || hasDiagError) {
+        const copyDiagRow = createElement("div", "pt-1 flex items-center justify-between gap-2");
+        const copyDiagBtn = createElement("button", "btn-tool text-xs text-subtle hover:text-foreground flex items-center gap-1", "📋 Salin Diagnostik AI");
+        copyDiagBtn.type = "button";
+        copyDiagBtn.addEventListener("click", async () => {
+          const text = formatAiDiagnosticText(classUi.batchState.diagnostic);
+          try {
+            if (navigator?.clipboard?.writeText) {
+              await navigator.clipboard.writeText(text);
+            } else {
+              const ta = document.createElement("textarea");
+              ta.value = text;
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand("copy");
+              document.body.removeChild(ta);
+            }
+            showToast("Diagnostik AI berhasil disalin");
+            copyDiagBtn.textContent = "✓ Diagnostik Tersalin";
+            setTimeout(() => {
+              copyDiagBtn.textContent = "📋 Salin Diagnostik AI";
+            }, 2500);
+          } catch (e) {
+            console.error("Gagal menyalin diagnostik:", e);
+            window.alert(text);
+          }
+        });
+        copyDiagRow.append(copyDiagBtn);
+        progressBox.append(copyDiagRow);
       }
 
       batchPanel.append(progressBox);
@@ -877,6 +930,9 @@ export function renderClassesScreen(state, actions) {
 
       if (classUi.batchState.isBatchGenerating) return;
 
+      const runId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const startedAt = new Date().toISOString();
+
       classUi.batchState.classId = classRoom.id;
       classUi.batchState.className = classRoom.name;
       classUi.batchState.isBatchGenerating = true;
@@ -888,112 +944,225 @@ export function renderClassesScreen(state, actions) {
       classUi.batchState.skippedCount = 0;
       classUi.batchState.failedStudentIds = [];
       classUi.batchState.statusSummary = null;
+      classUi.batchState.diagnostic = {
+        runId,
+        startedAt,
+        stage: BATCH_STAGES.BATCH_STARTED,
+        studentId: null,
+        studentName: null,
+        studentIndex: 0,
+        totalStudents: targetStudents.length,
+        assessmentCount: 0,
+        growthCount: 0,
+        observationCount: 0,
+        requestStartedAt: null,
+        responseReceivedAt: null,
+        elapsedMs: null,
+        httpStatus: null,
+        lastCompletedStage: null,
+        errorCode: null,
+        errorMessage: null
+      };
+
+      function updateDiag(newStage, updates = {}) {
+        if (!classUi.batchState.diagnostic) return;
+        const diag = classUi.batchState.diagnostic;
+        if (diag.stage !== newStage) {
+          diag.lastCompletedStage = diag.stage;
+          diag.stage = newStage;
+        }
+        Object.assign(diag, updates);
+      }
 
       render();
       if (actions?.requestAppRender) {
         actions.requestAppRender();
       }
 
-      for (let i = 0; i < targetStudents.length; i++) {
-        const student = targetStudents[i];
-        classUi.batchState.currentStudentIndex = i + 1;
-        classUi.batchState.currentStudentName = student.name;
+      try {
+        for (let i = 0; i < targetStudents.length; i++) {
+          const student = targetStudents[i];
+          classUi.batchState.currentStudentIndex = i + 1;
+          classUi.batchState.currentStudentName = student.name;
+
+          updateDiag(BATCH_STAGES.STUDENT_SELECTED, {
+            studentId: student.id,
+            studentName: student.name,
+            studentIndex: i + 1,
+            requestStartedAt: null,
+            responseReceivedAt: null,
+            elapsedMs: null,
+            httpStatus: null,
+            errorCode: null,
+            errorMessage: null
+          });
+
+          render();
+          if (actions?.requestAppRender) {
+            actions.requestAppRender();
+          }
+
+          updateDiag(BATCH_STAGES.CONTEXT_BUILDING);
+          render();
+          if (actions?.requestAppRender) {
+            actions.requestAppRender();
+          }
+
+          // Build data selections for student
+          const selectedAssessments = (state.assessmentResults || [])
+            .map((r) => {
+              if (r.studentId !== student.id) return null;
+              const sess = (state.assessmentSessions || []).find((as) => as.id === r.assessmentSessionId);
+              if (!sess || sess.classId !== classRoom.id) return null;
+              const batchAssessmentIds = classUi.batchReportSelection?.assessmentSessionIds || [];
+              if (batchAssessmentIds.length > 0 && !batchAssessmentIds.includes(sess.id)) {
+                return null;
+              }
+              const def = (state.assessmentDefinitions || []).find((d) => d.id === (sess.definitionId || r.definitionId));
+              return { result: r, assessmentSession: sess, definition: def, date: sess.date || r.recordedAt || "" };
+            })
+            .filter(Boolean);
+
+          const selectedGrowth = classUi.batchReportSelection?.includeGrowth
+            ? (state.growthRecords || []).filter((g) => g.studentId === student.id)
+            : [];
+
+          const selectedObs = classUi.batchReportSelection?.includeObservations
+            ? (state.studentObservations || []).filter((o) => o.studentId === student.id)
+            : [];
+
+          updateDiag(BATCH_STAGES.CONTEXT_READY, {
+            assessmentCount: selectedAssessments.length,
+            growthCount: selectedGrowth.length,
+            observationCount: selectedObs.length
+          });
+
+          const totalSources = selectedAssessments.length + selectedGrowth.length + selectedObs.length;
+
+          if (totalSources === 0) {
+            classUi.batchState.skippedCount++;
+            classUi.batchState.studentStatuses[student.id] = "Dilewati — data tidak tersedia";
+            updateDiag(BATCH_STAGES.STUDENT_DONE);
+            continue;
+          }
+
+          const reportContext = buildSelectedReportContext({
+            student,
+            classRoom,
+            assessmentSelections: selectedAssessments,
+            growthSelections: selectedGrowth,
+            observationSelections: selectedObs,
+            allGrowthRecords: state.growthRecords || []
+          });
+
+          try {
+            let reqStartTime = null;
+            const draft = await generateStudentReportWithAI({
+              apiKey,
+              reportContext,
+              onDiagnosticStage: (stageName, meta = {}) => {
+                if (stageName === "API_REQUEST_START") {
+                  reqStartTime = Date.now();
+                  updateDiag(BATCH_STAGES.API_REQUEST_START, {
+                    requestStartedAt: new Date(reqStartTime).toISOString(),
+                    responseReceivedAt: null,
+                    elapsedMs: null,
+                    httpStatus: null
+                  });
+                } else if (stageName === "API_WAITING") {
+                  updateDiag(BATCH_STAGES.API_WAITING);
+                } else if (stageName === "API_RESPONSE_RECEIVED") {
+                  const now = Date.now();
+                  updateDiag(BATCH_STAGES.API_RESPONSE_RECEIVED, {
+                    responseReceivedAt: new Date(now).toISOString(),
+                    elapsedMs: reqStartTime ? (now - reqStartTime) : null,
+                    httpStatus: meta?.httpStatus ?? null
+                  });
+                } else if (stageName === "RESPONSE_PARSING") {
+                  updateDiag(BATCH_STAGES.RESPONSE_PARSING);
+                }
+                render();
+                if (actions?.requestAppRender) {
+                  actions.requestAppRender();
+                }
+              }
+            });
+
+            if (draft && typeof draft === "object") {
+              updateDiag(BATCH_STAGES.REPORT_SAVING);
+              render();
+              if (actions?.requestAppRender) {
+                actions.requestAppRender();
+              }
+
+              if (!classUi.reportDrafts) classUi.reportDrafts = {};
+              classUi.reportDrafts[student.id] = draft;
+
+              if (actions?.saveStudentReport) {
+                actions.saveStudentReport({
+                  studentId: student.id,
+                  classId: classRoom.id,
+                  reportContext,
+                  draft
+                });
+              }
+
+              classUi.batchState.successCount++;
+              classUi.batchState.studentStatuses[student.id] = "Berhasil";
+              updateDiag(BATCH_STAGES.STUDENT_DONE);
+            } else {
+              classUi.batchState.failedCount++;
+              classUi.batchState.failedStudentIds.push(student.id);
+              classUi.batchState.studentStatuses[student.id] = "Gagal — respon AI tidak valid";
+              updateDiag(BATCH_STAGES.ERROR, {
+                errorCode: "INVALID_AI_RESPONSE",
+                errorMessage: "Format respon AI tidak valid"
+              });
+            }
+          } catch (err) {
+            console.error("[BATCH REPORT AI ERROR for student]", student.name, err);
+            const isKeyError = err?.isApiKeyError || (err?.message && (err.message.includes("API key") || err.message.includes("API_KEY")));
+            const isTimeout = err?.code === "AI_REQUEST_TIMEOUT" || (err?.message && err.message.includes("timed out"));
+            const errorCode = isKeyError ? "AUTH_ERROR" : (isTimeout ? "AI_REQUEST_TIMEOUT" : (err?.code || "AI_REQUEST_ERROR"));
+            const errorMessage = err?.message || "Error network/API";
+
+            updateDiag(BATCH_STAGES.ERROR, {
+              errorCode,
+              errorMessage
+            });
+
+            if (isKeyError) {
+              classUi.batchState.isBatchGenerating = false;
+              classUi.batchState.statusSummary = "API key tidak valid. Periksa di Pengaturan → AI.";
+              window.alert("API key tidak valid. Periksa di Pengaturan → AI.");
+              render();
+              if (actions?.requestAppRender) {
+                actions.requestAppRender();
+              }
+              return;
+            }
+
+            classUi.batchState.failedCount++;
+            classUi.batchState.failedStudentIds.push(student.id);
+            classUi.batchState.studentStatuses[student.id] = `Gagal — ${errorMessage}`;
+          }
+        }
+
+        updateDiag(BATCH_STAGES.BATCH_DONE);
+        classUi.batchState.statusSummary = `Ringkasan: ${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati`;
+      } catch (outerErr) {
+        console.error("[BATCH REPORT OUTER ERROR]", outerErr);
+        updateDiag(BATCH_STAGES.ERROR, {
+          errorCode: outerErr?.code || "FATAL_BATCH_ERROR",
+          errorMessage: outerErr?.message || String(outerErr)
+        });
+        classUi.batchState.statusSummary = `Terjadi kendala pada proses batch: ${outerErr?.message || "Gagal memproses batch"}`;
+      } finally {
+        classUi.batchState.isBatchGenerating = false;
         render();
         if (actions?.requestAppRender) {
           actions.requestAppRender();
         }
-
-        // Build data selections for student
-        const selectedAssessments = (state.assessmentResults || [])
-          .map((r) => {
-            if (r.studentId !== student.id) return null;
-            const sess = (state.assessmentSessions || []).find((as) => as.id === r.assessmentSessionId);
-            if (!sess || sess.classId !== classRoom.id) return null;
-            const batchAssessmentIds = classUi.batchReportSelection?.assessmentSessionIds || [];
-            if (batchAssessmentIds.length > 0 && !batchAssessmentIds.includes(sess.id)) {
-              return null;
-            }
-            const def = (state.assessmentDefinitions || []).find((d) => d.id === (sess.definitionId || r.definitionId));
-            return { result: r, assessmentSession: sess, definition: def, date: sess.date || r.recordedAt || "" };
-          })
-          .filter(Boolean);
-
-        const selectedGrowth = classUi.batchReportSelection?.includeGrowth
-          ? (state.growthRecords || []).filter((g) => g.studentId === student.id)
-          : [];
-
-        const selectedObs = classUi.batchReportSelection?.includeObservations
-          ? (state.studentObservations || []).filter((o) => o.studentId === student.id)
-          : [];
-
-        const totalSources = selectedAssessments.length + selectedGrowth.length + selectedObs.length;
-
-        if (totalSources === 0) {
-          classUi.batchState.skippedCount++;
-          classUi.batchState.studentStatuses[student.id] = "Dilewati — data tidak tersedia";
-          continue;
-        }
-
-        const reportContext = buildSelectedReportContext({
-          student,
-          classRoom,
-          assessmentSelections: selectedAssessments,
-          growthSelections: selectedGrowth,
-          observationSelections: selectedObs,
-          allGrowthRecords: state.growthRecords || []
-        });
-
-        try {
-          const draft = await generateStudentReportWithAI({
-            apiKey,
-            reportContext
-          });
-
-          if (draft && typeof draft === "object") {
-            if (!classUi.reportDrafts) classUi.reportDrafts = {};
-            classUi.reportDrafts[student.id] = draft;
-
-            if (actions?.saveStudentReport) {
-              actions.saveStudentReport({
-                studentId: student.id,
-                classId: classRoom.id,
-                reportContext,
-                draft
-              });
-            }
-
-            classUi.batchState.successCount++;
-            classUi.batchState.studentStatuses[student.id] = "Berhasil";
-          } else {
-            classUi.batchState.failedCount++;
-            classUi.batchState.failedStudentIds.push(student.id);
-            classUi.batchState.studentStatuses[student.id] = "Gagal — respon AI tidak valid";
-          }
-        } catch (err) {
-          console.error("[BATCH REPORT AI ERROR for student]", student.name, err);
-          const isKeyError = err?.isApiKeyError || (err?.message && (err.message.includes("API key") || err.message.includes("API_KEY")));
-          if (isKeyError) {
-            classUi.batchState.isBatchGenerating = false;
-            classUi.batchState.statusSummary = "API key tidak valid. Periksa di Pengaturan → AI.";
-            window.alert("API key tidak valid. Periksa di Pengaturan → AI.");
-            render();
-            if (actions?.requestAppRender) {
-              actions.requestAppRender();
-            }
-            return;
-          }
-
-          classUi.batchState.failedCount++;
-          classUi.batchState.failedStudentIds.push(student.id);
-          classUi.batchState.studentStatuses[student.id] = `Gagal — ${err?.message || "Error network/API"}`;
-        }
-      }
-
-      classUi.batchState.isBatchGenerating = false;
-      classUi.batchState.statusSummary = `Ringkasan: ${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati`;
-      render();
-      if (actions?.requestAppRender) {
-        actions.requestAppRender();
       }
     }
 
