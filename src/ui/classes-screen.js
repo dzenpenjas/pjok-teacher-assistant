@@ -32,7 +32,37 @@ import {
 const pendingReports = new Map();
 
 function getPendingKey(studentId, classId, academicYearId, semesterId) {
-  return `${studentId}_${classId}_${academicYearId || "null"}_${semesterId || "null"}`;
+  return JSON.stringify([
+    studentId || "",
+    classId || "",
+    academicYearId || null,
+    semesterId || null
+  ]);
+}
+
+function deepClone(obj) {
+  if (obj === null || typeof obj !== "object") return obj;
+  return JSON.parse(JSON.stringify(obj));
+}
+
+function validateScoringConfig(config) {
+  if (!config || !config.enabled) {
+    return { isValid: true, error: null };
+  }
+  const minStr = String(config.minScore ?? "").trim();
+  const maxStr = String(config.maxScore ?? "").trim();
+  if (!minStr || !maxStr) {
+    return { isValid: false, error: "Rentang konversi tidak boleh kosong. Masukkan nilai minimum dan maksimum." };
+  }
+  const minNum = Number(minStr);
+  const maxNum = Number(maxStr);
+  if (!Number.isFinite(minNum) || !Number.isFinite(maxNum)) {
+    return { isValid: false, error: "Rentang konversi harus berupa angka." };
+  }
+  if (minNum < 0 || maxNum > 100 || minNum >= maxNum) {
+    return { isValid: false, error: "Rentang konversi tidak valid (0 ≤ minimum < maksimum ≤ 100)." };
+  }
+  return { isValid: true, error: null, minScore: minNum, maxScore: maxNum };
 }
 
 function isDraftUnsaved(currentDraft, savedDraft) {
@@ -749,9 +779,6 @@ export function renderClassesScreen(state, actions) {
     if (!Array.isArray(classUi.batchReportSelection.assessmentSessionIds)) {
       classUi.batchReportSelection.assessmentSessionIds = [];
     }
-    if (!classUi.reportDrafts) {
-      classUi.reportDrafts = {};
-    }
 
     const header = createElement("div", "results-center-header space-y-1 mb-4");
     header.append(
@@ -873,8 +900,34 @@ export function renderClassesScreen(state, actions) {
     minInput.max = "100";
     minInput.value = classUi.batchScoringConfig.minScore ?? 75;
     minInput.disabled = classUi.batchState.isBatchGenerating;
+    const batchValidationErrorEl = createElement("p", "text-red-600 dark:text-red-400 text-xs font-semibold mt-1");
+    batchValidationErrorEl.style.display = "none";
+
+    let runBatchBtn;
+
+    function updateBatchValidation() {
+      if (!runBatchBtn) return;
+      const val = validateScoringConfig(classUi.batchScoringConfig);
+      if (val.isValid) {
+        batchValidationErrorEl.style.display = "none";
+        batchValidationErrorEl.textContent = "";
+        runBatchBtn.disabled = classUi.batchState.isBatchGenerating;
+        if (classUi.batchState.isBatchGenerating) {
+          runBatchBtn.classList.add("opacity-50", "cursor-not-allowed");
+        } else {
+          runBatchBtn.classList.remove("opacity-50", "cursor-not-allowed");
+        }
+      } else {
+        batchValidationErrorEl.style.display = "block";
+        batchValidationErrorEl.textContent = "⚠️ " + val.error;
+        runBatchBtn.disabled = true;
+        runBatchBtn.classList.add("opacity-50", "cursor-not-allowed");
+      }
+    }
+
     minInput.addEventListener("input", (e) => {
       classUi.batchScoringConfig.minScore = e.target.value;
+      updateBatchValidation();
     });
 
     const maxLbl = createElement("span", "text-subtle", "Maks:");
@@ -887,16 +940,18 @@ export function renderClassesScreen(state, actions) {
     maxInput.disabled = classUi.batchState.isBatchGenerating;
     maxInput.addEventListener("input", (e) => {
       classUi.batchScoringConfig.maxScore = e.target.value;
+      updateBatchValidation();
     });
 
     scoreConvChk.addEventListener("change", (e) => {
       classUi.batchScoringConfig.enabled = e.target.checked;
       inputsWrap.style.display = e.target.checked ? "flex" : "none";
+      updateBatchValidation();
     });
 
     inputsWrap.append(minLbl, minInput, maxLbl, maxInput);
     scoreConvRow.append(scoreConvLbl, inputsWrap);
-    scoringConfigBox.append(scoreConvRow);
+    scoringConfigBox.append(scoreConvRow, batchValidationErrorEl);
     sourceConfigBox.append(scoringConfigBox);
 
     batchPanel.append(batchHeader, sourceConfigBox);
@@ -904,12 +959,14 @@ export function renderClassesScreen(state, actions) {
     // Action Row
     const batchActionRow = createElement("div", "flex flex-wrap items-center gap-3");
 
-    const runBatchBtn = createElement("button", "primary-action compact-action", "✨ Generate Semua Laporan");
+    runBatchBtn = createElement("button", "primary-action compact-action", "✨ Generate Semua Laporan");
     runBatchBtn.type = "button";
     runBatchBtn.disabled = classUi.batchState.isBatchGenerating;
     if (classUi.batchState.isBatchGenerating) {
       runBatchBtn.classList.add("opacity-50", "cursor-not-allowed");
     }
+
+    updateBatchValidation();
 
     runBatchBtn.addEventListener("click", () => {
       runBatchReportGeneration(students, false);
@@ -1694,6 +1751,8 @@ export function renderClassesScreen(state, actions) {
       return;
     }
 
+    let aiReportBtn = null;
+
     // Back Button
     const backBtn = createElement("button", "btn-back-nav mb-4");
     backBtn.type = "button";
@@ -2290,8 +2349,47 @@ export function renderClassesScreen(state, actions) {
     singleMinInput.min = "0";
     singleMinInput.max = "100";
     singleMinInput.value = classUi.singleScoringConfig.minScore ?? 75;
+
+    const singleValidationErrorEl = createElement("p", "text-red-600 dark:text-red-400 text-xs font-semibold mt-1");
+    singleValidationErrorEl.style.display = "none";
+
+    function updateSingleValidation() {
+      const val = validateScoringConfig(classUi.singleScoringConfig);
+      
+      const aCount = (classUi.reportSelection.assessmentSessionIds || []).length;
+      const gCount = (classUi.reportSelection.growthRecordIds || []).length;
+      const oCount = (classUi.reportSelection.observationIds || []).length;
+      const totalCount = aCount + gCount + oCount;
+      
+      let storedApiKey = "";
+      try {
+        storedApiKey = window.sessionStorage.getItem("pjok_gemini_api_key") || "";
+      } catch (_) {}
+      const hasApiKey = Boolean(storedApiKey && storedApiKey.trim());
+
+      if (val.isValid) {
+        singleValidationErrorEl.style.display = "none";
+        singleValidationErrorEl.textContent = "";
+        
+        const canGenerate = totalCount > 0 && hasApiKey && !isAiDraftLoading;
+        aiReportBtn.disabled = !canGenerate;
+        if (canGenerate) {
+          aiReportBtn.classList.remove("opacity-60", "cursor-not-allowed");
+        } else {
+          aiReportBtn.classList.add("opacity-60", "cursor-not-allowed");
+        }
+      } else {
+        singleValidationErrorEl.style.display = "block";
+        singleValidationErrorEl.textContent = "⚠️ " + val.error;
+        aiReportBtn.disabled = true;
+        aiReportBtn.classList.add("opacity-60", "cursor-not-allowed");
+      }
+    }
+
     singleMinInput.addEventListener("input", (e) => {
       classUi.singleScoringConfig.minScore = e.target.value;
+      updateSingleValidation();
+      updateSummaryAndPreview();
     });
 
     const singleMaxLbl = createElement("span", "text-subtle", "Maks:");
@@ -2303,16 +2401,20 @@ export function renderClassesScreen(state, actions) {
     singleMaxInput.value = classUi.singleScoringConfig.maxScore ?? 92;
     singleMaxInput.addEventListener("input", (e) => {
       classUi.singleScoringConfig.maxScore = e.target.value;
+      updateSingleValidation();
+      updateSummaryAndPreview();
     });
 
     singleScoreConvChk.addEventListener("change", (e) => {
       classUi.singleScoringConfig.enabled = e.target.checked;
       singleInputsWrap.style.display = e.target.checked ? "flex" : "none";
+      updateSingleValidation();
+      updateSummaryAndPreview();
     });
 
     singleInputsWrap.append(singleMinLbl, singleMinInput, singleMaxLbl, singleMaxInput);
     singleScoreConvRow.append(singleScoreConvLbl, singleInputsWrap);
-    singleScoringBox.append(singleScoreConvRow);
+    singleScoringBox.append(singleScoreConvRow, singleValidationErrorEl);
     summaryPanel.append(singleScoringBox);
 
     // Action buttons row
@@ -2321,7 +2423,7 @@ export function renderClassesScreen(state, actions) {
     const previewToggleBtn = createElement("button", "btn-tool text-xs", "Lihat Data Terpilih");
     previewToggleBtn.type = "button";
 
-    const aiReportBtn = createElement("button", "primary-action compact-action", "✨ Buat Laporan AI");
+    aiReportBtn = createElement("button", "primary-action compact-action", "✨ Buat Laporan AI");
     aiReportBtn.type = "button";
 
     btnRow.append(previewToggleBtn, aiReportBtn);
@@ -2391,6 +2493,10 @@ export function renderClassesScreen(state, actions) {
         aiHelperText.textContent = "Siap membuat draf laporan AI berdasarkan sumber data terpilih.";
         aiHelperText.className = "text-emerald-600 dark:text-emerald-400 text-xs mt-2";
       }
+
+      if (typeof updateSingleValidation === "function") {
+        updateSingleValidation();
+      }
     }
 
     function renderPreviewContent() {
@@ -2407,6 +2513,13 @@ export function renderClassesScreen(state, actions) {
       }
 
       previewContainer.style.display = "block";
+
+      const configVal = validateScoringConfig(classUi.singleScoringConfig);
+      if (!configVal.isValid) {
+        const errorAlert = createElement("div", "p-4 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-xs font-semibold", `⚠️ Konfigurasi konversi nilai rapor tidak valid. Perbaiki rentang nilai untuk melihat preview data.\nDetail: ${configVal.error}`);
+        previewContainer.append(errorAlert);
+        return;
+      }
 
       const previewTitle = createElement("h3", "font-bold text-xs uppercase tracking-wider text-subtle mb-3", `Preview Sumber Data Terpilih (${totalCount} item)`);
       previewContainer.append(previewTitle);
@@ -2483,15 +2596,23 @@ export function renderClassesScreen(state, actions) {
       previewContainer.append(previewList);
 
       // 4. ReportContext JSON Preview Section
-      const reportContext = buildSelectedReportContext({
-        student,
-        classRoom,
-        assessmentSelections: selectedAssessments,
-        growthSelections: selectedGrowth,
-        observationSelections: selectedObs,
-        allGrowthRecords: state.growthRecords || [],
-        scoringConfig: classUi.singleScoringConfig || null
-      });
+      let reportContext = null;
+      try {
+        reportContext = buildSelectedReportContext({
+          student,
+          classRoom,
+          assessmentSelections: selectedAssessments,
+          growthSelections: selectedGrowth,
+          observationSelections: selectedObs,
+          allGrowthRecords: state.growthRecords || [],
+          scoringConfig: classUi.singleScoringConfig || null
+        });
+      } catch (err) {
+        console.error("Error building reportContext inside renderPreviewContent:", err);
+        const errBlock = createElement("div", "p-3 bg-red-100 text-red-800 rounded-lg text-xs font-semibold mb-3", `⚠️ Gagal menyusun ReportContext: ${err.message}`);
+        previewContainer.append(errBlock);
+        return;
+      }
 
       const rcSection = createElement("div", "report-context-section mt-4 pt-3 border-t border-slate-200 dark:border-slate-700");
       const rcToggleBtn = createElement("button", "btn-tool text-xs flex items-center gap-1", isRcJsonOpen ? "Sembunyikan ReportContext" : "Lihat ReportContext");
@@ -2591,15 +2712,25 @@ export function renderClassesScreen(state, actions) {
         (classUi.reportSelection.observationIds || []).includes(o.id)
       );
 
-      const currentContext = activeReportContext || savedReport?.reportContext || buildSelectedReportContext({
-        student,
-        classRoom,
-        assessmentSelections: currentSelectedAssessments,
-        growthSelections: currentSelectedGrowth,
-        observationSelections: currentSelectedObs,
-        allGrowthRecords: state.growthRecords || [],
-        scoringConfig: classUi.singleScoringConfig || null
-      });
+      let currentContext = activeReportContext || savedReport?.reportContext;
+      if (!currentContext) {
+        try {
+          currentContext = buildSelectedReportContext({
+            student,
+            classRoom,
+            assessmentSelections: currentSelectedAssessments,
+            growthSelections: currentSelectedGrowth,
+            observationSelections: currentSelectedObs,
+            allGrowthRecords: state.growthRecords || [],
+            scoringConfig: classUi.singleScoringConfig || null
+          });
+        } catch (err) {
+          console.error("Error building reportContext inside renderAiDraftContent:", err);
+          const errBlock = createElement("div", "p-4 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-xs font-semibold", `⚠️ Gagal menyusun data laporan: ${err.message}`);
+          aiDraftContainer.append(errBlock);
+          return;
+        }
+      }
 
       const {
         learning: isLearningActive,
