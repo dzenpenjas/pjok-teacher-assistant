@@ -860,6 +860,8 @@ export function renderClassesScreen(state, actions) {
 
       if (classUi.batchState.isBatchGenerating) return;
 
+      classUi.batchState.classId = classRoom.id;
+      classUi.batchState.className = classRoom.name;
       classUi.batchState.isBatchGenerating = true;
       classUi.batchState.totalStudents = targetStudents.length;
       classUi.batchState.currentStudentIndex = 0;
@@ -871,12 +873,18 @@ export function renderClassesScreen(state, actions) {
       classUi.batchState.statusSummary = null;
 
       render();
+      if (actions?.requestAppRender) {
+        actions.requestAppRender();
+      }
 
       for (let i = 0; i < targetStudents.length; i++) {
         const student = targetStudents[i];
         classUi.batchState.currentStudentIndex = i + 1;
         classUi.batchState.currentStudentName = student.name;
         render();
+        if (actions?.requestAppRender) {
+          actions.requestAppRender();
+        }
 
         // Build data selections for student
         const selectedAssessments = (state.assessmentResults || [])
@@ -940,6 +948,9 @@ export function renderClassesScreen(state, actions) {
             classUi.batchState.statusSummary = "API key tidak valid. Periksa di Pengaturan → AI.";
             window.alert("API key tidak valid. Periksa di Pengaturan → AI.");
             render();
+            if (actions?.requestAppRender) {
+              actions.requestAppRender();
+            }
             return;
           }
 
@@ -952,6 +963,9 @@ export function renderClassesScreen(state, actions) {
       classUi.batchState.isBatchGenerating = false;
       classUi.batchState.statusSummary = `Ringkasan: ${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati`;
       render();
+      if (actions?.requestAppRender) {
+        actions.requestAppRender();
+      }
     }
 
     const searchBar = createElement("div", "search-filter-bar");

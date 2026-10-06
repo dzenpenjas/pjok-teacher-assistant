@@ -752,6 +752,17 @@ function createCrudActions() {
       const allowed = ["school-teacher", "academic", "tags", "assessments", "ai", "backup"];
       settingsActiveTab = allowed.includes(tabId) ? tabId : "school-teacher";
       renderApp();
+    },
+    requestAppRender: () => {
+      renderApp();
+    },
+    openClassReports: (classId) => {
+      if (classId) {
+        uiState.classes.selectedClassId = classId;
+        uiState.classes.mode = "detail";
+        uiState.classes.activeTab = "reports";
+      }
+      setScreen(SCREENS.classes);
     }
   };
 }
@@ -890,9 +901,14 @@ function renderApp() {
     ? createResumeBanner(sessionContext.session)
     : null;
 
+  const globalAiBanner = createGlobalAiBanner(uiState?.classes?.batchState, appActions);
+
   appRoot.append(header);
   if (sessionNotice) {
     appRoot.append(sessionNotice);
+  }
+  if (globalAiBanner) {
+    appRoot.append(globalAiBanner);
   }
   appRoot.append(
     renderScreen(
@@ -953,6 +969,102 @@ function createResumeBanner(session) {
   button.addEventListener("click", () => setScreen(SCREENS.session));
 
   banner.append(text, button);
+  return banner;
+}
+
+function createGlobalAiBanner(batchState, actions) {
+  if (!batchState) return null;
+  if (!batchState.isBatchGenerating && !batchState.statusSummary) return null;
+
+  const banner = document.createElement("section");
+  banner.className = "global-ai-banner";
+
+  const isRunning = Boolean(batchState.isBatchGenerating);
+
+  // Top Row (Title / Status & Action Button)
+  const topRow = document.createElement("div");
+  topRow.className = "global-ai-banner-header";
+
+  const titleGroup = document.createElement("div");
+  titleGroup.className = "global-ai-banner-title";
+
+  if (isRunning) {
+    titleGroup.innerHTML = `✨ AI sedang membuat laporan <span class="font-normal opacity-80">• ${batchState.className || "Kelas"}</span>`;
+  } else {
+    titleGroup.innerHTML = `✓ Laporan AI selesai <span class="font-normal opacity-80">• ${batchState.className || "Kelas"}</span>`;
+  }
+
+  const actionsGroup = document.createElement("div");
+  actionsGroup.className = "global-ai-banner-actions";
+
+  const actionBtn = document.createElement("button");
+  actionBtn.type = "button";
+  actionBtn.className = "global-ai-banner-btn";
+  actionBtn.textContent = isRunning ? "Buka Proses" : "Lihat Hasil";
+  actionBtn.addEventListener("click", () => {
+    if (actions?.openClassReports && batchState.classId) {
+      actions.openClassReports(batchState.classId);
+    }
+  });
+  actionsGroup.append(actionBtn);
+
+  if (!isRunning) {
+    const dismissBtn = document.createElement("button");
+    dismissBtn.type = "button";
+    dismissBtn.className = "global-ai-banner-dismiss";
+    dismissBtn.textContent = "✕";
+    dismissBtn.title = "Tutup Notifikasi";
+    dismissBtn.addEventListener("click", () => {
+      batchState.statusSummary = null;
+      if (actions?.requestAppRender) {
+        actions.requestAppRender();
+      }
+    });
+    actionsGroup.append(dismissBtn);
+  }
+
+  topRow.append(titleGroup, actionsGroup);
+  banner.append(topRow);
+
+  // Middle/Bottom Meta Line
+  const completedCount = (batchState.successCount || 0) + (batchState.failedCount || 0) + (batchState.skippedCount || 0);
+  const totalStudents = batchState.totalStudents || 0;
+
+  const metaRow = document.createElement("div");
+  metaRow.className = "global-ai-banner-meta";
+
+  if (isRunning) {
+    const activeStudentSpan = document.createElement("span");
+    activeStudentSpan.textContent = `Sedang diproses: ${batchState.currentStudentName || "-"} • Siswa ${batchState.currentStudentIndex || 0} dari ${totalStudents}`;
+
+    const statsSpan = document.createElement("span");
+    statsSpan.textContent = `${completedCount} selesai • ${batchState.failedCount || 0} gagal • ${batchState.skippedCount || 0} dilewati`;
+
+    const noteSpan = document.createElement("span");
+    noteSpan.className = "italic text-xs opacity-75";
+    noteSpan.textContent = "AI memproses laporan satu per satu.";
+
+    metaRow.append(activeStudentSpan, document.createTextNode(" • "), statsSpan, document.createTextNode(" • "), noteSpan);
+  } else {
+    const statsSpan = document.createElement("span");
+    statsSpan.textContent = `${batchState.successCount || 0} berhasil • ${batchState.failedCount || 0} gagal • ${batchState.skippedCount || 0} dilewati`;
+    metaRow.append(statsSpan);
+  }
+
+  banner.append(metaRow);
+
+  // Progress bar if running
+  if (isRunning && totalStudents > 0) {
+    const progressBg = document.createElement("div");
+    progressBg.className = "global-ai-banner-progress-bg";
+    const progressFill = document.createElement("div");
+    progressFill.className = "global-ai-banner-progress-fill";
+    const pct = Math.min(100, Math.round((completedCount / totalStudents) * 100));
+    progressFill.style.width = `${pct}%`;
+    progressBg.append(progressFill);
+    banner.append(progressBg);
+  }
+
   return banner;
 }
 
