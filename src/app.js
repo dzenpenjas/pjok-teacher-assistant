@@ -382,67 +382,36 @@ function createCrudActions() {
       }
     },
     createStudent: (input) => {
-      const state = repositories.students.loadState();
-      const student = createStudent({
+      const student = repositories.students.create({
         ...input,
-        tagIds: input.tagId ? [input.tagId] : (Array.isArray(input.tagIds) ? input.tagIds : [])
-      });
+        tagIds: input.tagId ? [input.tagId] : []
+      }).at(-1);
 
-      const nextStudents = [...(state.students || []), student];
-      const nextNotes = [...(state.studentNotes || [])];
-      const nextGrowth = [...(state.growthRecords || [])];
-
-      if (input.noteText) {
-        const note = createStudentNote({
+      if (input.noteText && student) {
+        const notes = repositories.notes.create({
           studentId: student.id,
           text: input.noteText
         });
-        nextNotes.push(note);
-        student.noteIds = [note.id];
+        repositories.students.update(student.id, {
+          ...student,
+          noteIds: [notes.at(-1).id]
+        });
       }
 
-      if (input.heightCm || input.weightKg) {
-        const growth = createGrowthRecord({
+      if (student && (input.heightCm || input.weightKg)) {
+        repositories.growthRecords.create({
           studentId: student.id,
           date: new Date().toISOString().slice(0, 10),
           heightCm: input.heightCm || "",
           weightKg: input.weightKg || "",
           note: "Pengukuran awal siswa"
         });
-        nextGrowth.push(growth);
-      }
-
-      const saveResult = repositories.students.saveState({
-        ...state,
-        students: nextStudents,
-        studentNotes: nextNotes,
-        growthRecords: nextGrowth
-      });
-
-      if (saveResult && saveResult.success === false) {
-        return {
-          success: false,
-          data: null,
-          error: saveResult.error || new Error("Gagal menyimpan data siswa ke Local Storage.")
-        };
       }
 
       refreshState();
-      return {
-        success: true,
-        data: student,
-        error: null
-      };
     },
     batchCreateStudents: (studentsList = []) => {
-      if (!Array.isArray(studentsList) || studentsList.length === 0) {
-        return {
-          success: true,
-          created: [],
-          error: null
-        };
-      }
-
+      if (!Array.isArray(studentsList) || studentsList.length === 0) return [];
       const state = repositories.students.loadState();
       const currentStudents = [...(state.students || [])];
       const createdList = [];
@@ -461,67 +430,17 @@ function createCrudActions() {
         createdList.push(student);
       }
 
-      const saveResult = repositories.students.saveState({
+      repositories.students.saveState({
         ...state,
         students: currentStudents
       });
 
-      if (saveResult && saveResult.success === false) {
-        return {
-          success: false,
-          created: [],
-          error: saveResult.error || new Error("Gagal menyimpan batch siswa ke Local Storage.")
-        };
-      }
-
       refreshState();
-      return {
-        success: true,
-        created: createdList,
-        error: null
-      };
+      return createdList;
     },
     updateStudent: (id, input) => {
-      const state = repositories.students.loadState();
-      const studentIndex = (state.students || []).findIndex((s) => s.id === id);
-      if (studentIndex === -1) {
-        return {
-          success: false,
-          data: null,
-          error: new Error("Siswa tidak ditemukan.")
-        };
-      }
-
-      const existing = state.students[studentIndex];
-      const updatedStudent = createStudent({
-        ...existing,
-        ...input,
-        id,
-        createdAt: existing.createdAt
-      });
-
-      const nextStudents = [...state.students];
-      nextStudents[studentIndex] = updatedStudent;
-
-      const saveResult = repositories.students.saveState({
-        ...state,
-        students: nextStudents
-      });
-
-      if (saveResult && saveResult.success === false) {
-        return {
-          success: false,
-          data: null,
-          error: saveResult.error || new Error("Gagal memperbarui data siswa ke Local Storage.")
-        };
-      }
-
+      repositories.students.update(id, input);
       refreshState();
-      return {
-        success: true,
-        data: updatedStudent,
-        error: null
-      };
     },
     deleteStudent: (id) => {
       const student = repositories.students.findById(id);

@@ -2,6 +2,7 @@ import { createField, createSelectField, formToObject } from "./form-controls.js
 import { createPhotoPickerField } from "./student-photo-field.js";
 import { createStudentAvatar } from "./student-avatar.js";
 import { ICONS } from "./icons.js";
+import { showToast } from "./feedback.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -288,13 +289,17 @@ export function renderStudentsScreen(state, actions) {
       const payload = formToObject(form);
       const photo = photoPicker.getPhoto();
       if (actions?.createStudent) {
-        actions.createStudent({
+        const result = actions.createStudent({
           ...payload,
           photo
         });
+        if (result?.success === true) {
+          showAddModal = false;
+          render();
+          return;
+        }
       }
-      showAddModal = false;
-      render();
+      showToast("Penyimpanan gagal.\n\nData belum berhasil disimpan ke perangkat.\nKemungkinan ruang penyimpanan browser penuh atau tidak tersedia.");
     });
 
     modal.append(form);

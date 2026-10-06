@@ -57,13 +57,17 @@ export function renderStudentDetailModal(studentId, context, onClose) {
       title: `Foto: ${student.name}`,
       onCapture: (newPhoto) => {
         if (context.actions?.updateStudent) {
-          context.actions.updateStudent(student.id, {
+          const result = context.actions.updateStudent(student.id, {
             ...student,
             photo: newPhoto
           });
+          if (result?.success === true) {
+            const updatedAvatar = createStudentAvatar({ ...student, photo: newPhoto }, "modal-avatar profile-avatar-main");
+            avatar.replaceWith(updatedAvatar);
+            return;
+          }
         }
-        const updatedAvatar = createStudentAvatar({ ...student, photo: newPhoto }, "modal-avatar profile-avatar-main");
-        avatar.replaceWith(updatedAvatar);
+        showToast("Penyimpanan gagal.\n\nData belum berhasil disimpan ke perangkat.\nKemungkinan ruang penyimpanan browser penuh atau tidak tersedia.");
       }
     });
   });
@@ -150,15 +154,19 @@ export function renderStudentDetailModal(studentId, context, onClose) {
     e.preventDefault();
     const data = formToObject(idForm);
     if (context.actions?.updateStudent) {
-      context.actions.updateStudent(student.id, {
+      const result = context.actions.updateStudent(student.id, {
         ...student,
         name: data.name?.trim() || student.name,
         studentNumber: (data.studentNumber || "").trim(),
         gender: data.gender || student.gender,
         birthDate: data.birthDate || ""
       });
-      showToast("Profil tersimpan");
+      if (result?.success === true) {
+        showToast("Profil tersimpan");
+        return;
+      }
     }
+    showToast("Penyimpanan gagal.\n\nData belum berhasil disimpan ke perangkat.\nKemungkinan ruang penyimpanan browser penuh atau tidak tersedia.");
   });
 
   identitySection.append(idSummary, idForm);

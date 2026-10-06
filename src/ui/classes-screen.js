@@ -2352,14 +2352,18 @@ export function renderClassesScreen(state, actions) {
         const payload = formToObject(form);
         const photo = photoPicker.getPhoto();
         if (actions?.createStudent) {
-          actions.createStudent({
+          const result = actions.createStudent({
             ...payload,
             classId: classRoom.id,
             photo
           });
+          if (result?.success === true) {
+            showAddStudentModal = false;
+            render();
+            return;
+          }
         }
-        showAddStudentModal = false;
-        render();
+        showToast("Penyimpanan gagal.\n\nData belum berhasil disimpan ke perangkat.\nKemungkinan ruang penyimpanan browser penuh atau tidak tersedia.");
       });
 
       bodyContainer.append(form);
@@ -2607,15 +2611,17 @@ export function renderClassesScreen(state, actions) {
             classId: classRoom.id
           }));
 
-          if (actions?.batchCreateStudents) {
-            actions.batchCreateStudents(studentsToImport);
-          } else if (actions?.createStudent) {
-            studentsToImport.forEach((st) => actions.createStudent(st));
-          }
+          const result = actions?.batchCreateStudents
+            ? actions.batchCreateStudents(studentsToImport)
+            : null;
 
-          showToast(`✓ ${studentsToImport.length} siswa berhasil ditambahkan ke ${classRoom.name}`);
-          showAddStudentModal = false;
-          render();
+          if (result?.success === true) {
+            showToast(`✓ ${studentsToImport.length} siswa berhasil ditambahkan ke ${classRoom.name}`);
+            showAddStudentModal = false;
+            render();
+          } else {
+            showToast("Penyimpanan gagal.\n\nData belum berhasil disimpan ke perangkat.\nKemungkinan ruang penyimpanan browser penuh atau tidak tersedia.");
+          }
         });
 
         actionRow.append(changeFileBtn, importBtn);
