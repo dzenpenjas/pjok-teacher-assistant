@@ -36,15 +36,12 @@ export function calculateMonthsBetween(dateStr1, dateStr2) {
   
   const yearsDiff = d2.getFullYear() - d1.getFullYear();
   const monthsDiff = d2.getMonth() - d1.getMonth();
-  const daysDiff = d2.getDate() - d1.getDate();
   
   let totalMonths = (yearsDiff * 12) + monthsDiff;
-  if (daysDiff < 0) {
-    totalMonths -= 0.5;
-  } else if (daysDiff > 0) {
-    totalMonths += 0.5;
+  if (d2.getDate() < d1.getDate()) {
+    totalMonths--;
   }
-  return Math.max(0, Math.round(totalMonths * 10) / 10);
+  return Math.max(0, totalMonths);
 }
 
 export function analyzeGrowth(student, growthSelections = [], allGrowthRecords = []) {
