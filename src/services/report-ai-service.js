@@ -25,7 +25,7 @@ PRINSIP SINTESIS & ANALISIS BUKTI ASESMEN (EVIDENCE-BASED SYNTHESIS RULES):
    - Periksa setiap asesmen dalam "assessments":
      * assessmentType: "practice" (praktik), "oral" (lisan/diskusi), "written" (tertulis), "observation" (observasi/sikap).
      * materials & title: topik materi/kompetensi.
-     * items: perhatikan "prompt" (pertanyaan/instruksi), "rubricLevels" (seluruh skala rubrik 1-5), "rubricLevel" + "rubricLabel" + "rubricDescription" (capaian siswa), serta "teacherNote".
+     * items: perhatikan "prompt" (pertanyaan/instruksi), "rubricLevels" (seluruh level rubrik sesuai rubricScale pada item), "rubricLevel" + "rubricLabel" + "rubricDescription" (capaian siswa), serta "teacherNote".
      * teacherNote keseluruhan asesmen & numericScore.
 
 2. LAKUKAN SINTESIS LINTAS ASESMEN (CROSS-ASSESSMENT SYNTHESIS):
