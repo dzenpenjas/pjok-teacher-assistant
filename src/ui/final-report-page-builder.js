@@ -32,39 +32,45 @@ export function createFinalReportPage({
       );
       const sessionScoring = reportScoring?.sessions?.[item.assessmentSessionId] || null;
       let displayScore = null;
-      if (isScoringConverted && sessionScoring && sessionScoring.canConvert && sessionScoring.convertedScore !== null) {
-        displayScore = sessionScoring.convertedScore;
-      } else if (!isScoringConverted && matchSource && matchSource.numericScore !== null && matchSource.numericScore !== undefined) {
-        displayScore = matchSource.numericScore;
-      } else if (matchSource && matchSource.numericScore !== null && matchSource.numericScore !== undefined) {
-        displayScore = matchSource.numericScore;
+      let canConvert = true;
+      let conversionReason = null;
+
+      if (isScoringConverted) {
+        if (sessionScoring && sessionScoring.canConvert && sessionScoring.convertedScore !== null) {
+          displayScore = sessionScoring.convertedScore;
+        } else {
+          displayScore = null;
+          canConvert = false;
+          conversionReason = sessionScoring?.reason || "Tidak dapat dikonversi";
+        }
+      } else {
+        displayScore = matchSource?.numericScore !== null && matchSource?.numericScore !== undefined
+          ? matchSource.numericScore
+          : (item.numericScore !== undefined ? item.numericScore : null);
       }
 
-      if (!matchSource) {
-        if (item.title || item.description) {
-          return {
-            assessmentSessionId: item.assessmentSessionId || "",
-            title: item.title || "Asesmen PJOK",
-            numericScore: item.numericScore !== undefined ? item.numericScore : null,
-            displayScore: isScoringConverted ? (sessionScoring?.convertedScore ?? item.numericScore) : (item.numericScore ?? null),
-            description: item.description || ""
-          };
-        }
-        return null;
-      }
+      const title = matchSource?.title || item.title || "Asesmen PJOK";
+      const numericScore = matchSource?.numericScore !== undefined ? matchSource.numericScore : (item.numericScore ?? null);
+
       return {
-        assessmentSessionId: matchSource.assessmentSessionId,
-        title: matchSource.title,
-        numericScore: matchSource.numericScore,
+        assessmentSessionId: item.assessmentSessionId || matchSource?.assessmentSessionId || "",
+        title,
+        numericScore,
         displayScore,
+        canConvert,
+        conversionReason,
         description: item.description || ""
       };
     })
     .filter(Boolean);
 
   let overallScore = null;
-  if (isScoringConverted && reportScoring?.overallConvertedScore !== null && reportScoring?.overallConvertedScore !== undefined) {
-    overallScore = reportScoring.overallConvertedScore;
+  if (isScoringConverted) {
+    if (reportScoring?.overallConvertedScore !== null && reportScoring?.overallConvertedScore !== undefined) {
+      overallScore = reportScoring.overallConvertedScore;
+    } else {
+      overallScore = null;
+    }
   } else {
     const scoresWithVal = (currentContext.assessments || [])
       .map((a) => a.numericScore)
@@ -81,39 +87,57 @@ export function createFinalReportPage({
   });
 
   const growthSummary = currentContext.growthSummary || currentContext.growthAnalysis?.growthSummary || null;
-  const latestGrowthRecord = currentContext.growth?.[0] || null;
+  const growthList = Array.isArray(currentContext.growth) ? currentContext.growth : [];
 
-  let heightDisplay = "-";
-  let weightDisplay = "-";
-  let heightDate = "";
-  let weightDate = "";
-  let growthDateNote = "";
+  let latestHeightVal = null;
+  let latestHeightDate = "";
+  let latestWeightVal = null;
+  let latestWeightDate = "";
 
   if (growthSummary) {
-    if (growthSummary.latestHeight) {
-      heightDisplay = `${growthSummary.latestHeight.heightCm} cm`;
-      heightDate = growthSummary.latestHeight.date || "";
+    if (growthSummary.latestHeight && growthSummary.latestHeight.heightCm) {
+      latestHeightVal = growthSummary.latestHeight.heightCm;
+      latestHeightDate = growthSummary.latestHeight.date || "";
     }
-    if (growthSummary.latestWeight) {
-      weightDisplay = `${growthSummary.latestWeight.weightKg} kg`;
-      weightDate = growthSummary.latestWeight.date || "";
+    if (growthSummary.latestWeight && growthSummary.latestWeight.weightKg) {
+      latestWeightVal = growthSummary.latestWeight.weightKg;
+      latestWeightDate = growthSummary.latestWeight.date || "";
     }
+  } else if (growthList.length > 0) {
+    for (const g of growthList) {
+      if (!latestHeightVal && g && g.heightCm !== null && g.heightCm !== undefined && g.heightCm !== "" && g.heightCm !== "-") {
+        const hClean = typeof g.heightCm === "string" ? g.heightCm.replace(/cm/gi, "").trim() : g.heightCm;
+        if (!isNaN(Number(hClean)) && Number(hClean) > 0) {
+          latestHeightVal = Number(hClean);
+          latestHeightDate = g.date || "";
+        }
+      }
+      if (!latestWeightVal && g && g.weightKg !== null && g.weightKg !== undefined && g.weightKg !== "" && g.weightKg !== "-") {
+        const wClean = typeof g.weightKg === "string" ? g.weightKg.replace(/kg/gi, "").trim() : g.weightKg;
+        if (!isNaN(Number(wClean)) && Number(wClean) > 0) {
+          latestWeightVal = Number(wClean);
+          latestWeightDate = g.date || "";
+        }
+      }
+    }
+  }
 
-    if (heightDate && weightDate && heightDate === weightDate) {
-      growthDateNote = `Diukur pada ${heightDate}`;
-    } else if (heightDate && weightDate) {
-      growthDateNote = `Tinggi badan diukur pada ${heightDate} • Berat badan diukur pada ${weightDate}`;
-    } else if (heightDate) {
-      growthDateNote = `Tinggi badan diukur pada ${heightDate}`;
-    } else if (weightDate) {
-      growthDateNote = `Berat badan diukur pada ${weightDate}`;
-    } else {
-      growthDateNote = `Diukur pada ${formattedToday}`;
-    }
-  } else if (latestGrowthRecord) {
-    heightDisplay = latestGrowthRecord.heightCm && latestGrowthRecord.heightCm !== "-" ? `${latestGrowthRecord.heightCm} cm` : "-";
-    weightDisplay = latestGrowthRecord.weightKg && latestGrowthRecord.weightKg !== "-" ? `${latestGrowthRecord.weightKg} kg` : "-";
-    growthDateNote = `Diukur pada ${latestGrowthRecord.date || formattedToday}`;
+  const heightDisplay = latestHeightVal ? `${latestHeightVal} cm` : "-";
+  const weightDisplay = latestWeightVal ? `${latestWeightVal} kg` : "-";
+
+  let growthDateNote = "";
+  if (latestHeightDate && latestWeightDate && latestHeightDate === latestWeightDate) {
+    growthDateNote = `Diukur pada ${latestHeightDate}`;
+  } else if (latestHeightDate && latestWeightDate) {
+    growthDateNote = `Tinggi badan diukur pada ${latestHeightDate} • Berat badan diukur pada ${latestWeightDate}`;
+  } else if (latestHeightDate) {
+    growthDateNote = `Tinggi badan diukur pada ${latestHeightDate}`;
+  } else if (latestWeightDate) {
+    growthDateNote = `Berat badan diukur pada ${latestWeightDate}`;
+  } else if (growthList.length > 0 && growthList[0].date) {
+    growthDateNote = `Diukur pada ${growthList[0].date}`;
+  } else {
+    growthDateNote = `Diukur pada ${formattedToday}`;
   }
 
   let studentAgeText = currentContext.studentAgeText || "-";
@@ -237,7 +261,9 @@ export function createFinalReportPage({
 
     const heroNote = document.createElement("p");
     heroNote.className = "a4-score-hero-note";
-    heroNote.textContent = "Nilai dari asesmen yang dipilih guru.";
+    heroNote.textContent = isScoringConverted
+      ? `Nilai Konversi (${reportScoring?.minimum ?? 75}–${reportScoring?.maximum ?? 92}) dari asesmen yang dipilih guru.`
+      : "Nilai dari asesmen yang dipilih guru.";
 
     scoreHero.append(heroLabel, heroScoreWrap, heroNote);
     a4Paper.append(scoreHero);
@@ -276,8 +302,8 @@ export function createFinalReportPage({
     thead.innerHTML = `
       <tr>
         <th style="width: 28%;">Yang Dipelajari</th>
-        <th style="width: 14%; text-align: center;">Nilai</th>
-        <th style="width: 58%;">Hasil Belajar</th>
+        <th style="width: 18%; text-align: center;">${isScoringConverted ? "Nilai Konversi" : "Nilai"}</th>
+        <th style="width: 54%;">Hasil Belajar</th>
       </tr>
     `;
     const tbody = document.createElement("tbody");
@@ -292,16 +318,34 @@ export function createFinalReportPage({
       tdScore.className = "a4-td-score";
       const scoreBox = document.createElement("div");
       scoreBox.className = "a4-cell-score-box";
-      const hasScore = item.numericScore !== null && item.numericScore !== undefined;
-      const scoreNum = document.createElement("span");
-      scoreNum.className = "a4-cell-score-num";
-      scoreNum.textContent = hasScore ? String(item.numericScore) : "-";
-      scoreBox.append(scoreNum);
-      if (hasScore) {
-        const scoreDenom = document.createElement("span");
-        scoreDenom.className = "a4-cell-score-denom";
-        scoreDenom.textContent = "/100";
-        scoreBox.append(scoreDenom);
+
+      if (isScoringConverted) {
+        if (item.canConvert && item.displayScore !== null && item.displayScore !== undefined) {
+          const scoreNum = document.createElement("span");
+          scoreNum.className = "a4-cell-score-num";
+          scoreNum.textContent = String(item.displayScore);
+          const scoreDenom = document.createElement("span");
+          scoreDenom.className = "a4-cell-score-denom";
+          scoreDenom.textContent = "/100";
+          scoreBox.append(scoreNum, scoreDenom);
+        } else {
+          const scoreText = document.createElement("span");
+          scoreText.className = "a4-cell-score-unconverted text-xs text-subtle italic";
+          scoreText.textContent = "Tidak dapat dikonversi";
+          scoreBox.append(scoreText);
+        }
+      } else {
+        const hasScore = item.displayScore !== null && item.displayScore !== undefined;
+        const scoreNum = document.createElement("span");
+        scoreNum.className = "a4-cell-score-num";
+        scoreNum.textContent = hasScore ? String(item.displayScore) : "-";
+        scoreBox.append(scoreNum);
+        if (hasScore) {
+          const scoreDenom = document.createElement("span");
+          scoreDenom.className = "a4-cell-score-denom";
+          scoreDenom.textContent = "/100";
+          scoreBox.append(scoreDenom);
+        }
       }
       tdScore.append(scoreBox);
 
@@ -368,33 +412,25 @@ export function createFinalReportPage({
 
     const hCard = document.createElement("div");
     hCard.className = "a4-growth-card";
-    const hVal = finalReportData.growth.heightCm && finalReportData.growth.heightCm !== "-"
-      ? `${finalReportData.growth.heightCm} cm`
-      : "-";
-    
     const hLabel = document.createElement("span");
     hLabel.className = "a4-growth-card-label";
     hLabel.textContent = "TINGGI BADAN";
 
     const hValue = document.createElement("span");
     hValue.className = "a4-growth-card-value";
-    hValue.textContent = hVal;
+    hValue.textContent = finalReportData.growth.heightDisplay || (finalReportData.growth.heightCm ? `${finalReportData.growth.heightCm} cm` : "-");
 
     hCard.append(hLabel, hValue);
 
     const wCard = document.createElement("div");
     wCard.className = "a4-growth-card";
-    const wVal = finalReportData.growth.weightKg && finalReportData.growth.weightKg !== "-"
-      ? `${finalReportData.growth.weightKg} kg`
-      : "-";
-
     const wLabel = document.createElement("span");
     wLabel.className = "a4-growth-card-label";
     wLabel.textContent = "BERAT BADAN";
 
     const wValue = document.createElement("span");
     wValue.className = "a4-growth-card-value";
-    wValue.textContent = wVal;
+    wValue.textContent = finalReportData.growth.weightDisplay || (finalReportData.growth.weightKg ? `${finalReportData.growth.weightKg} kg` : "-");
 
     wCard.append(wLabel, wValue);
 
@@ -403,7 +439,7 @@ export function createFinalReportPage({
 
     const dateNote = document.createElement("p");
     dateNote.className = "a4-growth-date-note";
-    dateNote.textContent = `Diukur pada ${finalReportData.growth.date}`;
+    dateNote.textContent = finalReportData.growth.date;
     growthSection.append(dateNote);
 
     if (finalReportData.growth.interpretation) {

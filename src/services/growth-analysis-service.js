@@ -166,8 +166,22 @@ export function calculateReportScoring({ assessmentSelections = [], scoringConfi
     };
   }
 
-  const minimum = Number(scoringConfig.minScore !== undefined ? scoringConfig.minScore : 75);
-  const maximum = Number(scoringConfig.maxScore !== undefined ? scoringConfig.maxScore : 92);
+  if (!scoringConfig || typeof scoringConfig !== "object") {
+    throw new Error("Konfigurasi konversi nilai tidak ditemukan.");
+  }
+
+  const rawMin = scoringConfig.minScore !== undefined ? scoringConfig.minScore : scoringConfig.minimum;
+  const rawMax = scoringConfig.maxScore !== undefined ? scoringConfig.maxScore : scoringConfig.maximum;
+
+  if (rawMin === null || rawMin === undefined || (typeof rawMin === "string" && rawMin.trim() === "")) {
+    throw new Error("Nilai minimum konversi tidak boleh kosong.");
+  }
+  if (rawMax === null || rawMax === undefined || (typeof rawMax === "string" && rawMax.trim() === "")) {
+    throw new Error("Nilai maksimum konversi tidak boleh kosong.");
+  }
+
+  const minimum = Number(rawMin);
+  const maximum = Number(rawMax);
 
   if (!Number.isFinite(minimum) || !Number.isFinite(maximum) || minimum < 0 || maximum > 100 || minimum >= maximum) {
     throw new Error(`Rentang konversi tidak valid (${minimum} - ${maximum}). Minimum harus >= 0, maksimum <= 100, dan minimum < maksimum.`);
@@ -192,7 +206,7 @@ export function calculateReportScoring({ assessmentSelections = [], scoringConfi
 
     const itemResults = Array.isArray(result?.itemResults) ? result.itemResults : [];
 
-    if (rawItems.length === 0) {
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
       sessions[sessionId] = {
         assessmentSessionId: sessionId,
         rawScore,
@@ -203,24 +217,71 @@ export function calculateReportScoring({ assessmentSelections = [], scoringConfi
       continue;
     }
 
+    const itemIds = rawItems.map((it) => it?.id).filter(Boolean);
+    const uniqueItemIds = new Set(itemIds);
+    if (itemIds.length !== rawItems.length || uniqueItemIds.size !== rawItems.length) {
+      sessions[sessionId] = {
+        assessmentSessionId: sessionId,
+        rawScore,
+        convertedScore: null,
+        canConvert: false,
+        reason: "SNAPSHOT_SOAL_TIDAK_VALID"
+      };
+      continue;
+    }
+
     let allItemsComplete = true;
+    let failureReason = null;
     const proportions = [];
 
     for (const snapItem of rawItems) {
-      const scale = Number(snapItem.rubricScale) || 5;
-      if (scale <= 1) {
+      if (!snapItem || !snapItem.id) {
         allItemsComplete = false;
+        failureReason = "DATA_RUBRIK_BELUM_LENGKAP";
         break;
       }
 
-      const matchingResult = itemResults.find((ir) => ir && ir.itemId === snapItem.id);
-      const score = (matchingResult?.rubricLevel !== null && matchingResult?.rubricLevel !== undefined && Number.isFinite(Number(matchingResult.rubricLevel)))
-        ? Number(matchingResult.rubricLevel)
-        : null;
-
-      if (score === null || score < 1 || score > scale) {
+      const rawScale = snapItem.rubricScale;
+      if (rawScale === null || rawScale === undefined || (typeof rawScale === "string" && rawScale.trim() === "")) {
         allItemsComplete = false;
+        failureReason = "SKALA_RUBRIK_TIDAK_VALID";
         break;
+      }
+      const scale = Number(rawScale);
+      if (!Number.isInteger(scale) || scale <= 1) {
+        allItemsComplete = false;
+        failureReason = "SKALA_RUBRIK_TIDAK_VALID";
+        break;
+      }
+
+      const matchingResults = itemResults.filter((ir) => ir && ir.itemId === snapItem.id);
+      if (matchingResults.length !== 1) {
+        allItemsComplete = false;
+        failureReason = "DATA_RUBRIK_BELUM_LENGKAP";
+        break;
+      }
+
+      const matchingResult = matchingResults[0];
+      const rawLevel = matchingResult.rubricLevel;
+      if (rawLevel === null || rawLevel === undefined || (typeof rawLevel === "string" && rawLevel.trim() === "")) {
+        allItemsComplete = false;
+        failureReason = "DATA_RUBRIK_BELUM_LENGKAP";
+        break;
+      }
+      const score = Number(rawLevel);
+      if (!Number.isInteger(score) || score < 1 || score > scale) {
+        allItemsComplete = false;
+        failureReason = "DATA_RUBRIK_BELUM_LENGKAP";
+        break;
+      }
+
+      if (Array.isArray(snapItem.rubricLevels) && snapItem.rubricLevels.length > 0) {
+        const levelMatches = snapItem.rubricLevels.some((lvl) => Number(lvl.level) === score);
+        if (!levelMatches) {
+          allItemsComplete = false;
+          failureReason = "DATA_RUBRIK_BELUM_LENGKAP";
+          break;
+        }
       }
 
       const proportion = (score - 1) / (scale - 1);
@@ -233,7 +294,7 @@ export function calculateReportScoring({ assessmentSelections = [], scoringConfi
         rawScore,
         convertedScore: null,
         canConvert: false,
-        reason: "DATA_RUBRIK_BELUM_LENGKAP"
+        reason: failureReason || "DATA_RUBRIK_BELUM_LENGKAP"
       };
       continue;
     }

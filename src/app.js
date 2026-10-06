@@ -714,7 +714,9 @@ function createCrudActions() {
 
     // STUDENT REPORTS PERSISTENCE
     saveStudentReport: (report) => {
-      if (!report || !report.studentId || !report.classId) return null;
+      if (!report || !report.studentId || !report.classId) {
+        return { success: false, report: null, error: new Error("studentId dan classId wajib diisi.") };
+      }
       const existing = Array.isArray(appState.studentReports) ? [...appState.studentReports] : [];
       const resolvedAcademicYearId =
         report.academicYearId || appState.activeAcademicYearId || null;
@@ -745,12 +747,19 @@ function createCrudActions() {
       } else {
         existing.push(record);
       }
-      appState = saveState({
+      const savedResult = saveState({
         ...appState,
         studentReports: existing
       });
+      appState = savedResult;
       refreshState();
-      return record;
+
+      const isSuccess = Boolean(savedResult?.success !== false && !savedResult?.error);
+      return {
+        success: isSuccess,
+        report: isSuccess ? record : null,
+        error: isSuccess ? null : (savedResult?.error || new Error("Gagal menyimpan laporan"))
+      };
     },
 
     // TEACHING SESSION LIFECYCLE

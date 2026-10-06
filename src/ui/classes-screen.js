@@ -4,7 +4,7 @@ import { createStudentAvatar } from "./student-avatar.js";
 import { ICONS } from "./icons.js";
 import { generateRubricWithAI } from "../services/rubric-ai-service.js";
 import { generateStudentReportWithAI } from "../services/report-ai-service.js";
-import { analyzeGrowth } from "../services/growth-analysis-service.js";
+import { analyzeGrowth, calculateReportScoring } from "../services/growth-analysis-service.js";
 import { renderAssessmentImportModal } from "./assessment-import-modal.js";
 import { exportAssessmentSessionToJsonFile } from "../services/assessment-package-service.js";
 import { exportAssessmentSessionToExcelFile } from "../services/assessment-xlsx-adapter.js";
@@ -804,6 +804,59 @@ export function renderClassesScreen(state, actions) {
     extraOptionsWrap.append(growthLbl, obsLbl);
     sourceConfigBox.append(extraOptionsWrap);
 
+    // Scoring Conversion Configuration Controls
+    const scoringConfigBox = createElement("div", "pt-2 border-t border-slate-200/60 dark:border-slate-700/60 mt-2 space-y-2");
+    
+    if (!classUi.batchScoringConfig) {
+      classUi.batchScoringConfig = { enabled: false, minScore: 75, maxScore: 92 };
+    }
+
+    const scoreConvRow = createElement("div", "flex items-center justify-between flex-wrap gap-2");
+    const scoreConvLbl = createElement("label", "flex items-center gap-1.5 cursor-pointer font-medium text-slate-700 dark:text-slate-300");
+    const scoreConvChk = document.createElement("input");
+    scoreConvChk.type = "checkbox";
+    scoreConvChk.className = "report-source-check";
+    scoreConvChk.checked = Boolean(classUi.batchScoringConfig.enabled);
+    scoreConvChk.disabled = classUi.batchState.isBatchGenerating;
+    scoreConvLbl.append(scoreConvChk, document.createTextNode("Gunakan konversi nilai rapor"));
+
+    const inputsWrap = createElement("div", "flex items-center gap-2 text-xs");
+    inputsWrap.style.display = classUi.batchScoringConfig.enabled ? "flex" : "none";
+
+    const minLbl = createElement("span", "text-subtle", "Min:");
+    const minInput = document.createElement("input");
+    minInput.type = "number";
+    minInput.className = "input-text text-xs w-16 px-1.5 py-0.5";
+    minInput.min = "0";
+    minInput.max = "100";
+    minInput.value = classUi.batchScoringConfig.minScore ?? 75;
+    minInput.disabled = classUi.batchState.isBatchGenerating;
+    minInput.addEventListener("input", (e) => {
+      classUi.batchScoringConfig.minScore = e.target.value;
+    });
+
+    const maxLbl = createElement("span", "text-subtle", "Maks:");
+    const maxInput = document.createElement("input");
+    maxInput.type = "number";
+    maxInput.className = "input-text text-xs w-16 px-1.5 py-0.5";
+    maxInput.min = "0";
+    maxInput.max = "100";
+    maxInput.value = classUi.batchScoringConfig.maxScore ?? 92;
+    maxInput.disabled = classUi.batchState.isBatchGenerating;
+    maxInput.addEventListener("input", (e) => {
+      classUi.batchScoringConfig.maxScore = e.target.value;
+    });
+
+    scoreConvChk.addEventListener("change", (e) => {
+      classUi.batchScoringConfig.enabled = e.target.checked;
+      inputsWrap.style.display = e.target.checked ? "flex" : "none";
+    });
+
+    inputsWrap.append(minLbl, minInput, maxLbl, maxInput);
+    scoreConvRow.append(scoreConvLbl, inputsWrap);
+    scoringConfigBox.append(scoreConvRow);
+    sourceConfigBox.append(scoringConfigBox);
+
     batchPanel.append(batchHeader, sourceConfigBox);
 
     // Action Row
@@ -1069,6 +1122,24 @@ export function renderClassesScreen(state, actions) {
 
       if (classUi.batchState.isBatchGenerating) return;
 
+      let frozenScoringConfig = { enabled: false };
+      if (classUi.batchScoringConfig && classUi.batchScoringConfig.enabled) {
+        const minStr = String(classUi.batchScoringConfig.minScore ?? "").trim();
+        const maxStr = String(classUi.batchScoringConfig.maxScore ?? "").trim();
+        if (!minStr || !maxStr) {
+          window.alert("Rentang konversi tidak boleh kosong. Masukkan nilai minimum dan maksimum.");
+          return;
+        }
+        const minNum = Number(minStr);
+        const maxNum = Number(maxStr);
+        if (!Number.isFinite(minNum) || !Number.isFinite(maxNum) || minNum < 0 || maxNum > 100 || minNum >= maxNum) {
+          window.alert("Rentang konversi tidak valid (0 ≤ minimum < maksimum ≤ 100).");
+          return;
+        }
+        frozenScoringConfig = { enabled: true, minScore: minNum, maxScore: maxNum };
+      }
+      classUi.batchState.frozenScoringConfig = frozenScoringConfig;
+
       const runId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const startedAt = new Date().toISOString();
 
@@ -1192,7 +1263,8 @@ export function renderClassesScreen(state, actions) {
             assessmentSelections: selectedAssessments,
             growthSelections: selectedGrowth,
             observationSelections: selectedObs,
-            allGrowthRecords: state.growthRecords || []
+            allGrowthRecords: state.growthRecords || [],
+            scoringConfig: classUi.batchState.frozenScoringConfig || frozenScoringConfig
           });
 
           try {
@@ -1237,9 +1309,12 @@ export function renderClassesScreen(state, actions) {
 
               if (!classUi.reportDrafts) classUi.reportDrafts = {};
               classUi.reportDrafts[student.id] = draft;
+              if (!classUi.reportContexts) classUi.reportContexts = {};
+              classUi.reportContexts[student.id] = reportContext;
 
+              let saveResult = { success: false, error: new Error("saveStudentReport is not defined") };
               if (actions?.saveStudentReport) {
-                actions.saveStudentReport({
+                saveResult = actions.saveStudentReport({
                   studentId: student.id,
                   classId: classRoom.id,
                   academicYearId: state.activeAcademicYearId || null,
@@ -1249,9 +1324,32 @@ export function renderClassesScreen(state, actions) {
                 });
               }
 
-              classUi.batchState.successCount++;
-              classUi.batchState.studentStatuses[student.id] = "Berhasil";
-              updateDiag(BATCH_STAGES.STUDENT_DONE);
+              if (saveResult && saveResult.success) {
+                classUi.batchState.successCount++;
+                classUi.batchState.studentStatuses[student.id] = "Berhasil";
+                updateDiag(BATCH_STAGES.STUDENT_DONE);
+              } else {
+                classUi.batchState.failedCount++;
+                classUi.batchState.failedStudentIds.push(student.id);
+                classUi.batchState.studentStatuses[student.id] = "Gagal simpan";
+                updateDiag(BATCH_STAGES.ERROR, {
+                  errorCode: "SAVE_ERROR",
+                  errorMessage: saveResult?.error?.message || "Gagal menyimpan laporan ke penyimpanan lokal"
+                });
+                classUi.batchState.diagnostic.lastFailure = {
+                  studentId: student.id,
+                  studentName: student.name,
+                  studentIndex: i + 1,
+                  stage: BATCH_STAGES.REPORT_SAVING,
+                  lastCompletedStage: BATCH_STAGES.RESPONSE_PARSING,
+                  errorCode: "SAVE_ERROR",
+                  errorMessage: saveResult?.error?.message || "Gagal menyimpan laporan ke penyimpanan lokal",
+                  httpStatus: classUi.batchState.diagnostic.httpStatus,
+                  requestStartedAt: classUi.batchState.diagnostic.requestStartedAt,
+                  responseReceivedAt: classUi.batchState.diagnostic.responseReceivedAt,
+                  elapsedMs: classUi.batchState.diagnostic.elapsedMs
+                };
+              }
             } else {
               classUi.batchState.failedCount++;
               classUi.batchState.failedStudentIds.push(student.id);
@@ -1478,6 +1576,8 @@ export function renderClassesScreen(state, actions) {
           );
         } else if (studentSavedReport) {
           reportStatusPill = createElement("span", "results-stat-pill bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold", "✨ Laporan AI Tersimpan");
+        } else if (classUi.reportDrafts?.[student.id]) {
+          reportStatusPill = createElement("span", "results-stat-pill bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold", "Draf Belum Tersimpan");
         }
 
         if (reportStatusPill) {
@@ -1565,22 +1665,24 @@ export function renderClassesScreen(state, actions) {
         (r.semesterId || null) === activeSemesterId
     );
 
-    let activeReportContext = savedReport ? savedReport.reportContext : null;
-    let reportAiDraft = savedReport ? savedReport.draft : null;
+    let activeReportContext = savedReport ? savedReport.reportContext : (classUi.reportContexts?.[student.id] || null);
+    let reportAiDraft = savedReport ? savedReport.draft : (classUi.reportDrafts?.[student.id] || null);
     let isAiDraftLoading = false;
 
     function persistCurrentDraft() {
       if (actions?.saveStudentReport && reportAiDraft && (activeReportContext || savedReport?.reportContext)) {
-        actions.saveStudentReport({
+        const res = actions.saveStudentReport({
           id: savedReport?.id,
           studentId: student.id,
           classId: classId,
           academicYearId: activeAcademicYearId,
           semesterId: activeSemesterId,
-          reportContext: activeReportContext || savedReport.reportContext,
+          reportContext: activeReportContext || savedReport?.reportContext,
           draft: reportAiDraft
         });
+        return res;
       }
+      return { success: false };
     }
 
     // Build Data Sets
@@ -1794,11 +1896,37 @@ export function renderClassesScreen(state, actions) {
     // SECTION 2: PERTUMBUHAN
     // ==========================================
     const growthSection = createElement("section", "report-source-section");
-    const growthHeader = createElement("div", "report-section-header");
-    growthHeader.append(
+    const growthHeader = createElement("div", "report-section-header flex items-center justify-between flex-wrap gap-2");
+    const growthTitleWrap = createElement("div");
+    growthTitleWrap.append(
       createElement("h2", "report-section-title", `Pertumbuhan (${studentGrowth.length})`),
       createElement("span", "text-subtle text-xs", "Pilih data fisik / antropometri yang relevan")
     );
+
+    const selectLatestGrowthBtn = createElement("button", "btn-tool text-xs", "Gunakan TB & BB terbaru");
+    selectLatestGrowthBtn.type = "button";
+    selectLatestGrowthBtn.addEventListener("click", () => {
+      const sortedG = [...studentGrowth].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+      const latestH = sortedG.find((g) => g.heightCm !== null && g.heightCm !== undefined && g.heightCm !== "" && !isNaN(Number(g.heightCm)) && Number(g.heightCm) > 0);
+      const latestW = sortedG.find((g) => g.weightKg !== null && g.weightKg !== undefined && g.weightKg !== "" && !isNaN(Number(g.weightKg)) && Number(g.weightKg) > 0);
+
+      const selectedIds = new Set();
+      if (latestH && latestH.id) selectedIds.add(latestH.id);
+      if (latestW && latestW.id) selectedIds.add(latestW.id);
+
+      if (selectedIds.size === 0) {
+        showToast("Belum ada data tinggi atau berat badan yang valid.");
+        return;
+      }
+
+      classUi.reportSelection.growthRecordIds = Array.from(selectedIds);
+      render();
+      if (actions?.requestAppRender) {
+        actions.requestAppRender();
+      }
+    });
+
+    growthHeader.append(growthTitleWrap, selectLatestGrowthBtn);
     growthSection.append(growthHeader);
 
     if (studentGrowth.length === 0) {
@@ -1959,6 +2087,55 @@ export function renderClassesScreen(state, actions) {
 
     const summaryCountP = createElement("p", "report-summary-count-text text-sm font-medium mt-2");
     summaryPanel.append(summaryCountP);
+
+    // Scoring Conversion Controls for Single Student
+    if (!classUi.singleScoringConfig) {
+      classUi.singleScoringConfig = { enabled: false, minScore: 75, maxScore: 92 };
+    }
+
+    const singleScoringBox = createElement("div", "mt-4 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg text-xs border border-slate-200 dark:border-slate-700/60");
+    const singleScoreConvRow = createElement("div", "flex items-center justify-between flex-wrap gap-2");
+    const singleScoreConvLbl = createElement("label", "flex items-center gap-1.5 cursor-pointer font-medium text-slate-700 dark:text-slate-300");
+    const singleScoreConvChk = document.createElement("input");
+    singleScoreConvChk.type = "checkbox";
+    singleScoreConvChk.className = "report-source-check";
+    singleScoreConvChk.checked = Boolean(classUi.singleScoringConfig.enabled);
+    singleScoreConvLbl.append(singleScoreConvChk, document.createTextNode("Gunakan konversi nilai rapor"));
+
+    const singleInputsWrap = createElement("div", "flex items-center gap-2 text-xs");
+    singleInputsWrap.style.display = classUi.singleScoringConfig.enabled ? "flex" : "none";
+
+    const singleMinLbl = createElement("span", "text-subtle", "Min:");
+    const singleMinInput = document.createElement("input");
+    singleMinInput.type = "number";
+    singleMinInput.className = "input-text text-xs w-16 px-1.5 py-0.5";
+    singleMinInput.min = "0";
+    singleMinInput.max = "100";
+    singleMinInput.value = classUi.singleScoringConfig.minScore ?? 75;
+    singleMinInput.addEventListener("input", (e) => {
+      classUi.singleScoringConfig.minScore = e.target.value;
+    });
+
+    const singleMaxLbl = createElement("span", "text-subtle", "Maks:");
+    const singleMaxInput = document.createElement("input");
+    singleMaxInput.type = "number";
+    singleMaxInput.className = "input-text text-xs w-16 px-1.5 py-0.5";
+    singleMaxInput.min = "0";
+    singleMaxInput.max = "100";
+    singleMaxInput.value = classUi.singleScoringConfig.maxScore ?? 92;
+    singleMaxInput.addEventListener("input", (e) => {
+      classUi.singleScoringConfig.maxScore = e.target.value;
+    });
+
+    singleScoreConvChk.addEventListener("change", (e) => {
+      classUi.singleScoringConfig.enabled = e.target.checked;
+      singleInputsWrap.style.display = e.target.checked ? "flex" : "none";
+    });
+
+    singleInputsWrap.append(singleMinLbl, singleMinInput, singleMaxLbl, singleMaxInput);
+    singleScoreConvRow.append(singleScoreConvLbl, singleInputsWrap);
+    singleScoringBox.append(singleScoreConvRow);
+    summaryPanel.append(singleScoringBox);
 
     // Action buttons row
     const btnRow = createElement("div", "report-summary-btn-row flex flex-wrap gap-3 mt-4 items-center");
@@ -2134,7 +2311,8 @@ export function renderClassesScreen(state, actions) {
         assessmentSelections: selectedAssessments,
         growthSelections: selectedGrowth,
         observationSelections: selectedObs,
-        allGrowthRecords: state.growthRecords || []
+        allGrowthRecords: state.growthRecords || [],
+        scoringConfig: classUi.singleScoringConfig || null
       });
 
       const rcSection = createElement("div", "report-context-section mt-4 pt-3 border-t border-slate-200 dark:border-slate-700");
@@ -2231,7 +2409,8 @@ export function renderClassesScreen(state, actions) {
         assessmentSelections: currentSelectedAssessments,
         growthSelections: currentSelectedGrowth,
         observationSelections: currentSelectedObs,
-        allGrowthRecords: state.growthRecords || []
+        allGrowthRecords: state.growthRecords || [],
+        scoringConfig: classUi.singleScoringConfig || null
       });
 
       const {
@@ -2431,7 +2610,8 @@ export function renderClassesScreen(state, actions) {
         assessmentSelections: currentSelectedAssessments,
         growthSelections: currentSelectedGrowth,
         observationSelections: currentSelectedObs,
-        allGrowthRecords: state.growthRecords || []
+        allGrowthRecords: state.growthRecords || [],
+        scoringConfig: classUi.singleScoringConfig || null
       });
 
       const a4Paper = createFinalReportPage({
@@ -2628,13 +2808,31 @@ export function renderClassesScreen(state, actions) {
         return;
       }
 
+      let frozenScoringConfig = { enabled: false };
+      if (classUi.singleScoringConfig && classUi.singleScoringConfig.enabled) {
+        const minStr = String(classUi.singleScoringConfig.minScore ?? "").trim();
+        const maxStr = String(classUi.singleScoringConfig.maxScore ?? "").trim();
+        if (!minStr || !maxStr) {
+          window.alert("Rentang konversi tidak boleh kosong. Masukkan nilai minimum dan maksimum.");
+          return;
+        }
+        const minNum = Number(minStr);
+        const maxNum = Number(maxStr);
+        if (!Number.isFinite(minNum) || !Number.isFinite(maxNum) || minNum < 0 || maxNum > 100 || minNum >= maxNum) {
+          window.alert("Rentang konversi tidak valid (0 ≤ minimum < maksimum ≤ 100).");
+          return;
+        }
+        frozenScoringConfig = { enabled: true, minScore: minNum, maxScore: maxNum };
+      }
+
       const reportContext = buildSelectedReportContext({
         student,
         classRoom,
         assessmentSelections: selectedAssessments,
         growthSelections: selectedGrowth,
         observationSelections: selectedObs,
-        allGrowthRecords: state.growthRecords || []
+        allGrowthRecords: state.growthRecords || [],
+        scoringConfig: frozenScoringConfig
       });
 
       isAiDraftLoading = true;
@@ -2652,9 +2850,12 @@ export function renderClassesScreen(state, actions) {
         activeReportContext = reportContext;
         if (!classUi.reportDrafts) classUi.reportDrafts = {};
         classUi.reportDrafts[student.id] = draft;
+        if (!classUi.reportContexts) classUi.reportContexts = {};
+        classUi.reportContexts[student.id] = reportContext;
 
+        let saveResult = { success: false, error: new Error("saveStudentReport is not defined") };
         if (actions?.saveStudentReport) {
-          actions.saveStudentReport({
+          saveResult = actions.saveStudentReport({
             studentId: student.id,
             classId: classRoom.id,
             academicYearId: state.activeAcademicYearId || null,
@@ -2662,6 +2863,10 @@ export function renderClassesScreen(state, actions) {
             reportContext,
             draft
           });
+        }
+        if (!saveResult?.success) {
+          console.error("[SINGLE STUDENT REPORT SAVE FAILED]", saveResult?.error);
+          window.alert("Draf AI berhasil dibuat tetapi gagal disimpan ke penyimpanan lokal. Draf masih tampil di layar.");
         }
       } catch (err) {
         console.error("[AI REPORT GENERATION ERROR]", err);
@@ -4688,7 +4893,8 @@ export function buildSelectedReportContext({
   assessmentSelections = [],
   growthSelections = [],
   observationSelections = [],
-  allGrowthRecords = []
+  allGrowthRecords = [],
+  scoringConfig = null
 }) {
   const rawGrade = classRoom?.grade;
   const gradeNumber =
@@ -4816,6 +5022,10 @@ export function buildSelectedReportContext({
     : [];
 
   const growthAnalysis = analyzeGrowth(student, growthSelections, allGrowthRecords);
+  const reportScoring = calculateReportScoring({
+    assessmentSelections,
+    scoringConfig
+  });
 
   return {
     student: studentData,
@@ -4824,7 +5034,8 @@ export function buildSelectedReportContext({
     growth,
     observations,
     growthAnalysis,
-    growthSummary: growthAnalysis.growthSummary
+    growthSummary: growthAnalysis.growthSummary,
+    reportScoring
   };
 }
 
