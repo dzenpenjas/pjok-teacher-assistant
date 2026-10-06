@@ -697,9 +697,13 @@ export function renderClassesScreen(state, actions) {
     }
     if (!classUi.batchReportSelection) {
       classUi.batchReportSelection = {
+        assessmentSessionIds: [],
         includeGrowth: false,
         includeObservations: false
       };
+    }
+    if (!Array.isArray(classUi.batchReportSelection.assessmentSessionIds)) {
+      classUi.batchReportSelection.assessmentSessionIds = [];
     }
     if (!classUi.reportDrafts) {
       classUi.reportDrafts = {};
@@ -741,7 +745,7 @@ export function renderClassesScreen(state, actions) {
     } else {
       const sessList = createElement("div", "flex flex-wrap gap-3 mt-1");
       classSessions.forEach((sess) => {
-        const isChecked = (classUi.reportSelection.assessmentSessionIds || []).includes(sess.id);
+        const isChecked = (classUi.batchReportSelection.assessmentSessionIds || []).includes(sess.id);
         const lbl = createElement("label", "flex items-center gap-1.5 cursor-pointer font-medium text-slate-700 dark:text-slate-300");
         const chk = document.createElement("input");
         chk.type = "checkbox";
@@ -749,12 +753,15 @@ export function renderClassesScreen(state, actions) {
         chk.checked = isChecked;
         chk.disabled = classUi.batchState.isBatchGenerating;
         chk.addEventListener("change", (e) => {
+          if (!classUi.batchReportSelection.assessmentSessionIds) {
+            classUi.batchReportSelection.assessmentSessionIds = [];
+          }
           if (e.target.checked) {
-            if (!classUi.reportSelection.assessmentSessionIds.includes(sess.id)) {
-              classUi.reportSelection.assessmentSessionIds.push(sess.id);
+            if (!classUi.batchReportSelection.assessmentSessionIds.includes(sess.id)) {
+              classUi.batchReportSelection.assessmentSessionIds.push(sess.id);
             }
           } else {
-            classUi.reportSelection.assessmentSessionIds = classUi.reportSelection.assessmentSessionIds.filter(
+            classUi.batchReportSelection.assessmentSessionIds = classUi.batchReportSelection.assessmentSessionIds.filter(
               (id) => id !== sess.id
             );
           }
@@ -901,7 +908,8 @@ export function renderClassesScreen(state, actions) {
             if (r.studentId !== student.id) return null;
             const sess = (state.assessmentSessions || []).find((as) => as.id === r.assessmentSessionId);
             if (!sess || sess.classId !== classRoom.id) return null;
-            if ((classUi.reportSelection.assessmentSessionIds || []).length > 0 && !(classUi.reportSelection.assessmentSessionIds || []).includes(sess.id)) {
+            const batchAssessmentIds = classUi.batchReportSelection?.assessmentSessionIds || [];
+            if (batchAssessmentIds.length > 0 && !batchAssessmentIds.includes(sess.id)) {
               return null;
             }
             const def = (state.assessmentDefinitions || []).find((d) => d.id === (sess.definitionId || r.definitionId));
