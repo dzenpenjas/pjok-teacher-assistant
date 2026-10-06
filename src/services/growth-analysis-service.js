@@ -44,11 +44,237 @@ export function calculateMonthsBetween(dateStr1, dateStr2) {
   return Math.max(0, totalMonths);
 }
 
+export function buildGrowthSummary(growthSelections = [], student = null, allGrowthRecords = []) {
+  const selections = Array.isArray(growthSelections) ? growthSelections : [];
+
+  // Filter only records belonging to this student if student.id is present
+  const studentRecords = student?.id
+    ? selections.filter((g) => !g.studentId || g.studentId === student.id)
+    : selections;
+
+  // Deterministic sort: date desc, then id desc
+  const sortedRecords = [...studentRecords].sort((a, b) => {
+    const dComp = (b.date || "").localeCompare(a.date || "");
+    if (dComp !== 0) return dComp;
+    return (b.id || "").localeCompare(a.id || "");
+  });
+
+  // Extract valid Height records (positive and finite)
+  const validHeightRecords = sortedRecords
+    .filter((g) => {
+      if (g.heightCm === null || g.heightCm === undefined || g.heightCm === "") return false;
+      const num = Number(g.heightCm);
+      return Number.isFinite(num) && num > 0;
+    })
+    .map((g) => ({
+      id: g.id || "",
+      date: g.date || "",
+      heightCm: Number(g.heightCm)
+    }));
+
+  // Extract valid Weight records (positive and finite)
+  const validWeightRecords = sortedRecords
+    .filter((g) => {
+      if (g.weightKg === null || g.weightKg === undefined || g.weightKg === "") return false;
+      const num = Number(g.weightKg);
+      return Number.isFinite(num) && num > 0;
+    })
+    .map((g) => ({
+      id: g.id || "",
+      date: g.date || "",
+      weightKg: Number(g.weightKg)
+    }));
+
+  const latestHeight = validHeightRecords.length > 0 ? validHeightRecords[0] : null;
+  const previousHeight = validHeightRecords.length > 1 ? validHeightRecords[1] : null;
+
+  const latestWeight = validWeightRecords.length > 0 ? validWeightRecords[0] : null;
+  const previousWeight = validWeightRecords.length > 1 ? validWeightRecords[1] : null;
+
+  let heightChangeCm = null;
+  let heightChangeMonths = null;
+  if (latestHeight && previousHeight) {
+    heightChangeCm = Math.round((latestHeight.heightCm - previousHeight.heightCm) * 10) / 10;
+    heightChangeMonths = calculateMonthsBetween(previousHeight.date, latestHeight.date);
+  }
+
+  let weightChangeKg = null;
+  let weightChangeMonths = null;
+  if (latestWeight && previousWeight) {
+    weightChangeKg = Math.round((latestWeight.weightKg - previousWeight.weightKg) * 10) / 10;
+    weightChangeMonths = calculateMonthsBetween(previousWeight.date, latestWeight.date);
+  }
+
+  let bmi = null;
+  let bmiDate = null;
+  let bmiReason = null;
+
+  if (latestHeight && latestWeight) {
+    if (latestHeight.date && latestWeight.date && latestHeight.date === latestWeight.date) {
+      const bmiRes = calculateBmi(latestHeight.heightCm, latestWeight.weightKg);
+      bmi = bmiRes.bmi;
+      bmiDate = latestHeight.date;
+      bmiReason = null;
+    } else {
+      bmi = null;
+      bmiDate = null;
+      bmiReason = "TANGGAL_PENGUKURAN_BERBEDA";
+    }
+  } else {
+    bmi = null;
+    bmiDate = null;
+    bmiReason = "DATA_TIDAK_LENGKAP";
+  }
+
+  const ageAtHeight = (student?.birthDate && latestHeight?.date)
+    ? calculateAgeAtDate(student.birthDate, latestHeight.date)
+    : null;
+
+  const ageAtWeight = (student?.birthDate && latestWeight?.date)
+    ? calculateAgeAtDate(student.birthDate, latestWeight.date)
+    : null;
+
+  return {
+    latestHeight,
+    previousHeight,
+    latestWeight,
+    previousWeight,
+    heightChangeCm,
+    heightChangeMonths,
+    weightChangeKg,
+    weightChangeMonths,
+    bmi,
+    bmiDate,
+    bmiReason,
+    ageAtHeight,
+    ageAtWeight,
+    hasValidMeasurements: Boolean(latestHeight || latestWeight)
+  };
+}
+
+export function calculateReportScoring({ assessmentSelections = [], scoringConfig = null }) {
+  const isEnabled = Boolean(scoringConfig && scoringConfig.enabled);
+  if (!isEnabled) {
+    return {
+      enabled: false,
+      minimum: null,
+      maximum: null,
+      roundingRule: "round",
+      formulaVersion: "item-proportion-v1",
+      overallConvertedScore: null,
+      sessions: {}
+    };
+  }
+
+  const minimum = Number(scoringConfig.minScore !== undefined ? scoringConfig.minScore : 75);
+  const maximum = Number(scoringConfig.maxScore !== undefined ? scoringConfig.maxScore : 92);
+
+  if (!Number.isFinite(minimum) || !Number.isFinite(maximum) || minimum < 0 || maximum > 100 || minimum >= maximum) {
+    throw new Error(`Rentang konversi tidak valid (${minimum} - ${maximum}). Minimum harus >= 0, maksimum <= 100, dan minimum < maksimum.`);
+  }
+
+  const sessions = {};
+  const convertedScoresList = [];
+
+  for (const item of assessmentSelections) {
+    const sess = item.assessmentSession;
+    const result = item.result;
+    const sessionId = sess?.id || result?.assessmentSessionId || "";
+    if (!sessionId) continue;
+
+    const rawScore = (result?.numericScore !== null && result?.numericScore !== undefined && Number.isFinite(Number(result.numericScore)))
+      ? Number(result.numericScore)
+      : null;
+
+    const rawItems = Array.isArray(sess?.itemsSnapshot)
+      ? sess.itemsSnapshot
+      : (Array.isArray(sess?.items) ? sess.items : []);
+
+    const itemResults = Array.isArray(result?.itemResults) ? result.itemResults : [];
+
+    if (rawItems.length === 0) {
+      sessions[sessionId] = {
+        assessmentSessionId: sessionId,
+        rawScore,
+        convertedScore: null,
+        canConvert: false,
+        reason: "TIDAK_ADA_SNAPSHOT_SOAL"
+      };
+      continue;
+    }
+
+    let allItemsComplete = true;
+    const proportions = [];
+
+    for (const snapItem of rawItems) {
+      const scale = Number(snapItem.rubricScale) || 5;
+      if (scale <= 1) {
+        allItemsComplete = false;
+        break;
+      }
+
+      const matchingResult = itemResults.find((ir) => ir && ir.itemId === snapItem.id);
+      const score = (matchingResult?.rubricLevel !== null && matchingResult?.rubricLevel !== undefined && Number.isFinite(Number(matchingResult.rubricLevel)))
+        ? Number(matchingResult.rubricLevel)
+        : null;
+
+      if (score === null || score < 1 || score > scale) {
+        allItemsComplete = false;
+        break;
+      }
+
+      const proportion = (score - 1) / (scale - 1);
+      proportions.push(proportion);
+    }
+
+    if (!allItemsComplete || proportions.length !== rawItems.length) {
+      sessions[sessionId] = {
+        assessmentSessionId: sessionId,
+        rawScore,
+        convertedScore: null,
+        canConvert: false,
+        reason: "DATA_RUBRIK_BELUM_LENGKAP"
+      };
+      continue;
+    }
+
+    const avgProportion = proportions.reduce((acc, curr) => acc + curr, 0) / proportions.length;
+    const convertedFloat = minimum + (avgProportion * (maximum - minimum));
+    const convertedScore = Math.round(convertedFloat);
+
+    sessions[sessionId] = {
+      assessmentSessionId: sessionId,
+      rawScore,
+      convertedScore,
+      canConvert: true,
+      reason: null
+    };
+
+    convertedScoresList.push(convertedScore);
+  }
+
+  const overallConvertedScore = convertedScoresList.length > 0
+    ? Math.round(convertedScoresList.reduce((a, b) => a + b, 0) / convertedScoresList.length)
+    : null;
+
+  return {
+    enabled: true,
+    minimum,
+    maximum,
+    roundingRule: "round",
+    formulaVersion: "item-proportion-v1",
+    overallConvertedScore,
+    sessions
+  };
+}
+
 export function analyzeGrowth(student, growthSelections = [], allGrowthRecords = []) {
   const studentAllRecords = [...(allGrowthRecords || [])]
     .filter((g) => g.studentId === student?.id)
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   const historyCount = studentAllRecords.length;
+
+  const growthSummary = buildGrowthSummary(growthSelections, student, allGrowthRecords);
 
   const selectedSorted = [...(growthSelections || [])]
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
@@ -58,7 +284,8 @@ export function analyzeGrowth(student, growthSelections = [], allGrowthRecords =
       latest: null,
       previous: null,
       trend: null,
-      historyCount
+      historyCount,
+      growthSummary
     };
   }
 
@@ -123,6 +350,7 @@ export function analyzeGrowth(student, growthSelections = [], allGrowthRecords =
     latest,
     previous,
     trend,
-    historyCount
+    historyCount,
+    growthSummary
   };
 }

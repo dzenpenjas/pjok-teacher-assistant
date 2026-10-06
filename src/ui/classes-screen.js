@@ -603,7 +603,7 @@ export function renderClassesScreen(state, actions) {
 
         const textCol = createElement("div", "student-card-meta");
         const nameEl = createElement("strong", "student-card-name", student.name);
-        const subEl = createElement("span", "student-card-sub", `NIS: ${student.studentNumber || "-"} • ${student.gender === "female" ? "Perempuan" : "Laki-laki"}`);
+        const subEl = createElement("span", "student-card-sub", `NIS: ${student.studentNumber || "-"} • ${student.gender === "female" ? "Perempuan" : (student.gender === "male" ? "Laki-laki" : "-")}`);
 
         textCol.append(nameEl, subEl);
 
@@ -1438,7 +1438,7 @@ export function renderClassesScreen(state, actions) {
         const subEl = createElement(
           "span",
           "student-card-sub",
-          `NIS: ${student.studentNumber || "-"} • ${student.gender === "female" ? "Perempuan" : "Laki-laki"}`
+          `NIS: ${student.studentNumber || "-"} • ${student.gender === "female" ? "Perempuan" : (student.gender === "male" ? "Laki-laki" : "-")}`
         );
         textCol.append(nameEl, subEl);
 
@@ -1476,7 +1476,7 @@ export function renderClassesScreen(state, actions) {
             `results-stat-pill ${isOk ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold" : isSkip ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold" : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 font-semibold"}`,
             st
           );
-        } else if (studentSavedReport || classUi.reportDrafts?.[student.id]) {
+        } else if (studentSavedReport) {
           reportStatusPill = createElement("span", "results-stat-pill bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold", "✨ Laporan AI Tersimpan");
         }
 
@@ -1566,7 +1566,7 @@ export function renderClassesScreen(state, actions) {
     );
 
     let activeReportContext = savedReport ? savedReport.reportContext : null;
-    let reportAiDraft = savedReport ? savedReport.draft : (classUi.reportDrafts?.[student.id] || null);
+    let reportAiDraft = savedReport ? savedReport.draft : null;
     let isAiDraftLoading = false;
 
     function persistCurrentDraft() {
@@ -4221,7 +4221,7 @@ export function renderClassesScreen(state, actions) {
     nameWrap.append(
       createElement("p", "text-xs font-bold text-brand uppercase tracking-wider mb-0.5", `SISWA ${classUi.activeAssessmentStudentIndex + 1} / ${classStudents.length}`),
       createElement("h2", "font-bold text-xl leading-tight text-slate-900 dark:text-slate-100", currentStudent.name),
-      createElement("div", "text-subtle text-xs mt-0.5", `NIS ${currentStudent.studentNumber || "-"} • ${currentStudent.gender === "female" ? "Perempuan" : "Laki-laki"}`)
+      createElement("div", "text-subtle text-xs mt-0.5", `NIS ${currentStudent.studentNumber || "-"} • ${currentStudent.gender === "female" ? "Perempuan" : (currentStudent.gender === "male" ? "Laki-laki" : "-")}`)
     );
     profileWrap.append(avatar, nameWrap);
 
@@ -4823,7 +4823,8 @@ export function buildSelectedReportContext({
     assessments,
     growth,
     observations,
-    growthAnalysis
+    growthAnalysis,
+    growthSummary: growthAnalysis.growthSummary
   };
 }
 

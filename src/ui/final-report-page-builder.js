@@ -22,17 +22,31 @@ export function createFinalReportPage({
   const currentContext = reportContext || {};
   const currentDraft = draft || {};
 
+  const isScoringConverted = Boolean(currentContext.reportScoring?.enabled);
+  const reportScoring = currentContext.reportScoring || null;
+
   const validLearningItems = (currentDraft.learning || [])
     .map((item) => {
       const matchSource = (currentContext.assessments || []).find(
         (a) => a.assessmentSessionId === item.assessmentSessionId
       );
+      const sessionScoring = reportScoring?.sessions?.[item.assessmentSessionId] || null;
+      let displayScore = null;
+      if (isScoringConverted && sessionScoring && sessionScoring.canConvert && sessionScoring.convertedScore !== null) {
+        displayScore = sessionScoring.convertedScore;
+      } else if (!isScoringConverted && matchSource && matchSource.numericScore !== null && matchSource.numericScore !== undefined) {
+        displayScore = matchSource.numericScore;
+      } else if (matchSource && matchSource.numericScore !== null && matchSource.numericScore !== undefined) {
+        displayScore = matchSource.numericScore;
+      }
+
       if (!matchSource) {
         if (item.title || item.description) {
           return {
             assessmentSessionId: item.assessmentSessionId || "",
             title: item.title || "Asesmen PJOK",
             numericScore: item.numericScore !== undefined ? item.numericScore : null,
+            displayScore: isScoringConverted ? (sessionScoring?.convertedScore ?? item.numericScore) : (item.numericScore ?? null),
             description: item.description || ""
           };
         }
@@ -42,21 +56,65 @@ export function createFinalReportPage({
         assessmentSessionId: matchSource.assessmentSessionId,
         title: matchSource.title,
         numericScore: matchSource.numericScore,
+        displayScore,
         description: item.description || ""
       };
     })
     .filter(Boolean);
 
-  const scoresWithVal = (currentContext.assessments || [])
-    .map((a) => a.numericScore)
-    .filter((s) => s !== null && s !== undefined && !isNaN(Number(s)));
-
-  const overallScore =
-    scoresWithVal.length > 0
+  let overallScore = null;
+  if (isScoringConverted && reportScoring?.overallConvertedScore !== null && reportScoring?.overallConvertedScore !== undefined) {
+    overallScore = reportScoring.overallConvertedScore;
+  } else {
+    const scoresWithVal = (currentContext.assessments || [])
+      .map((a) => a.numericScore)
+      .filter((s) => s !== null && s !== undefined && !isNaN(Number(s)));
+    overallScore = scoresWithVal.length > 0
       ? Math.round(scoresWithVal.reduce((acc, curr) => acc + curr, 0) / scoresWithVal.length)
       : null;
+  }
 
+  const formattedToday = reportDate || new Date().toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
+
+  const growthSummary = currentContext.growthSummary || currentContext.growthAnalysis?.growthSummary || null;
   const latestGrowthRecord = currentContext.growth?.[0] || null;
+
+  let heightDisplay = "-";
+  let weightDisplay = "-";
+  let heightDate = "";
+  let weightDate = "";
+  let growthDateNote = "";
+
+  if (growthSummary) {
+    if (growthSummary.latestHeight) {
+      heightDisplay = `${growthSummary.latestHeight.heightCm} cm`;
+      heightDate = growthSummary.latestHeight.date || "";
+    }
+    if (growthSummary.latestWeight) {
+      weightDisplay = `${growthSummary.latestWeight.weightKg} kg`;
+      weightDate = growthSummary.latestWeight.date || "";
+    }
+
+    if (heightDate && weightDate && heightDate === weightDate) {
+      growthDateNote = `Diukur pada ${heightDate}`;
+    } else if (heightDate && weightDate) {
+      growthDateNote = `Tinggi badan diukur pada ${heightDate} • Berat badan diukur pada ${weightDate}`;
+    } else if (heightDate) {
+      growthDateNote = `Tinggi badan diukur pada ${heightDate}`;
+    } else if (weightDate) {
+      growthDateNote = `Berat badan diukur pada ${weightDate}`;
+    } else {
+      growthDateNote = `Diukur pada ${formattedToday}`;
+    }
+  } else if (latestGrowthRecord) {
+    heightDisplay = latestGrowthRecord.heightCm && latestGrowthRecord.heightCm !== "-" ? `${latestGrowthRecord.heightCm} cm` : "-";
+    weightDisplay = latestGrowthRecord.weightKg && latestGrowthRecord.weightKg !== "-" ? `${latestGrowthRecord.weightKg} kg` : "-";
+    growthDateNote = `Diukur pada ${latestGrowthRecord.date || formattedToday}`;
+  }
 
   let studentAgeText = currentContext.studentAgeText || "-";
   if ((!studentAgeText || studentAgeText === "-") && student?.birthDate) {
@@ -69,11 +127,6 @@ export function createFinalReportPage({
 
   const schoolName = school?.name || "SD NEGERI PJOK";
   const schoolAddress = school?.address ? school.address.trim() : "";
-  const formattedToday = reportDate || new Date().toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric"
-  });
 
   let genderText = "-";
   const rawGender = typeof student?.gender === "string"
@@ -95,6 +148,8 @@ export function createFinalReportPage({
     genderText,
     reportDate: formattedToday,
     overallScore,
+    isScoringConverted,
+    scoringConfig: reportScoring,
 
     learning: validLearningItems,
     summary: currentDraft.summary || "",
@@ -102,9 +157,9 @@ export function createFinalReportPage({
     attitude: currentDraft.attitude || "",
 
     growth: {
-      date: latestGrowthRecord?.date || formattedToday,
-      heightCm: latestGrowthRecord?.heightCm || "-",
-      weightKg: latestGrowthRecord?.weightKg || "-",
+      date: growthDateNote,
+      heightDisplay,
+      weightDisplay,
       interpretation: currentDraft.growth || "",
       nutritionAdvice: currentDraft.nutritionAdvice || "",
       followUp: currentDraft.followUp || ""
