@@ -672,16 +672,260 @@ export function renderClassesScreen(state, actions) {
   }
 
   function renderClassResultsCenter(classRoom, students) {
+    if (!classUi.batchState) {
+      classUi.batchState = {
+        isBatchGenerating: false,
+        currentStudentIndex: 0,
+        totalStudents: 0,
+        currentStudentName: "",
+        successCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        failedStudentIds: [],
+        statusSummary: null,
+        studentStatuses: {}
+      };
+    }
+    if (!classUi.reportDrafts) {
+      classUi.reportDrafts = {};
+    }
+
     const header = createElement("div", "results-center-header space-y-1 mb-4");
     header.append(
       createElement("h2", "sub-title font-bold text-base", "Hasil & Laporan"),
       createElement(
         "p",
         "text-subtle text-xs",
-        "Lihat seluruh hasil asesmen, pertumbuhan, dan observasi siswa dalam satu tempat. Pilih siswa untuk menyiapkan sumber data laporan."
+        "Lihat seluruh hasil asesmen, pertumbuhan, dan observasi siswa dalam satu tempat. Pilih sumber data dan buat draf laporan AI sekaligus."
       )
     );
     container.append(header);
+
+    // ==========================================
+    // BATCH AI REPORT GENERATION CONTROL PANEL
+    // ==========================================
+    const batchPanel = createElement("section", "batch-report-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-6 shadow-sm space-y-4");
+
+    const batchHeader = createElement("div", "flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 border-slate-100 dark:border-slate-800");
+    const headerTitleGroup = createElement("div");
+    headerTitleGroup.append(
+      createElement("h3", "font-bold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2", "✨ Generate Semua Laporan AI Siswa"),
+      createElement("p", "text-subtle text-xs mt-0.5", "Buat draf narasi laporan AI untuk seluruh siswa di kelas ini secara berurutan.")
+    );
+    batchHeader.append(headerTitleGroup);
+
+    // Class Source Configuration Controls
+    const sourceConfigBox = createElement("div", "space-y-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg text-xs");
+    sourceConfigBox.append(
+      createElement("p", "font-semibold text-slate-800 dark:text-slate-200", "Sumber Data Laporan Kelas:")
+    );
+
+    const classSessions = (state.assessmentSessions || []).filter((as) => as.classId === classRoom.id);
+    if (classSessions.length === 0) {
+      sourceConfigBox.append(createElement("p", "text-subtle italic", "Belum ada sesi asesmen di kelas ini."));
+    } else {
+      const sessList = createElement("div", "flex flex-wrap gap-3 mt-1");
+      classSessions.forEach((sess) => {
+        const isChecked = (classUi.reportSelection.assessmentSessionIds || []).includes(sess.id);
+        const lbl = createElement("label", "flex items-center gap-1.5 cursor-pointer font-medium text-slate-700 dark:text-slate-300");
+        const chk = document.createElement("input");
+        chk.type = "checkbox";
+        chk.className = "report-source-check";
+        chk.checked = isChecked;
+        chk.disabled = classUi.batchState.isBatchGenerating;
+        chk.addEventListener("change", (e) => {
+          if (e.target.checked) {
+            if (!classUi.reportSelection.assessmentSessionIds.includes(sess.id)) {
+              classUi.reportSelection.assessmentSessionIds.push(sess.id);
+            }
+          } else {
+            classUi.reportSelection.assessmentSessionIds = classUi.reportSelection.assessmentSessionIds.filter(
+              (id) => id !== sess.id
+            );
+          }
+          renderCards();
+        });
+        lbl.append(chk, document.createTextNode(sess.title || `Pertemuan ${sess.sessionNumber}`));
+        sessList.append(lbl);
+      });
+      sourceConfigBox.append(sessList);
+    }
+
+    batchPanel.append(batchHeader, sourceConfigBox);
+
+    // Action Row
+    const batchActionRow = createElement("div", "flex flex-wrap items-center gap-3");
+
+    const runBatchBtn = createElement("button", "primary-action compact-action", "✨ Generate Semua Laporan");
+    runBatchBtn.type = "button";
+    runBatchBtn.disabled = classUi.batchState.isBatchGenerating;
+    if (classUi.batchState.isBatchGenerating) {
+      runBatchBtn.classList.add("opacity-50", "cursor-not-allowed");
+    }
+
+    runBatchBtn.addEventListener("click", () => {
+      runBatchReportGeneration(students);
+    });
+
+    batchActionRow.append(runBatchBtn);
+
+    if (classUi.batchState.failedStudentIds && classUi.batchState.failedStudentIds.length > 0 && !classUi.batchState.isBatchGenerating) {
+      const retryBtn = createElement("button", "btn-tool btn-tool-primary text-xs", `🔄 Coba Lagi yang Gagal (${classUi.batchState.failedStudentIds.length})`);
+      retryBtn.type = "button";
+      retryBtn.addEventListener("click", () => {
+        const failedStudents = students.filter((s) => classUi.batchState.failedStudentIds.includes(s.id));
+        runBatchReportGeneration(failedStudents);
+      });
+      batchActionRow.append(retryBtn);
+    }
+
+    batchPanel.append(batchActionRow);
+
+    // Batch Status / Progress Indicator Box
+    if (classUi.batchState.isBatchGenerating || classUi.batchState.statusSummary) {
+      const progressBox = createElement("div", "p-3 rounded-lg border text-xs space-y-2 mt-2 " +
+        (classUi.batchState.isBatchGenerating
+          ? "bg-blue-50 border-blue-200 text-blue-900 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-200"
+          : "bg-slate-50 border-slate-200 text-slate-800 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200")
+      );
+
+      if (classUi.batchState.isBatchGenerating) {
+        const progressP = createElement("p", "font-bold", `Membuat laporan ${classUi.batchState.currentStudentIndex} dari ${classUi.batchState.totalStudents}`);
+        const currentStudentP = createElement("p", "text-subtle", `Sedang diproses: ${classUi.batchState.currentStudentName}`);
+        
+        const progressBarWrap = createElement("div", "w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden mt-1");
+        const pct = classUi.batchState.totalStudents > 0
+          ? Math.round((classUi.batchState.currentStudentIndex / classUi.batchState.totalStudents) * 100)
+          : 0;
+        const progressBarFill = createElement("div", "bg-primary h-full transition-all duration-300");
+        progressBarFill.style.width = `${pct}%`;
+        progressBarWrap.append(progressBarFill);
+
+        progressBox.append(progressP, currentStudentP, progressBarWrap);
+      } else if (classUi.batchState.statusSummary) {
+        const summaryP = createElement("p", "font-semibold", classUi.batchState.statusSummary);
+        progressBox.append(summaryP);
+      }
+
+      batchPanel.append(progressBox);
+    }
+
+    container.append(batchPanel);
+
+    async function runBatchReportGeneration(targetStudents) {
+      let apiKey = "";
+      try {
+        apiKey = (window.sessionStorage.getItem("pjok_gemini_api_key") || "").trim();
+      } catch (_) {}
+
+      if (!apiKey) {
+        window.alert("AI belum dikonfigurasi. Atur Gemini API Key di Pengaturan → AI.");
+        return;
+      }
+
+      if (classUi.batchState.isBatchGenerating) return;
+
+      classUi.batchState.isBatchGenerating = true;
+      classUi.batchState.totalStudents = targetStudents.length;
+      classUi.batchState.currentStudentIndex = 0;
+      classUi.batchState.currentStudentName = "";
+      classUi.batchState.successCount = 0;
+      classUi.batchState.failedCount = 0;
+      classUi.batchState.skippedCount = 0;
+      classUi.batchState.failedStudentIds = [];
+      classUi.batchState.statusSummary = null;
+
+      render();
+
+      for (let i = 0; i < targetStudents.length; i++) {
+        const student = targetStudents[i];
+        classUi.batchState.currentStudentIndex = i + 1;
+        classUi.batchState.currentStudentName = student.name;
+        render();
+
+        // Build data selections for student
+        const selectedAssessments = (state.assessmentResults || [])
+          .map((r) => {
+            if (r.studentId !== student.id) return null;
+            const sess = (state.assessmentSessions || []).find((as) => as.id === r.assessmentSessionId);
+            if (!sess || sess.classId !== classRoom.id) return null;
+            if ((classUi.reportSelection.assessmentSessionIds || []).length > 0 && !(classUi.reportSelection.assessmentSessionIds || []).includes(sess.id)) {
+              return null;
+            }
+            const def = (state.assessmentDefinitions || []).find((d) => d.id === (sess.definitionId || r.definitionId));
+            return { result: r, assessmentSession: sess, definition: def, date: sess.date || r.recordedAt || "" };
+          })
+          .filter(Boolean);
+
+        const selectedGrowth = (state.growthRecords || []).filter((g) => {
+          if (g.studentId !== student.id) return false;
+          if ((classUi.reportSelection.growthRecordIds || []).length > 0) {
+            return classUi.reportSelection.growthRecordIds.includes(g.id);
+          }
+          return true;
+        });
+
+        const selectedObs = (state.studentObservations || []).filter((o) => {
+          if (o.studentId !== student.id) return false;
+          if ((classUi.reportSelection.observationIds || []).length > 0) {
+            return classUi.reportSelection.observationIds.includes(o.id);
+          }
+          return true;
+        });
+
+        const totalSources = selectedAssessments.length + selectedGrowth.length + selectedObs.length;
+
+        if (totalSources === 0) {
+          classUi.batchState.skippedCount++;
+          classUi.batchState.studentStatuses[student.id] = "Dilewati — data tidak tersedia";
+          continue;
+        }
+
+        const reportContext = buildSelectedReportContext({
+          student,
+          classRoom,
+          assessmentSelections: selectedAssessments,
+          growthSelections: selectedGrowth,
+          observationSelections: selectedObs
+        });
+
+        try {
+          const draft = await generateStudentReportWithAI({
+            apiKey,
+            reportContext
+          });
+
+          if (draft && typeof draft === "object") {
+            if (!classUi.reportDrafts) classUi.reportDrafts = {};
+            classUi.reportDrafts[student.id] = draft;
+            classUi.batchState.successCount++;
+            classUi.batchState.studentStatuses[student.id] = "Berhasil";
+          } else {
+            classUi.batchState.failedCount++;
+            classUi.batchState.failedStudentIds.push(student.id);
+            classUi.batchState.studentStatuses[student.id] = "Gagal — respon AI tidak valid";
+          }
+        } catch (err) {
+          console.error("[BATCH REPORT AI ERROR for student]", student.name, err);
+          const isKeyError = err?.isApiKeyError || (err?.message && (err.message.includes("API key") || err.message.includes("API_KEY")));
+          if (isKeyError) {
+            classUi.batchState.isBatchGenerating = false;
+            classUi.batchState.statusSummary = "API key tidak valid. Periksa di Pengaturan → AI.";
+            window.alert("API key tidak valid. Periksa di Pengaturan → AI.");
+            render();
+            return;
+          }
+
+          classUi.batchState.failedCount++;
+          classUi.batchState.failedStudentIds.push(student.id);
+          classUi.batchState.studentStatuses[student.id] = `Gagal — ${err?.message || "Error network/API"}`;
+        }
+      }
+
+      classUi.batchState.isBatchGenerating = false;
+      classUi.batchState.statusSummary = `Ringkasan: ${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati`;
+      render();
+    }
 
     const searchBar = createElement("div", "search-filter-bar");
     const searchInput = document.createElement("input");
@@ -786,6 +1030,25 @@ export function renderClassesScreen(state, actions) {
             `Nilai terbaru: ${latestScoreText}`
           )
         );
+
+        let reportStatusPill = null;
+        if (classUi.batchState?.studentStatuses?.[student.id]) {
+          const st = classUi.batchState.studentStatuses[student.id];
+          const isOk = st.startsWith("Berhasil");
+          const isSkip = st.startsWith("Dilewati");
+          reportStatusPill = createElement(
+            "span",
+            `results-stat-pill ${isOk ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold" : isSkip ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold" : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 font-semibold"}`,
+            st
+          );
+        } else if (classUi.reportDrafts?.[student.id]) {
+          reportStatusPill = createElement("span", "results-stat-pill bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold", "✨ Laporan AI Tersimpan");
+        }
+
+        if (reportStatusPill) {
+          statsRow.append(reportStatusPill);
+        }
+
         textCol.append(statsRow);
 
         infoRow.append(avatar, textCol);
@@ -854,7 +1117,7 @@ export function renderClassesScreen(state, actions) {
     const expandedAssessmentIds = new Set();
     let isPreviewOpen = false;
     let isRcJsonOpen = false;
-    let reportAiDraft = null;
+    let reportAiDraft = classUi.reportDrafts?.[student.id] || null;
     let isAiDraftLoading = false;
 
     // Build Data Sets
@@ -2140,6 +2403,8 @@ export function renderClassesScreen(state, actions) {
           reportContext
         });
         reportAiDraft = draft;
+        if (!classUi.reportDrafts) classUi.reportDrafts = {};
+        classUi.reportDrafts[student.id] = draft;
       } catch (err) {
         console.error("[AI REPORT GENERATION ERROR]", err);
         if (err?.isApiKeyError || (err?.message && (err.message.includes("API key") || err.message.includes("API_KEY")))) {
