@@ -3680,7 +3680,10 @@ export function renderClassesScreen(state, actions) {
     const hasInstructions = Boolean(as.instructions);
 
     if (hasQuestions || hasInstructions) {
-      const refBox = createElement("div", "scoring-reference-box");
+      const refDisclosure = createElement("details", "scoring-reference-disclosure");
+      const refSummary = createElement("summary", "scoring-reference-summary", "Panduan Asesmen ▾");
+
+      const refBox = createElement("div", "scoring-reference-box mt-2");
       if (hasInstructions) {
         refBox.append(
           createElement("div", "scoring-reference-title", "📋 Panduan / Instruksi Gerak:"),
@@ -3695,7 +3698,8 @@ export function renderClassesScreen(state, actions) {
         });
         refBox.append(qList);
       }
-      container.append(refBox);
+      refDisclosure.append(refSummary, refBox);
+      container.append(refDisclosure);
     }
 
     if (classStudents.length === 0) {
@@ -3716,9 +3720,6 @@ export function renderClassesScreen(state, actions) {
 
     // Stepper & Jump Bar
     const stepperBar = createElement("div", "student-stepper-bar");
-    stepperBar.append(
-      createElement("div", "student-stepper-counter", `Siswa ${classUi.activeAssessmentStudentIndex + 1} dari ${classStudents.length}`)
-    );
 
     const isStudentComplete = (studentId) => {
       const res = (state.assessmentResults || []).find(
@@ -3771,9 +3772,9 @@ export function renderClassesScreen(state, actions) {
     const avatar = createStudentAvatar(currentStudent, "scoring-student-avatar");
     const nameWrap = createElement("div");
     nameWrap.append(
-      createElement("p", "text-xs font-semibold text-brand uppercase tracking-wider mb-0.5", `SISWA ${classUi.activeAssessmentStudentIndex + 1} DARI ${classStudents.length}`),
+      createElement("p", "text-xs font-bold text-brand uppercase tracking-wider mb-0.5", `SISWA ${classUi.activeAssessmentStudentIndex + 1} / ${classStudents.length}`),
       createElement("h2", "font-bold text-xl leading-tight text-slate-900 dark:text-slate-100", currentStudent.name),
-      createElement("div", "text-subtle text-xs mt-0.5", `NIS: ${currentStudent.studentNumber || "-"} • ${currentStudent.gender === "female" ? "Perempuan" : "Laki-laki"}`)
+      createElement("div", "text-subtle text-xs mt-0.5", `NIS ${currentStudent.studentNumber || "-"} • ${currentStudent.gender === "female" ? "Perempuan" : "Laki-laki"}`)
     );
     profileWrap.append(avatar, nameWrap);
 
@@ -3792,24 +3793,23 @@ export function renderClassesScreen(state, actions) {
       }).length;
       const allItemsComplete = assessmentItems.length > 0 && completedItemCount === assessmentItems.length;
 
-      const scoreBadgeWrap = createElement("div", "text-right");
+      const scoreBadgeWrap = createElement("div", "text-right flex-shrink-0");
       if (allItemsComplete) {
         const scale = Number(currentItem.rubricScale) || 5;
         const finalScore = currentResult?.numericScore !== null && currentResult?.numericScore !== undefined
           ? currentResult.numericScore
           : (currentResult?.averageRubricScore ? Math.round((currentResult.averageRubricScore / scale) * 100) : 0);
-        const avgScore = currentResult?.averageRubricScore ? Number(currentResult.averageRubricScore).toFixed(2) : "0.00";
 
         scoreBadgeWrap.append(
-          createElement("span", "assess-score-badge badge-has-score block text-sm font-bold", `Nilai ${finalScore}`),
-          createElement("span", "text-xs text-subtle font-medium mt-1 block", `Rata-rata Rubrik ${avgScore} / ${scale}`)
+          createElement("span", "assess-score-badge badge-has-score block text-xs font-bold", `${completedItemCount} / ${assessmentItems.length} selesai`),
+          createElement("span", "text-xs text-subtle font-medium mt-0.5 block", `Nilai ${finalScore}`)
         );
       } else {
         scoreBadgeWrap.append(
           createElement(
             "span",
             `assess-score-badge ${completedItemCount > 0 ? "badge-has-score" : ""}`,
-            completedItemCount > 0 ? `${completedItemCount} dari ${assessmentItems.length} pertanyaan selesai` : "Belum dinilai"
+            completedItemCount > 0 ? `${completedItemCount} / ${assessmentItems.length} selesai` : "Belum dinilai"
           )
         );
       }
@@ -3891,10 +3891,10 @@ export function renderClassesScreen(state, actions) {
       } else {
         const itemFocusCard = createElement("div", "item-focus-card");
 
-        const itemMetaRow = createElement("div", "item-meta-row");
+        const itemMetaRow = createElement("div", "item-number-header");
         itemMetaRow.append(
-          createElement("span", "item-meta-label", `PERTANYAAN ${classUi.activeAssessmentItemIndex + 1} DARI ${assessmentItems.length}`),
-          createElement("span", "item-meta-scale", `Skala 1–${currentItem.rubricScale || 5}`)
+          createElement("span", "item-number-tag", "SOAL"),
+          createElement("strong", "item-number-value", `${classUi.activeAssessmentItemIndex + 1} / ${assessmentItems.length}`)
         );
         itemFocusCard.append(itemMetaRow);
 
@@ -3917,6 +3917,7 @@ export function renderClassesScreen(state, actions) {
         const selectedRubricLevel = existingItemResult ? existingItemResult.rubricLevel : null;
 
         const compactRubricWrap = createElement("div", "compact-rubric-wrap");
+        const scoreActionHeader = createElement("p", "score-action-label", "PILIH SKOR");
         const rubricBar = createElement("div", "compact-rubric-bar");
 
         const helpBox = createElement("div", "compact-rubric-help-box");
@@ -3938,7 +3939,7 @@ export function renderClassesScreen(state, actions) {
         helpBox.append(helpText);
 
         const noteDisclosure = createElement("details", "item-note-disclosure");
-        const noteSummary = createElement("summary", "item-note-summary", "+ Tambah Catatan Observasi");
+        const noteSummary = createElement("summary", "item-note-summary", "+ Tambah Catatan");
 
         if (existingItemResult?.note) {
           noteDisclosure.open = true;
@@ -4043,7 +4044,7 @@ export function renderClassesScreen(state, actions) {
           rubricBar.append(rBtn);
         });
 
-        compactRubricWrap.append(rubricBar, helpBox);
+        compactRubricWrap.append(scoreActionHeader, rubricBar, helpBox);
         itemFocusCard.append(compactRubricWrap, noteDisclosure);
         focusCard.append(itemFocusCard);
 
