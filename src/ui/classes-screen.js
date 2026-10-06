@@ -9,8 +9,7 @@ import { exportAssessmentSessionToJsonFile } from "../services/assessment-packag
 import { exportAssessmentSessionToExcelFile } from "../services/assessment-xlsx-adapter.js";
 import {
   parseStudentExcelFile,
-  downloadStudentTemplateExcel,
-  downloadStudentsExcel
+  downloadStudentTemplateExcel
 } from "../services/student-xlsx-adapter.js";
 import {
   showToast,
@@ -2244,6 +2243,22 @@ export function renderClassesScreen(state, actions) {
     return backdrop;
   }
 
+  function formatIndoDate(dateStr) {
+    if (!dateStr) return "-";
+    const parts = String(dateStr).split("-");
+    if (parts.length !== 3) return dateStr;
+    const [y, m, d] = parts;
+    const months = [
+      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+    ];
+    const mIdx = Number(m) - 1;
+    if (months[mIdx]) {
+      return `${Number(d)} ${months[mIdx]} ${y}`;
+    }
+    return dateStr;
+  }
+
   function renderAddStudentModal(classRoom) {
     const backdrop = createElement("div", "modal-backdrop");
     const modal = createElement("div", "modal-card modal-card-wide");
@@ -2357,9 +2372,9 @@ export function renderClassesScreen(state, actions) {
       const infoBox = createElement("div", "notice-box");
       const infoTitle = createElement("strong", null, "Petunjuk Import Excel");
       const infoList = createElement("ul", "text-xs text-subtle");
-      const li1 = createElement("li", null, "• Kolom Nama Siswa wajib diisi.");
-      const li2 = createElement("li", null, "• Kolom NIS, Jenis Kelamin (L/P), Tanggal Lahir, dan Catatan bersifat opsional.");
-      const li3 = createElement("li", null, `• Siswa yang diimport akan otomatis didaftarkan ke dalam kelas ${classRoom.name}.`);
+      const li1 = createElement("li", null, "• Nama siswa wajib.");
+      const li2 = createElement("li", null, "• NIS, jenis kelamin, dan tanggal lahir boleh dikosongkan.");
+      const li3 = createElement("li", null, `• Siswa otomatis dimasukkan ke kelas: ${classRoom.name}.`);
       infoList.append(li1, li2, li3);
       infoBox.append(infoTitle, infoList);
       wrapper.append(infoBox);
@@ -2368,10 +2383,10 @@ export function renderClassesScreen(state, actions) {
       const templateRow = createElement("div", "template-download-row");
       const dlBtn = createElement("button", "btn-tool");
       dlBtn.type = "button";
-      dlBtn.append(ICONS.download(15), document.createTextNode(" Unduh Template Excel (.xlsx)"));
+      dlBtn.append(ICONS.download(15), document.createTextNode(" Download Template Excel"));
       dlBtn.addEventListener("click", () => {
         try {
-          downloadStudentTemplateExcel({ className: classRoom.name, grade: classRoom.grade });
+          downloadStudentTemplateExcel();
           showToast("Template Excel siswa berhasil diunduh.");
         } catch (err) {
           showToast(`Gagal mengunduh template: ${err.message}`);
@@ -2409,7 +2424,7 @@ export function renderClassesScreen(state, actions) {
         const dropzone = createElement("div", "file-dropzone");
         const dropIcon = ICONS.upload(28);
         const dropTitle = createElement("p", "dropzone-title", "Pilih atau Tarik File Excel (.xlsx) ke sini");
-        const dropHint = createElement("p", "dropzone-sub", "Pastikan file berformat .xlsx atau .xls");
+        const dropHint = createElement("p", "dropzone-sub", "Format file: Sheet SISWA dengan kolom nama_siswa, nis, jenis_kelamin, tanggal_lahir");
 
         const fileInput = document.createElement("input");
         fileInput.type = "file";
@@ -2429,7 +2444,10 @@ export function renderClassesScreen(state, actions) {
           renderModalBody();
 
           try {
-            const result = await parseStudentExcelFile(file);
+            const result = await parseStudentExcelFile(file, {
+              existingStudents: state.students || [],
+              targetClassId: classRoom.id
+            });
             parsedExcelData = result;
           } catch (err) {
             excelError = err.message || "Terjadi kesalahan saat membaca file Excel.";
@@ -2457,7 +2475,10 @@ export function renderClassesScreen(state, actions) {
           renderModalBody();
 
           try {
-            const result = await parseStudentExcelFile(file);
+            const result = await parseStudentExcelFile(file, {
+              existingStudents: state.students || [],
+              targetClassId: classRoom.id
+            });
             parsedExcelData = result;
           } catch (err) {
             excelError = err.message || "Terjadi kesalahan saat membaca file Excel.";
@@ -2470,75 +2491,92 @@ export function renderClassesScreen(state, actions) {
         dropzone.append(dropIcon, dropTitle, dropHint, chooseBtn, fileInput);
         wrapper.append(dropzone);
       } else {
-        // Preview state
-        const { validStudents, invalidRows, totalRows, validCount, invalidCount } = parsedExcelData;
+        // Preview state with Vertical Cards
+        const { rows, summary } = parsedExcelData;
 
-        const summaryBox = createElement("div", "import-summary-badges");
-        const badgeTotal = createElement("span", "summary-pill", `Total: ${totalRows} baris`);
-        const badgeValid = createElement("span", "summary-pill pill-success", `Siap Diimport: ${validCount} siswa`);
-        summaryBox.append(badgeTotal, badgeValid);
+        // Summary Header Box
+        const summaryBox = createElement("div", "import-summary-header");
+        const countTitle = createElement("p", "summary-title-count", `${summary.total} siswa ditemukan`);
+        const pillsWrap = createElement("div", "import-summary-badges");
 
-        if (invalidCount > 0) {
-          const badgeInvalid = createElement("span", "summary-pill pill-warning", `Dilewati: ${invalidCount} baris`);
-          summaryBox.append(badgeInvalid);
+        const readyPill = createElement("span", "summary-pill pill-success", `✓ ${summary.valid} siap`);
+        pillsWrap.append(readyPill);
+
+        if (summary.warning > 0) {
+          const warnPill = createElement("span", "summary-pill pill-warning", `⚠ ${summary.warning} peringatan`);
+          pillsWrap.append(warnPill);
         }
+
+        const skippedCount = (summary.duplicate || 0) + (summary.invalid || 0);
+        if (skippedCount > 0) {
+          const skipPill = createElement("span", "summary-pill pill-error", `⛔ ${skippedCount} dilewati`);
+          pillsWrap.append(skipPill);
+        }
+
+        summaryBox.append(countTitle, pillsWrap);
         wrapper.append(summaryBox);
 
-        if (invalidCount > 0) {
-          const invalidList = createElement("div", "invalid-rows-warning");
-          invalidList.append(createElement("strong", "text-xs", `Catatan Baris Dilewati (${invalidCount}):`));
-          const ul = createElement("ul", "text-xs mt-1");
-          invalidRows.slice(0, 5).forEach((inv) => {
-            ul.append(createElement("li", null, `• Baris ${inv.rowNumber}: ${inv.reason}`));
-          });
-          if (invalidRows.length > 5) {
-            ul.append(createElement("li", "text-subtle", `...dan ${invalidRows.length - 5} baris lainnya.`));
-          }
-          invalidList.append(ul);
-          wrapper.append(invalidList);
-        }
-
-        if (validCount === 0) {
+        if (summary.total === 0) {
           wrapper.append(
             createElement(
               "p",
               "empty-copy text-sm",
-              "Tidak ditemukan data siswa valid. Pastikan kolom Nama Siswa terisi pada file Excel."
+              "Tidak ditemukan baris data siswa pada sheet SISWA."
             )
           );
         } else {
-          // Preview table
-          const previewCard = createElement("div", "table-card import-preview-table");
-          const table = createElement("table", "app-table");
-          const thead = createElement("thead");
-          const headerRow = createElement("tr");
-          headerRow.append(
-            createElement("th", "col-num", "No"),
-            createElement("th", null, "Nama Lengkap Siswa"),
-            createElement("th", null, "NIS"),
-            createElement("th", null, "L/P"),
-            createElement("th", null, "Tgl Lahir"),
-            createElement("th", null, "Catatan")
-          );
-          thead.append(headerRow);
-          table.append(thead);
+          // Vertical Cards Container
+          const cardsContainer = createElement("div", "import-cards-scroll");
 
-          const tbody = createElement("tbody");
-          validStudents.forEach((st, idx) => {
-            const tr = createElement("tr");
-            tr.append(
-              createElement("td", "col-num text-subtle", `${idx + 1}`),
-              createElement("td", "font-medium", st.name),
-              createElement("td", "text-subtle", st.studentNumber || "-"),
-              createElement("td", "text-center", st.gender === "male" ? "L" : st.gender === "female" ? "P" : "-"),
-              createElement("td", "text-subtle", st.birthDate || "-"),
-              createElement("td", "text-subtle text-xs", st.noteText || "-")
+          rows.forEach((r) => {
+            const { rowNumber, student, status, messages } = r;
+            const card = createElement("article", `student-preview-card card-status-${status}`);
+
+            const topRow = createElement("div", "preview-card-top");
+            let iconText = "✓";
+            if (status === "warning") iconText = "⚠";
+            else if (status === "duplicate" || status === "invalid") iconText = "⛔";
+
+            const nameHeader = createElement(
+              "strong",
+              "preview-student-name",
+              `${iconText} ${student.name || `(Tanpa Nama - Baris ${rowNumber})`}`
             );
-            tbody.append(tr);
+            topRow.append(nameHeader);
+
+            const metaRow = createElement("div", "preview-student-meta text-xs text-subtle");
+            const nisText = `NIS: ${student.studentNumber || "-"}`;
+            const genderText =
+              student.gender === "male"
+                ? "Laki-laki"
+                : student.gender === "female"
+                  ? "Perempuan"
+                  : "-";
+            const birthText = student.birthDate ? formatIndoDate(student.birthDate) : "-";
+
+            if (status === "warning" && !student.gender) {
+              metaRow.append(createElement("p", null, nisText));
+              metaRow.append(createElement("p", null, `Jenis kelamin: ${genderText} • ${birthText}`));
+            } else {
+              metaRow.append(createElement("p", null, nisText));
+              metaRow.append(createElement("p", null, `${genderText} • ${birthText}`));
+            }
+
+            card.append(topRow, metaRow);
+
+            if (Array.isArray(messages) && messages.length > 0) {
+              const msgBox = createElement("div", "preview-card-messages");
+              messages.forEach((msg) => {
+                const msgClass = status === "warning" ? "preview-msg-warning" : "preview-msg-error";
+                msgBox.append(createElement("p", msgClass, msg));
+              });
+              card.append(msgBox);
+            }
+
+            cardsContainer.append(card);
           });
-          table.append(tbody);
-          previewCard.append(table);
-          wrapper.append(previewCard);
+
+          wrapper.append(cardsContainer);
         }
 
         const actionRow = createElement("div", "modal-btn-row mt-3");
@@ -2553,13 +2591,19 @@ export function renderClassesScreen(state, actions) {
         const importBtn = createElement(
           "button",
           "primary-action",
-          `Simpan ${validCount} Siswa ke ${classRoom.name}`
+          `Simpan ${summary.importable} Siswa ke ${classRoom.name}`
         );
         importBtn.type = "button";
-        importBtn.disabled = validCount === 0;
+        importBtn.disabled = summary.importable === 0;
         importBtn.addEventListener("click", () => {
-          const studentsToImport = validStudents.map((s) => ({
-            ...s,
+          const importableRows = rows.filter(
+            (r) => r.status === "valid" || r.status === "warning"
+          );
+          const studentsToImport = importableRows.map((r) => ({
+            name: r.student.name,
+            studentNumber: r.student.studentNumber || "",
+            gender: r.student.gender || "",
+            birthDate: r.student.birthDate || "",
             classId: classRoom.id
           }));
 
@@ -2569,7 +2613,7 @@ export function renderClassesScreen(state, actions) {
             studentsToImport.forEach((st) => actions.createStudent(st));
           }
 
-          showToast(`✓ ${validCount} siswa berhasil ditambahkan ke ${classRoom.name}`);
+          showToast(`✓ ${studentsToImport.length} siswa berhasil ditambahkan ke ${classRoom.name}`);
           showAddStudentModal = false;
           render();
         });

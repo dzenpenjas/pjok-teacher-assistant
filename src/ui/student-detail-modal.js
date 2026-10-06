@@ -69,7 +69,7 @@ export function renderStudentDetailModal(studentId, context, onClose) {
   });
   avatarWrapper.append(changePhotoBtn);
 
-  const genderLabel = student.gender === "female" ? "Perempuan" : "Laki-laki";
+  const genderLabel = student.gender === "female" ? "Perempuan" : student.gender === "male" ? "Laki-laki" : "-";
   const textGroup = createElement("div", "modal-identity-text");
   textGroup.append(createElement("h2", "modal-student-name", student.name));
   textGroup.append(

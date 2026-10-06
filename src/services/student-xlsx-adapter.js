@@ -1,38 +1,44 @@
 import { getXLSX } from "./xlsx-runtime.js";
 
 /**
- * Normalizes header string to lowercase alphanumeric representation.
+ * Normalizes header string to lowercase alphanumeric with underscores.
  */
 function normalizeHeaderKey(str) {
   if (!str) return "";
   return String(str)
     .toLowerCase()
-    .replace(/[^a-z0-9]/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
     .trim();
 }
 
 /**
  * Normalizes gender value to standard "male", "female", or "".
+ * Returns { gender: "male" | "female" | "", isValid: boolean, raw: string }
  */
 export function normalizeGender(val) {
-  if (val === undefined || val === null) return "";
-  const clean = String(val).toLowerCase().trim();
-  if (!clean) return "";
+  if (val === undefined || val === null) {
+    return { gender: "", isValid: true, raw: "" };
+  }
+
+  const raw = String(val).trim();
+  if (!raw) {
+    return { gender: "", isValid: true, raw: "" };
+  }
+
+  const clean = raw.toLowerCase().replace(/[\s\-_]+/g, " ");
 
   if (
     clean === "l" ||
     clean === "laki" ||
-    clean === "laki-laki" ||
-    clean === "laki - laki" ||
+    clean === "laki laki" ||
     clean === "lakilaki" ||
     clean === "pria" ||
     clean === "m" ||
-    clean === "male" ||
-    clean.startsWith("l /") ||
-    clean.startsWith("l/")
+    clean === "male"
   ) {
-    return "male";
+    return { gender: "male", isValid: true, raw };
   }
 
   if (
@@ -40,244 +46,254 @@ export function normalizeGender(val) {
     clean === "perempuan" ||
     clean === "wanita" ||
     clean === "f" ||
-    clean === "female" ||
-    clean.startsWith("p /") ||
-    clean.startsWith("p/")
+    clean === "female"
   ) {
-    return "female";
+    return { gender: "female", isValid: true, raw };
   }
 
-  return "";
+  return { gender: "", isValid: false, raw };
 }
 
 const INDO_MONTHS = {
-  januari: "01",
-  jan: "01",
-  februari: "02",
-  feb: "02",
-  maret: "03",
-  mar: "03",
-  april: "04",
-  apr: "04",
-  mei: "05",
-  may: "05",
-  juni: "06",
-  jun: "06",
-  juli: "07",
-  jul: "07",
-  agustus: "08",
-  agu: "08",
-  ags: "08",
-  aug: "08",
-  september: "09",
-  sep: "09",
-  oktober: "10",
-  okt: "10",
-  oct: "10",
-  november: "11",
-  nov: "11",
-  desember: "12",
-  des: "12",
-  dec: "12"
+  januari: 1,
+  jan: 1,
+  februari: 2,
+  feb: 2,
+  maret: 3,
+  mar: 3,
+  april: 4,
+  apr: 4,
+  mei: 5,
+  may: 5,
+  juni: 6,
+  jun: 6,
+  juli: 7,
+  jul: 7,
+  agustus: 8,
+  agu: 8,
+  ags: 8,
+  aug: 8,
+  september: 9,
+  sep: 9,
+  oktober: 10,
+  okt: 10,
+  oct: 10,
+  november: 11,
+  nov: 11,
+  desember: 12,
+  des: 12,
+  dec: 12
 };
 
 /**
- * Normalizes birthDate to ISO date format YYYY-MM-DD or empty string if invalid.
+ * Validates real calendar date (checks leap years, valid days in month).
+ */
+export function isValidCalendarDate(year, month, day) {
+  const y = Number(year);
+  const m = Number(month);
+  const d = Number(day);
+
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return false;
+  if (y < 1900 || y > 2100) return false;
+  if (m < 1 || m > 12) return false;
+
+  const daysInMonth = new Date(y, m, 0).getDate();
+  return d >= 1 && d <= daysInMonth;
+}
+
+/**
+ * Normalizes birth date to YYYY-MM-DD or empty string.
+ * Returns { birthDate: string, isValid: boolean, raw: string }
  */
 export function normalizeBirthDate(val) {
-  if (val === undefined || val === null || val === "") return "";
+  if (val === undefined || val === null || val === "") {
+    return { birthDate: "", isValid: true, raw: "" };
+  }
 
   if (val instanceof Date) {
-    if (isNaN(val.getTime())) return "";
-    return val.toISOString().slice(0, 10);
+    if (isNaN(val.getTime())) {
+      return { birthDate: "", isValid: false, raw: String(val) };
+    }
+    const y = val.getUTCFullYear();
+    const m = val.getUTCMonth() + 1;
+    const d = val.getUTCDate();
+    if (isValidCalendarDate(y, m, d)) {
+      const formatted = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      return { birthDate: formatted, isValid: true, raw: formatted };
+    }
+    return { birthDate: "", isValid: false, raw: String(val) };
   }
 
   // Handle Excel date serial numbers
   if (typeof val === "number") {
-    if (val <= 0 || isNaN(val)) return "";
-    // Excel base date: 1899-12-30 (accounting for 1900 leap bug)
+    if (val <= 0 || isNaN(val)) {
+      return { birthDate: "", isValid: false, raw: String(val) };
+    }
+    // Excel date base 1899-12-30
     const date = new Date(Math.round((val - 25569) * 86400 * 1000));
     if (!isNaN(date.getTime())) {
-      return date.toISOString().slice(0, 10);
+      const y = date.getUTCFullYear();
+      const m = date.getUTCMonth() + 1;
+      const d = date.getUTCDate();
+      if (isValidCalendarDate(y, m, d)) {
+        const formatted = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        return { birthDate: formatted, isValid: true, raw: String(val) };
+      }
     }
+    return { birthDate: "", isValid: false, raw: String(val) };
   }
 
   const str = String(val).trim();
-  if (!str) return "";
+  if (!str) {
+    return { birthDate: "", isValid: true, raw: "" };
+  }
 
   // YYYY-MM-DD or YYYY/MM/DD
   const isoMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
   if (isoMatch) {
-    const y = isoMatch[1];
-    const m = isoMatch[2].padStart(2, "0");
-    const d = isoMatch[3].padStart(2, "0");
-    return `${y}-${m}-${d}`;
+    const y = Number(isoMatch[1]);
+    const m = Number(isoMatch[2]);
+    const d = Number(isoMatch[3]);
+    if (isValidCalendarDate(y, m, d)) {
+      const formatted = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      return { birthDate: formatted, isValid: true, raw: str };
+    }
+    return { birthDate: "", isValid: false, raw: str };
   }
 
   // DD-MM-YYYY or DD/MM/YYYY
   const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
   if (dmyMatch) {
-    const d = dmyMatch[1].padStart(2, "0");
-    const m = dmyMatch[2].padStart(2, "0");
-    const y = dmyMatch[3];
-    return `${y}-${m}-${d}`;
+    const d = Number(dmyMatch[1]);
+    const m = Number(dmyMatch[2]);
+    const y = Number(dmyMatch[3]);
+    if (isValidCalendarDate(y, m, d)) {
+      const formatted = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      return { birthDate: formatted, isValid: true, raw: str };
+    }
+    return { birthDate: "", isValid: false, raw: str };
   }
 
-  // DD Month YYYY (e.g., "17 Agustus 2015" or "12-Mei-2016")
+  // DD Month YYYY (e.g., "12 Maret 2019", "17 Agustus 2015")
   const textMonthMatch = str.match(/^(\d{1,2})[\s\-_]+([A-Za-z]+)[\s\-_]+(\d{4})$/);
   if (textMonthMatch) {
-    const d = textMonthMatch[1].padStart(2, "0");
+    const d = Number(textMonthMatch[1]);
     const mKey = textMonthMatch[2].toLowerCase();
-    const y = textMonthMatch[3];
+    const y = Number(textMonthMatch[3]);
     const m = INDO_MONTHS[mKey];
-    if (m) {
-      return `${y}-${m}-${d}`;
+    if (m && isValidCalendarDate(y, m, d)) {
+      const formatted = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      return { birthDate: formatted, isValid: true, raw: str };
     }
+    return { birthDate: "", isValid: false, raw: str };
   }
 
-  // If already standard date string
-  const parsed = new Date(str);
-  if (!isNaN(parsed.getTime()) && parsed.getFullYear() > 1900 && parsed.getFullYear() < 2100) {
-    return parsed.toISOString().slice(0, 10);
-  }
-
-  return "";
+  return { birthDate: "", isValid: false, raw: str };
 }
 
 /**
- * Identifies column type from header cell label.
+ * Identifies column type from normalized header text.
+ * Strictly recognizes only: nama_siswa, nis, jenis_kelamin, tanggal_lahir.
  */
 function identifyColumnType(headerText) {
   const norm = normalizeHeaderKey(headerText);
   if (!norm) return null;
 
-  // Row number / index column
-  if (norm === "no" || norm === "nomor" || norm === "num" || norm === "idx" || norm === "index") {
-    return null;
-  }
-
-  // Gender (checked early so 'jenis' doesn't trigger 'nis')
   if (
-    norm.includes("kelamin") ||
-    norm.includes("gender") ||
-    norm.includes("sex") ||
-    norm === "jk" ||
-    norm === "lp" ||
-    norm === "l p" ||
-    norm.includes("l p") ||
-    norm.includes("l/p")
-  ) {
-    return "gender";
-  }
-
-  // Name
-  if (
-    norm.includes("nama") ||
-    norm.includes("student name") ||
-    norm === "name" ||
-    norm.includes("peserta didik") ||
-    norm.includes("murid")
+    norm === "nama_siswa" ||
+    norm === "nama" ||
+    norm === "nama_lengkap" ||
+    norm === "nama_lengkap_siswa"
   ) {
     return "name";
   }
 
-  // Student number (NIS) - use boundary check
   if (
-    /\b(nis|nisn)\b/.test(norm) ||
-    norm.includes("nomor induk") ||
-    norm.includes("no induk") ||
-    norm.includes("student number")
+    norm === "nis" ||
+    norm === "nisn" ||
+    norm === "nomor_induk" ||
+    norm === "nomor_induk_siswa" ||
+    norm === "no_induk"
   ) {
     return "studentNumber";
   }
 
-  // Birth Date
   if (
-    norm.includes("lahir") ||
-    norm.includes("birth") ||
-    norm.includes("dob") ||
+    norm === "jenis_kelamin" ||
+    norm === "jk" ||
+    norm === "gender" ||
+    norm === "kelamin"
+  ) {
+    return "gender";
+  }
+
+  if (
+    norm === "tanggal_lahir" ||
+    norm === "tgl_lahir" ||
     norm === "tgl" ||
-    norm === "tanggal"
+    norm === "tanggal" ||
+    norm === "birth_date"
   ) {
     return "birthDate";
-  }
-
-  // Note / Catatan
-  if (
-    norm.includes("catatan") ||
-    norm.includes("keterangan") ||
-    norm.includes("note")
-  ) {
-    return "noteText";
-  }
-
-  // Height / TB
-  if (
-    norm.includes("tinggi") ||
-    norm === "tb" ||
-    norm.startsWith("tb ") ||
-    norm.includes("height")
-  ) {
-    return "heightCm";
-  }
-
-  // Weight / BB
-  if (
-    norm.includes("berat") ||
-    norm === "bb" ||
-    norm.startsWith("bb ") ||
-    norm.includes("weight")
-  ) {
-    return "weightKg";
   }
 
   return null;
 }
 
 /**
- * Parses an XLSX workbook into structured student import data.
- * Does not mutate input or set classId.
+ * Parses and analyzes an Excel workbook for student import according to V1 contract.
+ *
+ * @param {object} workbook - XLSX workbook object
+ * @param {object} [options] - { existingStudents = [], targetClassId = "" }
+ * @returns {object} { rows: Array, summary: object, sheetName: string }
  */
-export function parseStudentWorkbook(workbook) {
+export function parseStudentWorkbook(workbook, options = {}) {
   if (!workbook || !Array.isArray(workbook.SheetNames) || workbook.SheetNames.length === 0) {
     throw new Error("File Excel tidak memiliki lembar kerja (worksheet).");
   }
 
   const XLSX = getXLSX();
+  const { existingStudents = [], targetClassId = "" } = options;
 
-  // Pick target sheet: prefer "DATA SISWA" or "SISWA", otherwise first sheet
-  const targetSheetName =
-    workbook.SheetNames.find((name) => {
-      const n = name.toUpperCase().trim();
-      return n === "DATA SISWA" || n === "SISWA" || n === "DATA_SISWA" || n === "STUDENTS";
-    }) || workbook.SheetNames[0];
+  // Strict sheet requirement: sheet "SISWA" MUST exist
+  const exactSheetName = workbook.SheetNames.find(
+    (name) => name.trim().toUpperCase() === "SISWA"
+  );
 
-  const sheet = workbook.Sheets[targetSheetName];
+  if (!exactSheetName) {
+    throw new Error("Sheet SISWA tidak ditemukan.");
+  }
+
+  const sheet = workbook.Sheets[exactSheetName];
   if (!sheet) {
-    throw new Error(`Lembar kerja "${targetSheetName}" tidak dapat dibaca.`);
+    throw new Error("Sheet SISWA tidak dapat dibaca.");
   }
 
   const rawRows = XLSX.utils.sheet_to_json(sheet, {
     header: 1,
     defval: "",
     blankrows: false,
-    raw: true
+    raw: false // Use formatted text when possible to preserve leading zeros in text cells
   });
 
   if (!rawRows || rawRows.length === 0) {
     return {
-      validStudents: [],
-      invalidRows: [],
-      totalRows: 0,
-      validCount: 0,
-      invalidCount: 0,
-      sheetName: targetSheetName
+      rows: [],
+      summary: {
+        total: 0,
+        valid: 0,
+        warning: 0,
+        duplicate: 0,
+        invalid: 0,
+        importable: 0
+      },
+      sheetName: exactSheetName
     };
   }
 
-  // Find header row by locating the row containing "nama" or "name"
+  // Find header row containing nama_siswa
   let headerRowIndex = -1;
-  let columnMapping = {}; // colIndex -> fieldKey
+  let columnMapping = {}; // colIdx -> fieldKey
 
   for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
     const row = rawRows[r];
@@ -303,94 +319,159 @@ export function parseStudentWorkbook(workbook) {
     }
   }
 
-  // Fallback: If no recognized header row found, assume row 0 is standard template
   if (headerRowIndex === -1) {
-    headerRowIndex = 0;
-    columnMapping = {
-      0: "name",
-      1: "studentNumber",
-      2: "gender",
-      3: "birthDate",
-      4: "noteText"
-    };
+    throw new Error("Kolom nama_siswa tidak ditemukan pada sheet SISWA.");
   }
 
-  const validStudents = [];
-  const invalidRows = [];
-  let processedRows = 0;
+  const rows = [];
+  const seenNisInFile = new Set();
 
   for (let r = headerRowIndex + 1; r < rawRows.length; r++) {
     const row = rawRows[r];
     if (!Array.isArray(row) || row.length === 0) continue;
 
-    // Check if entire row is blank
-    const isCompletelyEmpty = row.every((cell) => cell === undefined || cell === null || String(cell).trim() === "");
+    // Check if entire row is completely empty
+    const isCompletelyEmpty = row.every(
+      (cell) => cell === undefined || cell === null || String(cell).trim() === ""
+    );
     if (isCompletelyEmpty) continue;
 
-    processedRows++;
     const rowNumber = r + 1; // 1-indexed Excel row
 
-    const extracted = {
-      name: "",
-      studentNumber: "",
-      gender: "",
-      birthDate: "",
-      noteText: "",
-      heightCm: "",
-      weightKg: ""
-    };
-
-    const rawData = {};
+    let rawName = "";
+    let rawNis = "";
+    let rawGender = "";
+    let rawBirthDate = "";
 
     row.forEach((cellVal, colIdx) => {
       const field = columnMapping[colIdx];
-      const trimmed = cellVal !== undefined && cellVal !== null ? String(cellVal).trim() : "";
-      rawData[`col_${colIdx + 1}`] = trimmed;
+      const strVal = cellVal !== undefined && cellVal !== null ? String(cellVal).trim() : "";
 
       if (field === "name") {
-        extracted.name = trimmed;
+        rawName = strVal;
       } else if (field === "studentNumber") {
-        extracted.studentNumber = trimmed;
+        rawNis = strVal;
       } else if (field === "gender") {
-        extracted.gender = normalizeGender(cellVal);
+        rawGender = strVal;
       } else if (field === "birthDate") {
-        extracted.birthDate = normalizeBirthDate(cellVal);
-      } else if (field === "noteText") {
-        extracted.noteText = trimmed;
-      } else if (field === "heightCm") {
-        extracted.heightCm = trimmed;
-      } else if (field === "weightKg") {
-        extracted.weightKg = trimmed;
+        rawBirthDate = cellVal; // keep raw cell value for date parsing
       }
     });
 
-    // Validation: Name is required
-    if (!extracted.name) {
-      invalidRows.push({
-        rowNumber,
-        rawData,
-        reason: "Nama siswa wajib diisi (kolom nama kosong)."
-      });
-      continue;
+    let status = "valid";
+    const messages = [];
+
+    // 1. NAME RULE (Strict: Required)
+    const name = rawName.trim();
+    if (!name) {
+      status = "invalid";
+      messages.push(`SISWA baris ${rowNumber}: Nama siswa wajib diisi.`);
     }
 
-    validStudents.push(extracted);
+    // 2. NIS RULE (Optional, stringified, preserves leading zeros)
+    const studentNumber = rawNis.trim();
+
+    // 3. GENDER RULE (Optional, standardizes or warns)
+    const genderResult = normalizeGender(rawGender);
+    const gender = genderResult.gender;
+    if (!genderResult.isValid && rawGender) {
+      if (status === "valid") {
+        status = "warning";
+      }
+      messages.push(`Jenis kelamin "${rawGender}" tidak dikenali dan akan dikosongkan.`);
+    }
+
+    // 4. BIRTH DATE RULE (Optional, validates real calendar date or warns)
+    const birthResult = normalizeBirthDate(rawBirthDate);
+    const birthDate = birthResult.birthDate;
+    if (!birthResult.isValid && rawBirthDate !== "" && rawBirthDate !== undefined && rawBirthDate !== null) {
+      if (status === "valid") {
+        status = "warning";
+      }
+      messages.push("Tanggal lahir tidak dikenali dan akan dikosongkan.");
+    }
+
+    // 5. DUPLICATE ANALYSIS (Only if student is otherwise valid/warning)
+    if (status !== "invalid") {
+      // 5a. Duplicates inside the same Excel file
+      if (studentNumber) {
+        if (seenNisInFile.has(studentNumber)) {
+          status = "duplicate";
+          messages.push(`NIS ${studentNumber} muncul lebih dari satu kali pada file Excel.`);
+        } else {
+          seenNisInFile.add(studentNumber);
+        }
+      }
+
+      // 5b. Duplicates against existing database students
+      if (studentNumber && status !== "duplicate") {
+        const matchSameClass = existingStudents.find(
+          (s) => (s.studentNumber || "").trim() === studentNumber && s.classId === targetClassId
+        );
+        const matchOtherClass = existingStudents.find(
+          (s) => (s.studentNumber || "").trim() === studentNumber && s.classId !== targetClassId
+        );
+
+        if (matchSameClass) {
+          status = "duplicate";
+          messages.push(`NIS ${studentNumber} sudah terdaftar di kelas ini.`);
+        } else if (matchOtherClass) {
+          status = "duplicate";
+          messages.push(`NIS ${studentNumber} sudah terdaftar di kelas lain. Data tidak dipindahkan otomatis.`);
+        }
+      }
+
+      // 5c. Same normalized name with empty NIS in target class -> Warning (still importable!)
+      if (!studentNumber && status === "valid") {
+        const matchNameInClass = existingStudents.find(
+          (s) =>
+            s.classId === targetClassId &&
+            (s.name || "").trim().toLowerCase() === name.toLowerCase()
+        );
+        if (matchNameInClass) {
+          status = "warning";
+          messages.push("Ada siswa dengan nama yang sama di kelas ini.");
+        }
+      }
+    }
+
+    rows.push({
+      rowNumber,
+      student: {
+        name,
+        studentNumber,
+        gender,
+        birthDate
+      },
+      status,
+      messages
+    });
   }
 
+  const validCount = rows.filter((r) => r.status === "valid").length;
+  const warningCount = rows.filter((r) => r.status === "warning").length;
+  const duplicateCount = rows.filter((r) => r.status === "duplicate").length;
+  const invalidCount = rows.filter((r) => r.status === "invalid").length;
+  const importableCount = validCount + warningCount;
+
   return {
-    validStudents,
-    invalidRows,
-    totalRows: processedRows,
-    validCount: validStudents.length,
-    invalidCount: invalidRows.length,
-    sheetName: targetSheetName
+    rows,
+    summary: {
+      total: rows.length,
+      valid: validCount,
+      warning: warningCount,
+      duplicate: duplicateCount,
+      invalid: invalidCount,
+      importable: importableCount
+    },
+    sheetName: exactSheetName
   };
 }
 
 /**
  * Parses a File or Blob or ArrayBuffer from browser file input.
  */
-export async function parseStudentExcelFile(fileOrBuffer) {
+export async function parseStudentExcelFile(fileOrBuffer, options = {}) {
   const XLSX = getXLSX();
   let buffer;
 
@@ -406,114 +487,52 @@ export async function parseStudentExcelFile(fileOrBuffer) {
 
   const workbook = XLSX.read(buffer, {
     type: "array",
-    cellDates: true,
+    cellDates: false,
     cellNF: false,
-    cellText: false
+    cellText: false,
+    raw: false
   });
 
-  return parseStudentWorkbook(workbook);
+  return parseStudentWorkbook(workbook, options);
 }
 
 /**
- * Generates an Excel template workbook for importing students.
+ * Generates an Excel template workbook for importing students (V1 Exact Format).
+ * Contains exactly one sheet named 'SISWA' and only the 4 identity columns.
  */
-export function generateStudentTemplateWorkbook({ className = "", grade = "" } = {}) {
+export function generateStudentTemplateWorkbook() {
   const XLSX = getXLSX();
   const wb = XLSX.utils.book_new();
 
-  const headers = [
-    "Nama Lengkap Siswa *",
-    "Nomor Induk Siswa (NIS)",
-    "Jenis Kelamin (L/P)",
-    "Tanggal Lahir (YYYY-MM-DD)",
-    "Catatan Guru (Kesehatan/Karakter)"
-  ];
+  const headers = ["nama_siswa", "nis", "jenis_kelamin", "tanggal_lahir"];
 
   const sampleRows = [
-    ["Ahmad Fauzi", "1001", "L", "2015-04-12", "Asma ringan, perlu istirahat saat lelah"],
-    ["Siti Nurhaliza", "1002", "P", "2015-08-25", ""],
-    ["Budi Pratama", "1003", "L", "2016-01-10", ""],
-    ["Dewi Lestari", "1004", "P", "2015-11-05", "Aktif dalam atletik"],
-    ["Rian Saputra", "1005", "L", "2015-06-18", ""]
+    ["Ahmad Fauzan", "00101", "L", "2019-03-12"],
+    ["Siti Aisyah", "", "P", ""],
+    ["Muhammad Fikri", "", "", ""]
   ];
 
   const sheetData = [headers, ...sampleRows];
   const ws = XLSX.utils.aoa_to_sheet(sheetData);
 
   ws["!cols"] = [
-    { wch: 30 }, // Nama
-    { wch: 22 }, // NIS
-    { wch: 20 }, // JK
-    { wch: 26 }, // Tgl Lahir
-    { wch: 40 }  // Catatan
+    { wch: 28 }, // nama_siswa
+    { wch: 16 }, // nis
+    { wch: 18 }, // jenis_kelamin
+    { wch: 20 }  // tanggal_lahir
   ];
 
-  XLSX.utils.book_append_sheet(wb, ws, "DATA SISWA");
+  XLSX.utils.book_append_sheet(wb, ws, "SISWA");
   return wb;
 }
 
 /**
  * Generates and downloads student import template directly in browser.
  */
-export function downloadStudentTemplateExcel({ className = "", grade = "" } = {}) {
+export function downloadStudentTemplateExcel() {
   const XLSX = getXLSX();
-  const wb = generateStudentTemplateWorkbook({ className, grade });
-  const safeName = (className || "Kelas").replace(/[^a-zA-Z0-9_\-]/g, "_");
-  const fileName = `Template_Import_Siswa_${safeName}.xlsx`;
-
-  XLSX.writeFile(wb, fileName);
-}
-
-/**
- * Exports existing student list to Excel workbook.
- */
-export function exportStudentsToWorkbook(students = [], className = "") {
-  const XLSX = getXLSX();
-  const wb = XLSX.utils.book_new();
-
-  const headers = [
-    "No",
-    "Nama Lengkap Siswa",
-    "Nomor Induk Siswa (NIS)",
-    "Jenis Kelamin",
-    "Tanggal Lahir",
-    "Tinggi Badan (cm)",
-    "Berat Badan (kg)"
-  ];
-
-  const rows = (students || []).map((s, idx) => [
-    idx + 1,
-    s.name || "",
-    s.studentNumber || "",
-    s.gender === "male" ? "Laki-laki" : s.gender === "female" ? "Perempuan" : "",
-    s.birthDate || "",
-    s.heightCm || "",
-    s.weightKg || ""
-  ]);
-
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  ws["!cols"] = [
-    { wch: 6 },
-    { wch: 30 },
-    { wch: 22 },
-    { wch: 18 },
-    { wch: 16 },
-    { wch: 18 },
-    { wch: 18 }
-  ];
-
-  XLSX.utils.book_append_sheet(wb, ws, "DATA SISWA");
-  return wb;
-}
-
-/**
- * Exports and downloads current class student roster directly in browser.
- */
-export function downloadStudentsExcel(students = [], className = "") {
-  const XLSX = getXLSX();
-  const wb = exportStudentsToWorkbook(students, className);
-  const safeName = (className || "Kelas").replace(/[^a-zA-Z0-9_\-]/g, "_");
-  const fileName = `Data_Siswa_${safeName}.xlsx`;
+  const wb = generateStudentTemplateWorkbook();
+  const fileName = "Template_Import_Siswa.xlsx";
 
   XLSX.writeFile(wb, fileName);
 }

@@ -186,10 +186,17 @@ export function renderAttendancePanel(context) {
         nameEl.addEventListener("click", () => context.onViewStudent(student.id));
       }
       
+      const genderLabel =
+        student.gender === "female" || student.gender === "P"
+          ? "Perempuan"
+          : student.gender === "male" || student.gender === "L"
+            ? "Laki-laki"
+            : "-";
+
       const sub = createElement(
         "span",
         "student-nis",
-        student.studentNumber ? `NIS: ${student.studentNumber} • ${student.gender === "P" ? "Perempuan" : "Laki-laki"}` : (student.gender === "P" ? "Perempuan" : "Laki-laki")
+        student.studentNumber ? `NIS: ${student.studentNumber} • ${genderLabel}` : genderLabel
       );
 
       // Student tags (health, injury, talented, etc.)

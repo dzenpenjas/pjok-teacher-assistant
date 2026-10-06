@@ -414,36 +414,17 @@ function createCrudActions() {
       if (!Array.isArray(studentsList) || studentsList.length === 0) return [];
       const state = repositories.students.loadState();
       const currentStudents = [...(state.students || [])];
-      const currentNotes = [...(state.studentNotes || [])];
-      const currentGrowth = [...(state.growthRecords || [])];
       const createdList = [];
 
       for (const input of studentsList) {
         if (!input || !input.name) continue;
         const student = createStudent({
-          ...input,
-          tagIds: input.tagId ? [input.tagId] : (Array.isArray(input.tagIds) ? input.tagIds : [])
+          name: input.name,
+          studentNumber: input.studentNumber || "",
+          gender: input.gender || "",
+          birthDate: input.birthDate || "",
+          classId: input.classId || ""
         });
-
-        if (input.noteText) {
-          const note = createStudentNote({
-            studentId: student.id,
-            text: input.noteText
-          });
-          currentNotes.push(note);
-          student.noteIds = [note.id];
-        }
-
-        if (input.heightCm || input.weightKg) {
-          const rec = createGrowthRecord({
-            studentId: student.id,
-            date: new Date().toISOString().slice(0, 10),
-            heightCm: input.heightCm || "",
-            weightKg: input.weightKg || "",
-            note: "Pengukuran awal siswa (Import Excel)"
-          });
-          currentGrowth.push(rec);
-        }
 
         currentStudents.push(student);
         createdList.push(student);
@@ -451,9 +432,7 @@ function createCrudActions() {
 
       repositories.students.saveState({
         ...state,
-        students: currentStudents,
-        studentNotes: currentNotes,
-        growthRecords: currentGrowth
+        students: currentStudents
       });
 
       refreshState();

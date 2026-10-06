@@ -163,7 +163,8 @@ export function renderStudentsScreen(state, actions) {
         nameBtn.type = "button";
         nameBtn.addEventListener("click", () => actions.openStudentDetail(student.id));
 
-        const subMeta = createElement("p", "student-dir-sub", `NIS: ${student.studentNumber || "-"} • ${student.gender === "female" ? "Perempuan" : "Laki-laki"}`);
+        const genderText = student.gender === "female" ? "Perempuan" : student.gender === "male" ? "Laki-laki" : "-";
+        const subMeta = createElement("p", "student-dir-sub", `NIS: ${student.studentNumber || "-"} • ${genderText}`);
         infoCol.append(nameBtn, subMeta);
 
         if (classRoom) {
