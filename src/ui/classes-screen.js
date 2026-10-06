@@ -686,6 +686,12 @@ export function renderClassesScreen(state, actions) {
         studentStatuses: {}
       };
     }
+    if (!classUi.batchReportSelection) {
+      classUi.batchReportSelection = {
+        includeGrowth: false,
+        includeObservations: false
+      };
+    }
     if (!classUi.reportDrafts) {
       classUi.reportDrafts = {};
     }
@@ -750,6 +756,35 @@ export function renderClassesScreen(state, actions) {
       });
       sourceConfigBox.append(sessList);
     }
+
+    const extraOptionsWrap = createElement("div", "flex flex-wrap gap-4 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 mt-2");
+    
+    const growthLbl = createElement("label", "flex items-center gap-1.5 cursor-pointer font-medium text-slate-700 dark:text-slate-300");
+    const growthChk = document.createElement("input");
+    growthChk.type = "checkbox";
+    growthChk.className = "report-source-check";
+    growthChk.checked = Boolean(classUi.batchReportSelection?.includeGrowth);
+    growthChk.disabled = classUi.batchState.isBatchGenerating;
+    growthChk.addEventListener("change", (e) => {
+      if (!classUi.batchReportSelection) classUi.batchReportSelection = {};
+      classUi.batchReportSelection.includeGrowth = e.target.checked;
+    });
+    growthLbl.append(growthChk, document.createTextNode("Sertakan Pertumbuhan Fisik"));
+
+    const obsLbl = createElement("label", "flex items-center gap-1.5 cursor-pointer font-medium text-slate-700 dark:text-slate-300");
+    const obsChk = document.createElement("input");
+    obsChk.type = "checkbox";
+    obsChk.className = "report-source-check";
+    obsChk.checked = Boolean(classUi.batchReportSelection?.includeObservations);
+    obsChk.disabled = classUi.batchState.isBatchGenerating;
+    obsChk.addEventListener("change", (e) => {
+      if (!classUi.batchReportSelection) classUi.batchReportSelection = {};
+      classUi.batchReportSelection.includeObservations = e.target.checked;
+    });
+    obsLbl.append(obsChk, document.createTextNode("Sertakan Catatan Sikap & Observasi"));
+
+    extraOptionsWrap.append(growthLbl, obsLbl);
+    sourceConfigBox.append(extraOptionsWrap);
 
     batchPanel.append(batchHeader, sourceConfigBox);
 
@@ -857,21 +892,13 @@ export function renderClassesScreen(state, actions) {
           })
           .filter(Boolean);
 
-        const selectedGrowth = (state.growthRecords || []).filter((g) => {
-          if (g.studentId !== student.id) return false;
-          if ((classUi.reportSelection.growthRecordIds || []).length > 0) {
-            return classUi.reportSelection.growthRecordIds.includes(g.id);
-          }
-          return true;
-        });
+        const selectedGrowth = classUi.batchReportSelection?.includeGrowth
+          ? (state.growthRecords || []).filter((g) => g.studentId === student.id)
+          : [];
 
-        const selectedObs = (state.studentObservations || []).filter((o) => {
-          if (o.studentId !== student.id) return false;
-          if ((classUi.reportSelection.observationIds || []).length > 0) {
-            return classUi.reportSelection.observationIds.includes(o.id);
-          }
-          return true;
-        });
+        const selectedObs = classUi.batchReportSelection?.includeObservations
+          ? (state.studentObservations || []).filter((o) => o.studentId === student.id)
+          : [];
 
         const totalSources = selectedAssessments.length + selectedGrowth.length + selectedObs.length;
 
