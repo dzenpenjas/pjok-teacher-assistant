@@ -1,5 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import * as xlsxModule from "xlsx";
+
+// Provide XLSX in Node.js test environment
+globalThis.XLSX = xlsxModule.read ? xlsxModule : xlsxModule.default || xlsxModule;
 
 import { createAssessmentDefinition, createAssessmentSession } from "../src/data/models.js";
 import {

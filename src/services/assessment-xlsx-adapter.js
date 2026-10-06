@@ -1,4 +1,3 @@
-import * as xlsxModule from "xlsx";
 import {
   ASSESSMENT_PACKAGE_FORMAT,
   ASSESSMENT_PACKAGE_FORMAT_VERSION,
@@ -10,22 +9,9 @@ import {
   createCanonicalAssessmentPackage,
   generateSafeExportFilename
 } from "./assessment-package-service.js";
+import { getXLSX } from "./xlsx-runtime.js";
 
-/**
- * Resolves the XLSX library instance across Browser runtime and Node test runner.
- */
-export function getXLSX() {
-  if (typeof window !== "undefined" && window.XLSX) {
-    return window.XLSX;
-  }
-  if (typeof globalThis !== "undefined" && globalThis.XLSX) {
-    return globalThis.XLSX;
-  }
-  if (xlsxModule && (xlsxModule.read || xlsxModule.default?.read)) {
-    return xlsxModule.read ? xlsxModule : xlsxModule.default;
-  }
-  throw new Error("Library XLSX tidak tersedia.");
-}
+export { getXLSX };
 
 function normalizeString(val) {
   if (val === undefined || val === null) return "";

@@ -4923,11 +4923,183 @@ textarea {
   position: relative;
 }
 
-.assessment-card-menu .dropdown-open {
-  display: block;
+.assessment-card-dropdown {
+  display: none;
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  width: 180px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+  padding: 6px;
+  z-index: 30;
+  flex-direction: column;
+  gap: 4px;
 }
 
+.assessment-card-dropdown.dropdown-open {
+  display: flex;
+}
 
+.assessment-card-menu-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-subtle, #94a3b8);
+  padding: 4px 8px;
+  margin: 0;
+}
+
+.assessment-card-menu-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text, #334155);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.assessment-card-menu-item:hover {
+  background: var(--color-surface-muted, #f1f5f9);
+  color: var(--color-text, #0f172a);
+}
+
+.assessment-card-menu-item.item-cancel {
+  color: var(--color-text-subtle, #64748b);
+  font-weight: 500;
+  padding: 6px 10px;
+}
+
+/* ==========================================================================
+   EXCEL STUDENT IMPORT STYLES
+   ========================================================================== */
+.excel-import-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.notice-box {
+  background: var(--color-surface-muted, #f8fafc);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-md, 8px);
+  padding: 12px 14px;
+}
+
+.notice-box strong {
+  color: var(--color-text, #1e293b);
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.template-download-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.file-dropzone {
+  border: 2px dashed var(--color-border, #cbd5e1);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--color-surface, #ffffff);
+  padding: 24px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.file-dropzone:hover,
+.file-dropzone.dragover {
+  border-color: var(--color-primary, #116149);
+  background: rgba(17, 97, 73, 0.04);
+}
+
+.dropzone-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--color-text, #1e293b);
+  margin: 0;
+}
+
+.dropzone-sub {
+  font-size: 0.78rem;
+  color: var(--color-text-subtle, #64748b);
+  margin: 0;
+}
+
+.import-summary-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.summary-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--color-surface-muted, #f1f5f9);
+  color: var(--color-text, #334155);
+}
+
+.summary-pill.pill-success {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.summary-pill.pill-warning {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.invalid-rows-warning {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-md, 8px);
+  padding: 10px 12px;
+  color: #92400e;
+}
+
+.import-preview-table {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-md, 8px);
+}
+
+.import-preview-table table {
+  width: 100%;
+  font-size: 0.8rem;
+}
+
+.import-preview-table th {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface-muted, #f8fafc);
+  z-index: 1;
+}
 
 @media print {
   body * {

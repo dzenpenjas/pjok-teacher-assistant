@@ -1,4 +1,5 @@
 import { SCREENS } from "./data/schema.js";
+import { createStudent, createStudentNote, createGrowthRecord } from "./data/models.js";
 import { importStateFromJson, exportStateAsJson, inspectBackupJson } from "./storage/backup.js";
 import { loadState, saveState } from "./storage/storage.js";
 import { createRepositoryContext } from "./repositories/repository-context.js";
@@ -408,6 +409,55 @@ function createCrudActions() {
       }
 
       refreshState();
+    },
+    batchCreateStudents: (studentsList = []) => {
+      if (!Array.isArray(studentsList) || studentsList.length === 0) return [];
+      const state = repositories.students.loadState();
+      const currentStudents = [...(state.students || [])];
+      const currentNotes = [...(state.studentNotes || [])];
+      const currentGrowth = [...(state.growthRecords || [])];
+      const createdList = [];
+
+      for (const input of studentsList) {
+        if (!input || !input.name) continue;
+        const student = createStudent({
+          ...input,
+          tagIds: input.tagId ? [input.tagId] : (Array.isArray(input.tagIds) ? input.tagIds : [])
+        });
+
+        if (input.noteText) {
+          const note = createStudentNote({
+            studentId: student.id,
+            text: input.noteText
+          });
+          currentNotes.push(note);
+          student.noteIds = [note.id];
+        }
+
+        if (input.heightCm || input.weightKg) {
+          const rec = createGrowthRecord({
+            studentId: student.id,
+            date: new Date().toISOString().slice(0, 10),
+            heightCm: input.heightCm || "",
+            weightKg: input.weightKg || "",
+            note: "Pengukuran awal siswa (Import Excel)"
+          });
+          currentGrowth.push(rec);
+        }
+
+        currentStudents.push(student);
+        createdList.push(student);
+      }
+
+      repositories.students.saveState({
+        ...state,
+        students: currentStudents,
+        studentNotes: currentNotes,
+        growthRecords: currentGrowth
+      });
+
+      refreshState();
+      return createdList;
     },
     updateStudent: (id, input) => {
       repositories.students.update(id, input);

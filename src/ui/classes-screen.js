@@ -8,6 +8,11 @@ import { renderAssessmentImportModal } from "./assessment-import-modal.js";
 import { exportAssessmentSessionToJsonFile } from "../services/assessment-package-service.js";
 import { exportAssessmentSessionToExcelFile } from "../services/assessment-xlsx-adapter.js";
 import {
+  parseStudentExcelFile,
+  downloadStudentTemplateExcel,
+  downloadStudentsExcel
+} from "../services/student-xlsx-adapter.js";
+import {
   showToast,
   registerDirtyGuard,
   unregisterDirtyGuard,
@@ -2241,7 +2246,12 @@ export function renderClassesScreen(state, actions) {
 
   function renderAddStudentModal(classRoom) {
     const backdrop = createElement("div", "modal-backdrop");
-    const modal = createElement("div", "modal-card");
+    const modal = createElement("div", "modal-card modal-card-wide");
+
+    let currentTab = "manual"; // "manual" | "excel"
+    let parsedExcelData = null;
+    let isParsingExcel = false;
+    let excelError = null;
 
     const header = createElement("div", "modal-header-row");
     header.append(createElement("h2", "modal-title", `Tambah Siswa ke ${classRoom.name}`));
@@ -2253,55 +2263,325 @@ export function renderClassesScreen(state, actions) {
     header.append(closeBtn);
     modal.append(header);
 
-    const form = createElement("form", "master-form");
-    const photoPicker = createPhotoPickerField();
+    // Sub-tab Navigation
+    const tabNav = createElement("div", "sub-tabs-row");
+    const manualTabBtn = createElement("button", "sub-tab-btn active", "✏️ Input Manual");
+    manualTabBtn.type = "button";
+    const excelTabBtn = createElement("button", "sub-tab-btn", "📊 Import Excel (.xlsx)");
+    excelTabBtn.type = "button";
 
-    form.append(
-      photoPicker,
-      createField({ label: "Nama Lengkap Siswa", name: "name", required: true }),
-      createField({ label: "Nomor Induk Siswa (NIS)", name: "studentNumber" }),
-      createSelectField({
-        label: "Jenis Kelamin",
-        name: "gender",
-        options: [
-          { value: "male", label: "Laki-laki" },
-          { value: "female", label: "Perempuan" }
-        ]
-      }),
-      createField({ label: "Tanggal Lahir", name: "birthDate", type: "date" }),
-      createSelectField({
-        label: "Tag Kesehatan / Kebugaran",
-        name: "tagId",
-        options: [
-          { value: "", label: "-- Tanpa Tag Khusus --" },
-          ...(state.studentTags || []).map((t) => ({ value: t.id, label: t.name }))
-        ]
-      }),
-      createField({ label: "Catatan Guru (Kesehatan/Karakter)", name: "noteText" })
-    );
+    tabNav.append(manualTabBtn, excelTabBtn);
+    modal.append(tabNav);
 
-    const btnRow = createElement("div", "modal-btn-row");
-    const submitBtn = createElement("button", "primary-action", "Simpan Siswa");
-    submitBtn.type = "submit";
-    btnRow.append(submitBtn);
-    form.append(btnRow);
+    const bodyContainer = createElement("div", "modal-tab-body");
+    modal.append(bodyContainer);
 
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const payload = formToObject(form);
-      const photo = photoPicker.getPhoto();
-      if (actions?.createStudent) {
-        actions.createStudent({
-          ...payload,
-          classId: classRoom.id,
-          photo
-        });
+    function renderModalBody() {
+      bodyContainer.replaceChildren();
+      manualTabBtn.className = `sub-tab-btn ${currentTab === "manual" ? "active" : ""}`;
+      excelTabBtn.className = `sub-tab-btn ${currentTab === "excel" ? "active" : ""}`;
+
+      if (currentTab === "manual") {
+        renderManualForm();
+      } else {
+        renderExcelImport();
       }
-      showAddStudentModal = false;
-      render();
+    }
+
+    manualTabBtn.addEventListener("click", () => {
+      currentTab = "manual";
+      renderModalBody();
     });
 
-    modal.append(form);
+    excelTabBtn.addEventListener("click", () => {
+      currentTab = "excel";
+      renderModalBody();
+    });
+
+    function renderManualForm() {
+      const form = createElement("form", "master-form");
+      const photoPicker = createPhotoPickerField();
+
+      form.append(
+        photoPicker,
+        createField({ label: "Nama Lengkap Siswa", name: "name", required: true }),
+        createField({ label: "Nomor Induk Siswa (NIS)", name: "studentNumber" }),
+        createSelectField({
+          label: "Jenis Kelamin",
+          name: "gender",
+          options: [
+            { value: "male", label: "Laki-laki" },
+            { value: "female", label: "Perempuan" }
+          ]
+        }),
+        createField({ label: "Tanggal Lahir", name: "birthDate", type: "date" }),
+        createSelectField({
+          label: "Tag Kesehatan / Kebugaran",
+          name: "tagId",
+          options: [
+            { value: "", label: "-- Tanpa Tag Khusus --" },
+            ...(state.studentTags || []).map((t) => ({ value: t.id, label: t.name }))
+          ]
+        }),
+        createField({ label: "Catatan Guru (Kesehatan/Karakter)", name: "noteText" })
+      );
+
+      const btnRow = createElement("div", "modal-btn-row");
+      const submitBtn = createElement("button", "primary-action", "Simpan Siswa");
+      submitBtn.type = "submit";
+      btnRow.append(submitBtn);
+      form.append(btnRow);
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const payload = formToObject(form);
+        const photo = photoPicker.getPhoto();
+        if (actions?.createStudent) {
+          actions.createStudent({
+            ...payload,
+            classId: classRoom.id,
+            photo
+          });
+        }
+        showAddStudentModal = false;
+        render();
+      });
+
+      bodyContainer.append(form);
+    }
+
+    function renderExcelImport() {
+      const wrapper = createElement("div", "excel-import-panel");
+
+      // Guidance Note
+      const infoBox = createElement("div", "notice-box");
+      const infoTitle = createElement("strong", null, "Petunjuk Import Excel");
+      const infoList = createElement("ul", "text-xs text-subtle");
+      const li1 = createElement("li", null, "• Kolom Nama Siswa wajib diisi.");
+      const li2 = createElement("li", null, "• Kolom NIS, Jenis Kelamin (L/P), Tanggal Lahir, dan Catatan bersifat opsional.");
+      const li3 = createElement("li", null, `• Siswa yang diimport akan otomatis didaftarkan ke dalam kelas ${classRoom.name}.`);
+      infoList.append(li1, li2, li3);
+      infoBox.append(infoTitle, infoList);
+      wrapper.append(infoBox);
+
+      // Template Download Toolbar
+      const templateRow = createElement("div", "template-download-row");
+      const dlBtn = createElement("button", "btn-tool");
+      dlBtn.type = "button";
+      dlBtn.append(ICONS.download(15), document.createTextNode(" Unduh Template Excel (.xlsx)"));
+      dlBtn.addEventListener("click", () => {
+        try {
+          downloadStudentTemplateExcel({ className: classRoom.name, grade: classRoom.grade });
+          showToast("Template Excel siswa berhasil diunduh.");
+        } catch (err) {
+          showToast(`Gagal mengunduh template: ${err.message}`);
+        }
+      });
+      templateRow.append(dlBtn);
+      wrapper.append(templateRow);
+
+      if (isParsingExcel) {
+        const loadingBox = createElement("div", "empty-copy text-sm", "Sedang memproses dan membaca file Excel...");
+        wrapper.append(loadingBox);
+        bodyContainer.append(wrapper);
+        return;
+      }
+
+      if (excelError) {
+        const errBox = createElement("div", "invalid-rows-warning");
+        errBox.append(
+          createElement("strong", "block text-xs font-semibold", "Gagal Membaca File:"),
+          createElement("p", "text-xs mt-1", excelError)
+        );
+        const retryBtn = createElement("button", "btn-tool text-xs mt-2", "Pilih File Lain");
+        retryBtn.type = "button";
+        retryBtn.addEventListener("click", () => {
+          excelError = null;
+          parsedExcelData = null;
+          renderModalBody();
+        });
+        errBox.append(retryBtn);
+        wrapper.append(errBox);
+      }
+
+      if (!parsedExcelData) {
+        // Upload Dropzone
+        const dropzone = createElement("div", "file-dropzone");
+        const dropIcon = ICONS.upload(28);
+        const dropTitle = createElement("p", "dropzone-title", "Pilih atau Tarik File Excel (.xlsx) ke sini");
+        const dropHint = createElement("p", "dropzone-sub", "Pastikan file berformat .xlsx atau .xls");
+
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel";
+        fileInput.style.display = "none";
+
+        const chooseBtn = createElement("button", "primary-action compact-action mt-2", "Pilih File Excel");
+        chooseBtn.type = "button";
+        chooseBtn.addEventListener("click", () => fileInput.click());
+
+        fileInput.addEventListener("change", async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+
+          isParsingExcel = true;
+          excelError = null;
+          renderModalBody();
+
+          try {
+            const result = await parseStudentExcelFile(file);
+            parsedExcelData = result;
+          } catch (err) {
+            excelError = err.message || "Terjadi kesalahan saat membaca file Excel.";
+          } finally {
+            isParsingExcel = false;
+            renderModalBody();
+          }
+        });
+
+        dropzone.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          dropzone.classList.add("dragover");
+        });
+        dropzone.addEventListener("dragleave", () => {
+          dropzone.classList.remove("dragover");
+        });
+        dropzone.addEventListener("drop", async (e) => {
+          e.preventDefault();
+          dropzone.classList.remove("dragover");
+          const file = e.dataTransfer?.files?.[0];
+          if (!file) return;
+
+          isParsingExcel = true;
+          excelError = null;
+          renderModalBody();
+
+          try {
+            const result = await parseStudentExcelFile(file);
+            parsedExcelData = result;
+          } catch (err) {
+            excelError = err.message || "Terjadi kesalahan saat membaca file Excel.";
+          } finally {
+            isParsingExcel = false;
+            renderModalBody();
+          }
+        });
+
+        dropzone.append(dropIcon, dropTitle, dropHint, chooseBtn, fileInput);
+        wrapper.append(dropzone);
+      } else {
+        // Preview state
+        const { validStudents, invalidRows, totalRows, validCount, invalidCount } = parsedExcelData;
+
+        const summaryBox = createElement("div", "import-summary-badges");
+        const badgeTotal = createElement("span", "summary-pill", `Total: ${totalRows} baris`);
+        const badgeValid = createElement("span", "summary-pill pill-success", `Siap Diimport: ${validCount} siswa`);
+        summaryBox.append(badgeTotal, badgeValid);
+
+        if (invalidCount > 0) {
+          const badgeInvalid = createElement("span", "summary-pill pill-warning", `Dilewati: ${invalidCount} baris`);
+          summaryBox.append(badgeInvalid);
+        }
+        wrapper.append(summaryBox);
+
+        if (invalidCount > 0) {
+          const invalidList = createElement("div", "invalid-rows-warning");
+          invalidList.append(createElement("strong", "text-xs", `Catatan Baris Dilewati (${invalidCount}):`));
+          const ul = createElement("ul", "text-xs mt-1");
+          invalidRows.slice(0, 5).forEach((inv) => {
+            ul.append(createElement("li", null, `• Baris ${inv.rowNumber}: ${inv.reason}`));
+          });
+          if (invalidRows.length > 5) {
+            ul.append(createElement("li", "text-subtle", `...dan ${invalidRows.length - 5} baris lainnya.`));
+          }
+          invalidList.append(ul);
+          wrapper.append(invalidList);
+        }
+
+        if (validCount === 0) {
+          wrapper.append(
+            createElement(
+              "p",
+              "empty-copy text-sm",
+              "Tidak ditemukan data siswa valid. Pastikan kolom Nama Siswa terisi pada file Excel."
+            )
+          );
+        } else {
+          // Preview table
+          const previewCard = createElement("div", "table-card import-preview-table");
+          const table = createElement("table", "app-table");
+          const thead = createElement("thead");
+          const headerRow = createElement("tr");
+          headerRow.append(
+            createElement("th", "col-num", "No"),
+            createElement("th", null, "Nama Lengkap Siswa"),
+            createElement("th", null, "NIS"),
+            createElement("th", null, "L/P"),
+            createElement("th", null, "Tgl Lahir"),
+            createElement("th", null, "Catatan")
+          );
+          thead.append(headerRow);
+          table.append(thead);
+
+          const tbody = createElement("tbody");
+          validStudents.forEach((st, idx) => {
+            const tr = createElement("tr");
+            tr.append(
+              createElement("td", "col-num text-subtle", `${idx + 1}`),
+              createElement("td", "font-medium", st.name),
+              createElement("td", "text-subtle", st.studentNumber || "-"),
+              createElement("td", "text-center", st.gender === "male" ? "L" : st.gender === "female" ? "P" : "-"),
+              createElement("td", "text-subtle", st.birthDate || "-"),
+              createElement("td", "text-subtle text-xs", st.noteText || "-")
+            );
+            tbody.append(tr);
+          });
+          table.append(tbody);
+          previewCard.append(table);
+          wrapper.append(previewCard);
+        }
+
+        const actionRow = createElement("div", "modal-btn-row mt-3");
+        const changeFileBtn = createElement("button", "btn-tool", "Ganti File");
+        changeFileBtn.type = "button";
+        changeFileBtn.addEventListener("click", () => {
+          parsedExcelData = null;
+          excelError = null;
+          renderModalBody();
+        });
+
+        const importBtn = createElement(
+          "button",
+          "primary-action",
+          `Simpan ${validCount} Siswa ke ${classRoom.name}`
+        );
+        importBtn.type = "button";
+        importBtn.disabled = validCount === 0;
+        importBtn.addEventListener("click", () => {
+          const studentsToImport = validStudents.map((s) => ({
+            ...s,
+            classId: classRoom.id
+          }));
+
+          if (actions?.batchCreateStudents) {
+            actions.batchCreateStudents(studentsToImport);
+          } else if (actions?.createStudent) {
+            studentsToImport.forEach((st) => actions.createStudent(st));
+          }
+
+          showToast(`✓ ${validCount} siswa berhasil ditambahkan ke ${classRoom.name}`);
+          showAddStudentModal = false;
+          render();
+        });
+
+        actionRow.append(changeFileBtn, importBtn);
+        wrapper.append(actionRow);
+      }
+
+      bodyContainer.append(wrapper);
+    }
+
+    renderModalBody();
     backdrop.append(modal);
     return backdrop;
   }
@@ -2685,55 +2965,47 @@ export function renderClassesScreen(state, actions) {
       menuBtn.setAttribute("aria-label", "Menu opsi asesmen");
       menuBtn.append(ICONS.moreHorizontal(18));
 
-      const dropdown = createElement("div", "hidden absolute right-0 bottom-full mb-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-30 space-y-1");
+      const dropdown = createElement("div", "assessment-card-dropdown");
       
-      const menuTitle = createElement("p", "text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1", "Export Asesmen");
+      const menuTitle = createElement("p", "assessment-card-menu-title", "Export Asesmen");
       
-      const exportExcelBtn = createElement("button", "w-full text-left px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-emerald-50 hover:text-emerald-800 rounded flex items-center gap-2 cursor-pointer");
+      const exportExcelBtn = createElement("button", "assessment-card-menu-item");
       exportExcelBtn.type = "button";
       exportExcelBtn.append(ICONS.download(16), document.createTextNode("Excel (.xlsx)"));
       exportExcelBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        dropdown.classList.add("hidden");
         dropdown.classList.remove("dropdown-open");
         const expResult = exportAssessmentSessionToExcelFile(as, def);
         showToast(`✓ Asesmen diekspor: ${expResult.filename}`);
       });
 
-      const exportJsonBtn = createElement("button", "w-full text-left px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-800 rounded flex items-center gap-2 cursor-pointer");
+      const exportJsonBtn = createElement("button", "assessment-card-menu-item");
       exportJsonBtn.type = "button";
       exportJsonBtn.append(ICONS.download(16), document.createTextNode("JSON (.json)"));
       exportJsonBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        dropdown.classList.add("hidden");
         dropdown.classList.remove("dropdown-open");
         const expResult = exportAssessmentSessionToJsonFile(as, def);
         showToast(`✓ Asesmen diekspor: ${expResult.filename}`);
       });
 
-      const cancelMenuBtn = createElement("button", "w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded cursor-pointer");
+      const cancelMenuBtn = createElement("button", "assessment-card-menu-item item-cancel");
       cancelMenuBtn.type = "button";
       cancelMenuBtn.textContent = "Batal";
       cancelMenuBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        dropdown.classList.add("hidden");
         dropdown.classList.remove("dropdown-open");
       });
 
       dropdown.append(menuTitle, exportExcelBtn, exportJsonBtn, cancelMenuBtn);
       menuBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const isHidden = dropdown.classList.contains("hidden");
-        document.querySelectorAll(".assessment-card-menu .dropdown-open").forEach((el) => {
-          el.classList.add("hidden");
+        const isOpen = dropdown.classList.contains("dropdown-open");
+        document.querySelectorAll(".assessment-card-dropdown.dropdown-open").forEach((el) => {
           el.classList.remove("dropdown-open");
         });
-        if (isHidden) {
-          dropdown.classList.remove("hidden");
+        if (!isOpen) {
           dropdown.classList.add("dropdown-open");
-        } else {
-          dropdown.classList.add("hidden");
-          dropdown.classList.remove("dropdown-open");
         }
       });
 
