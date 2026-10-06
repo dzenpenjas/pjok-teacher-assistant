@@ -832,6 +832,9 @@ export function renderClassesScreen(state, actions) {
       batchActionRow.append(retryBtn);
     }
 
+    const activeAcademicYearId = state.activeAcademicYearId || null;
+    const activeSemesterId = state.activeSemesterId || null;
+
     const readyStudentsWithReports = students
       .map((student) => {
         const savedReport = (state.studentReports || []).find(
@@ -839,6 +842,8 @@ export function renderClassesScreen(state, actions) {
             r &&
             r.studentId === student.id &&
             r.classId === classRoom.id &&
+            (r.academicYearId || null) === activeAcademicYearId &&
+            (r.semesterId || null) === activeSemesterId &&
             r.draft &&
             typeof r.draft === "object" &&
             r.reportContext &&
@@ -1237,6 +1242,8 @@ export function renderClassesScreen(state, actions) {
                 actions.saveStudentReport({
                   studentId: student.id,
                   classId: classRoom.id,
+                  academicYearId: state.activeAcademicYearId || null,
+                  semesterId: state.activeSemesterId || null,
                   reportContext,
                   draft
                 });
@@ -1447,6 +1454,18 @@ export function renderClassesScreen(state, actions) {
           )
         );
 
+        const activeAcademicYearId = state.activeAcademicYearId || null;
+        const activeSemesterId = state.activeSemesterId || null;
+        const studentSavedReport = (state.studentReports || []).find(
+          (r) =>
+            r &&
+            r.studentId === student.id &&
+            r.classId === classRoom.id &&
+            (r.academicYearId || null) === activeAcademicYearId &&
+            (r.semesterId || null) === activeSemesterId &&
+            r.draft
+        );
+
         let reportStatusPill = null;
         if (classUi.batchState?.studentStatuses?.[student.id]) {
           const st = classUi.batchState.studentStatuses[student.id];
@@ -1457,7 +1476,7 @@ export function renderClassesScreen(state, actions) {
             `results-stat-pill ${isOk ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold" : isSkip ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold" : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 font-semibold"}`,
             st
           );
-        } else if (classUi.reportDrafts?.[student.id]) {
+        } else if (studentSavedReport || classUi.reportDrafts?.[student.id]) {
           reportStatusPill = createElement("span", "results-stat-pill bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold", "✨ Laporan AI Tersimpan");
         }
 
@@ -1518,7 +1537,7 @@ export function renderClassesScreen(state, actions) {
       createElement(
         "p",
         "screen-copy text-sm",
-        `${classRoom.name} • NIS: ${student.studentNumber || "-"} • ${student.gender === "female" ? "Perempuan" : "Laki-laki"}`
+        `${classRoom.name} • NIS: ${student.studentNumber || "-"} • ${student.gender === "female" ? "Perempuan" : (student.gender === "male" ? "Laki-laki" : "-")}`
       ),
       createElement(
         "p",
@@ -1534,8 +1553,16 @@ export function renderClassesScreen(state, actions) {
     let isPreviewOpen = false;
     let isRcJsonOpen = false;
 
+    const activeAcademicYearId = state.activeAcademicYearId || null;
+    const activeSemesterId = state.activeSemesterId || null;
+
     const savedReport = (state.studentReports || []).find(
-      (r) => r.studentId === student.id && r.classId === classId
+      (r) =>
+        r &&
+        r.studentId === student.id &&
+        r.classId === classId &&
+        (r.academicYearId || null) === activeAcademicYearId &&
+        (r.semesterId || null) === activeSemesterId
     );
 
     let activeReportContext = savedReport ? savedReport.reportContext : null;
@@ -1548,6 +1575,8 @@ export function renderClassesScreen(state, actions) {
           id: savedReport?.id,
           studentId: student.id,
           classId: classId,
+          academicYearId: activeAcademicYearId,
+          semesterId: activeSemesterId,
           reportContext: activeReportContext || savedReport.reportContext,
           draft: reportAiDraft
         });
@@ -2628,6 +2657,8 @@ export function renderClassesScreen(state, actions) {
           actions.saveStudentReport({
             studentId: student.id,
             classId: classRoom.id,
+            academicYearId: state.activeAcademicYearId || null,
+            semesterId: state.activeSemesterId || null,
             reportContext,
             draft
           });
@@ -4678,11 +4709,17 @@ export function buildSelectedReportContext({
     growth: hasGrowth
   };
 
+  let normalizedGender = null;
+  const rawGender = typeof student?.gender === "string" ? student.gender.trim().toLowerCase() : "";
+  if (rawGender === "male" || rawGender === "female") {
+    normalizedGender = rawGender;
+  }
+
   const studentData = {
     id: student?.id || "",
     name: student?.name || "",
     studentNumber: student?.studentNumber || "",
-    gender: student?.gender || "male",
+    gender: normalizedGender,
     birthDate: student?.birthDate || "",
     gradeLevel:
       gradeNumber !== null && Number.isFinite(gradeNumber)

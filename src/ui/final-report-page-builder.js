@@ -75,6 +75,16 @@ export function createFinalReportPage({
     year: "numeric"
   });
 
+  let genderText = "-";
+  const rawGender = typeof student?.gender === "string"
+    ? student.gender.trim().toLowerCase()
+    : (typeof currentContext.student?.gender === "string" ? currentContext.student.gender.trim().toLowerCase() : "");
+  if (rawGender === "female") {
+    genderText = "Perempuan";
+  } else if (rawGender === "male") {
+    genderText = "Laki-laki";
+  }
+
   const finalReportData = {
     schoolName,
     schoolAddress,
@@ -82,7 +92,7 @@ export function createFinalReportPage({
     studentNumber: student?.studentNumber || "-",
     className: classRoom?.name || "",
     studentAge: studentAgeText,
-    genderText: student?.gender === "female" ? "Perempuan" : "Laki-laki",
+    genderText,
     reportDate: formattedToday,
     overallScore,
 

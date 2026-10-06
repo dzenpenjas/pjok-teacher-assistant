@@ -186,8 +186,14 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
   const data = await response.json();
   const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
+  function createInvalidAiResponseError(message) {
+    const err = new Error(message);
+    err.code = "INVALID_AI_RESPONSE";
+    return err;
+  }
+
   if (!rawText) {
-    throw new Error("Respon kosong diterima dari model AI");
+    throw createInvalidAiResponseError("Respon kosong diterima dari model AI");
   }
 
   let parsed;
@@ -200,11 +206,21 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
     }
     parsed = JSON.parse(cleaned);
   } catch (parseErr) {
-    throw new Error(`Gagal memproses format respon AI: ${parseErr.message}`);
+    throw createInvalidAiResponseError(`Gagal memproses format respon AI: ${parseErr.message}`);
   }
 
-  if (!parsed || typeof parsed !== "object") {
-    throw new Error("Format respon AI tidak valid: bukan object JSON");
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw createInvalidAiResponseError("Format respon AI tidak valid: bukan plain object JSON");
+  }
+
+  // 1. Summary validation
+  if (typeof parsed.summary !== "string" || !parsed.summary.trim()) {
+    throw createInvalidAiResponseError("AI response missing summary");
+  }
+
+  // 2. Home Activity validation
+  if (typeof parsed.homeActivity !== "string" || !parsed.homeActivity.trim()) {
+    throw createInvalidAiResponseError("AI response missing home activity");
   }
 
   const selectedSections = reportContext.selectedSections || {};
@@ -213,27 +229,79 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
   const isAttitudeActive = Boolean(selectedSections.attitude);
   const isGrowthActive = Boolean(selectedSections.growth);
 
-  const sanitizedLearning = isLearningActive && Array.isArray(parsed.learning)
-    ? parsed.learning.map((item) => ({
-        assessmentSessionId:
-          typeof item?.assessmentSessionId === "string"
-            ? item.assessmentSessionId.trim()
-            : "",
-        description:
-          typeof item?.description === "string"
-            ? item.description.trim()
-            : ""
-      }))
-    : [];
+  let sanitizedLearning = [];
+
+  // 3. Learning validation
+  if (isLearningActive) {
+    if (!Array.isArray(parsed.learning)) {
+      throw createInvalidAiResponseError("AI response missing learning array");
+    }
+
+    const contextAssessments = Array.isArray(reportContext.assessments) ? reportContext.assessments : [];
+    if (contextAssessments.length > 0 && parsed.learning.length === 0) {
+      throw createInvalidAiResponseError("AI response learning array is empty");
+    }
+
+    for (const assess of contextAssessments) {
+      const sessId = assess.assessmentSessionId;
+      const matched = parsed.learning.find(
+        (item) => item && typeof item === "object" && String(item.assessmentSessionId || "").trim() === String(sessId || "").trim()
+      );
+      if (!matched) {
+        throw createInvalidAiResponseError(`AI response missing learning item for assessment ${sessId}`);
+      }
+      if (typeof matched.description !== "string" || !matched.description.trim()) {
+        throw createInvalidAiResponseError(`AI response missing description for assessment ${sessId}`);
+      }
+    }
+
+    sanitizedLearning = parsed.learning.map((item) => ({
+      assessmentSessionId:
+        typeof item?.assessmentSessionId === "string"
+          ? item.assessmentSessionId.trim()
+          : (item?.assessmentSessionId !== undefined && item?.assessmentSessionId !== null ? String(item.assessmentSessionId).trim() : ""),
+      description:
+        typeof item?.description === "string"
+          ? item.description.trim()
+          : ""
+    }));
+  }
+
+  // 4. Understanding validation
+  if (isUnderstandingActive) {
+    if (typeof parsed.understanding !== "string" || !parsed.understanding.trim()) {
+      throw createInvalidAiResponseError("AI response missing understanding section");
+    }
+  }
+
+  // 5. Attitude validation
+  if (isAttitudeActive) {
+    if (typeof parsed.attitude !== "string" || !parsed.attitude.trim()) {
+      throw createInvalidAiResponseError("AI response missing attitude section");
+    }
+  }
+
+  // 6. Growth validation
+  if (isGrowthActive) {
+    if (typeof parsed.growth !== "string" || !parsed.growth.trim()) {
+      throw createInvalidAiResponseError("AI response missing growth section");
+    }
+    if (typeof parsed.nutritionAdvice !== "string" || !parsed.nutritionAdvice.trim()) {
+      throw createInvalidAiResponseError("AI response missing nutrition advice");
+    }
+    if (typeof parsed.followUp !== "string" || !parsed.followUp.trim()) {
+      throw createInvalidAiResponseError("AI response missing follow-up recommendations");
+    }
+  }
 
   return {
-    summary: typeof parsed.summary === "string" ? parsed.summary.trim() : "",
+    summary: parsed.summary.trim(),
     learning: sanitizedLearning,
-    understanding: isUnderstandingActive && typeof parsed.understanding === "string" ? parsed.understanding.trim() : "",
-    attitude: isAttitudeActive && typeof parsed.attitude === "string" ? parsed.attitude.trim() : "",
-    growth: isGrowthActive && typeof parsed.growth === "string" ? parsed.growth.trim() : "",
-    homeActivity: typeof parsed.homeActivity === "string" ? parsed.homeActivity.trim() : "",
-    nutritionAdvice: isGrowthActive && typeof parsed.nutritionAdvice === "string" ? parsed.nutritionAdvice.trim() : "",
-    followUp: isGrowthActive && typeof parsed.followUp === "string" ? parsed.followUp.trim() : ""
+    understanding: isUnderstandingActive ? parsed.understanding.trim() : "",
+    attitude: isAttitudeActive ? parsed.attitude.trim() : "",
+    growth: isGrowthActive ? parsed.growth.trim() : "",
+    homeActivity: parsed.homeActivity.trim(),
+    nutritionAdvice: isGrowthActive ? parsed.nutritionAdvice.trim() : "",
+    followUp: isGrowthActive ? parsed.followUp.trim() : ""
   };
 }

@@ -716,8 +716,17 @@ function createCrudActions() {
     saveStudentReport: (report) => {
       if (!report || !report.studentId || !report.classId) return null;
       const existing = Array.isArray(appState.studentReports) ? [...appState.studentReports] : [];
+      const resolvedAcademicYearId =
+        report.academicYearId || appState.activeAcademicYearId || null;
+      const resolvedSemesterId =
+        report.semesterId || appState.activeSemesterId || null;
+
       const idx = existing.findIndex(
-        (r) => r.studentId === report.studentId && r.classId === report.classId
+        (r) =>
+          r.studentId === report.studentId &&
+          r.classId === report.classId &&
+          (r.academicYearId || null) === resolvedAcademicYearId &&
+          (r.semesterId || null) === resolvedSemesterId
       );
       const now = new Date().toISOString();
       const record = {
@@ -726,8 +735,8 @@ function createCrudActions() {
         classId: report.classId,
         reportContext: report.reportContext,
         draft: report.draft,
-        academicYearId: report.academicYearId || appState.activeAcademicYearId || null,
-        semesterId: report.semesterId || appState.activeSemesterId || null,
+        academicYearId: resolvedAcademicYearId,
+        semesterId: resolvedSemesterId,
         generatedAt: report.generatedAt || (idx >= 0 ? existing[idx].generatedAt : now),
         updatedAt: now
       };
