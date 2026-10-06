@@ -832,20 +832,30 @@ export function renderClassesScreen(state, actions) {
       batchActionRow.append(retryBtn);
     }
 
-    const savedStudents = students.filter((student) => {
-      const savedReport = (state.studentReports || []).find(
-        (r) => r.studentId === student.id && r.classId === classRoom.id && r.draft
-      );
-      return Boolean(savedReport || classUi.reportDrafts?.[student.id]);
-    });
+    const readyStudentsWithReports = students
+      .map((student) => {
+        const savedReport = (state.studentReports || []).find(
+          (r) =>
+            r &&
+            r.studentId === student.id &&
+            r.classId === classRoom.id &&
+            r.draft &&
+            typeof r.draft === "object" &&
+            r.reportContext &&
+            typeof r.reportContext === "object"
+        );
+        if (!savedReport) return null;
+        return { student, savedReport };
+      })
+      .filter(Boolean);
 
     const downloadAllBtn = createElement(
       "button",
       "btn-tool btn-tool-primary text-xs flex items-center gap-1.5 font-bold",
-      `📥 Unduh Semua Laporan (${savedStudents.length}/${students.length})`
+      `📥 Unduh Semua Laporan (${readyStudentsWithReports.length}/${students.length})`
     );
     downloadAllBtn.type = "button";
-    downloadAllBtn.disabled = classUi.batchState.isBatchGenerating || savedStudents.length === 0;
+    downloadAllBtn.disabled = classUi.batchState.isBatchGenerating || readyStudentsWithReports.length === 0;
     if (downloadAllBtn.disabled) {
       downloadAllBtn.classList.add("opacity-50", "cursor-not-allowed");
     }
@@ -855,7 +865,7 @@ export function renderClassesScreen(state, actions) {
         window.alert("Mesin PDF belum tersedia. Muat ulang aplikasi lalu coba lagi.");
         return;
       }
-      if (savedStudents.length === 0) {
+      if (readyStudentsWithReports.length === 0) {
         window.alert("Belum ada laporan yang disimpan untuk kelas ini.");
         return;
       }
@@ -864,7 +874,7 @@ export function renderClassesScreen(state, actions) {
       const pdfFilename = `Laporan_PJOK_${cleanClassName}.pdf`;
 
       downloadAllBtn.disabled = true;
-      downloadAllBtn.textContent = `⏳ Menyiapkan PDF (${savedStudents.length} siswa)...`;
+      downloadAllBtn.textContent = `⏳ Menyiapkan PDF (${readyStudentsWithReports.length} siswa)...`;
 
       const exportContainer = document.createElement("div");
       exportContainer.className = "batch-pdf-export-container";
@@ -876,57 +886,29 @@ export function renderClassesScreen(state, actions) {
       document.body.appendChild(exportContainer);
 
       try {
-        for (let i = 0; i < savedStudents.length; i++) {
-          const student = savedStudents[i];
-          const savedReport = (state.studentReports || []).find(
-            (r) => r.studentId === student.id && r.classId === classRoom.id && r.draft
-          );
-          const draft = savedReport?.draft || classUi.reportDrafts?.[student.id];
-          let reportContext = savedReport?.reportContext;
+        let renderedPageCount = 0;
 
-          if (!reportContext) {
-            const studentAssessments = (state.assessmentResults || [])
-              .filter((r) => r.studentId === student.id)
-              .map((r) => {
-                const sess = (state.assessmentSessions || []).find((s) => s.id === r.assessmentSessionId);
-                return { result: r, assessmentSession: sess };
-              })
-              .filter((item) => item.assessmentSession && item.assessmentSession.classId === classRoom.id);
-
-            const studentGrowth = (state.growthRecords || [])
-              .filter((g) => g.studentId === student.id)
-              .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-
-            const studentObservations = (state.studentObservations || [])
-              .filter((o) => o.studentId === student.id)
-              .sort((a, b) => (b.recordedAt || "").localeCompare(a.recordedAt || ""));
-
-            const selAssessments = (classUi.batchReportSelection?.assessmentSessionIds?.length > 0)
-              ? studentAssessments.filter(({ assessmentSession: sess }) => classUi.batchReportSelection.assessmentSessionIds.includes(sess.id))
-              : studentAssessments;
-
-            const selGrowth = classUi.batchReportSelection?.includeGrowth ? studentGrowth : [];
-            const selObs = classUi.batchReportSelection?.includeObservations ? studentObservations : [];
-
-            reportContext = buildSelectedReportContext({
-              student,
-              classRoom,
-              assessmentSelections: selAssessments,
-              growthSelections: selGrowth,
-              observationSelections: selObs,
-              allGrowthRecords: state.growthRecords || []
-            });
+        for (let i = 0; i < readyStudentsWithReports.length; i++) {
+          const { student, savedReport } = readyStudentsWithReports[i];
+          if (
+            !savedReport ||
+            !savedReport.draft ||
+            typeof savedReport.draft !== "object" ||
+            !savedReport.reportContext ||
+            typeof savedReport.reportContext !== "object"
+          ) {
+            continue;
           }
 
           const pageEl = createFinalReportPage({
             student,
             classRoom,
-            draft,
-            reportContext,
+            draft: savedReport.draft,
+            reportContext: savedReport.reportContext,
             school: state.school || { name: state.schoolName, address: state.schoolAddress }
           });
 
-          if (i > 0) {
+          if (renderedPageCount > 0) {
             pageEl.style.pageBreakBefore = "always";
             pageEl.style.breakBefore = "page";
           }
@@ -939,6 +921,13 @@ export function renderClassesScreen(state, actions) {
           if (pageEl.scrollHeight > pageEl.clientHeight) {
             pageEl.classList.add("a4-compact");
           }
+
+          renderedPageCount++;
+        }
+
+        if (renderedPageCount === 0) {
+          window.alert("Tidak ada laporan valid yang dapat diekspor.");
+          return;
         }
 
         const opt = {
@@ -964,9 +953,9 @@ export function renderClassesScreen(state, actions) {
           }
         };
 
-        downloadAllBtn.textContent = `⏳ Mengekspor PDF (${savedStudents.length} siswa)...`;
+        downloadAllBtn.textContent = `⏳ Mengekspor PDF (${renderedPageCount} siswa)...`;
         await window.html2pdf().set(opt).from(exportContainer).save();
-        showToast(`Berhasil mengunduh semua laporan kelas (${savedStudents.length} siswa)`);
+        showToast(`Berhasil mengunduh semua laporan kelas (${renderedPageCount} siswa)`);
       } catch (pdfErr) {
         console.error("[BATCH PDF GENERATION ERROR]", pdfErr);
         window.alert("Terjadi kendala saat membuat PDF gabungan kelas: " + (pdfErr?.message || ""));
@@ -975,7 +964,7 @@ export function renderClassesScreen(state, actions) {
           exportContainer.parentNode.removeChild(exportContainer);
         }
         downloadAllBtn.disabled = false;
-        downloadAllBtn.textContent = `📥 Unduh Semua Laporan (${savedStudents.length}/${students.length})`;
+        downloadAllBtn.textContent = `📥 Unduh Semua Laporan (${readyStudentsWithReports.length}/${students.length})`;
       }
     });
 
