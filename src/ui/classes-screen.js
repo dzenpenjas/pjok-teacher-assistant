@@ -2173,6 +2173,16 @@ export function renderClassesScreen(state, actions) {
         a4Paper.append(scoreHero);
       }
 
+      // GAMBARAN PERKEMBANGAN (SUMMARY)
+      if (finalReportData.summary && finalReportData.summary.trim()) {
+        const summarySection = createElement("section", "a4-section");
+        summarySection.append(
+          createElement("h2", "a4-section-title", "Gambaran Perkembangan"),
+          createElement("p", "a4-section-text text-xs leading-relaxed text-slate-800 dark:text-slate-200", finalReportData.summary.trim())
+        );
+        a4Paper.append(summarySection);
+      }
+
       // TABEL HASIL BELAJAR
       if (isLearningActive && finalReportData.learning.length > 0) {
         const learningSection = createElement("section", "a4-section");
@@ -4593,6 +4603,14 @@ export function buildSelectedReportContext({
             teacherNote = itemResult.note || "";
           }
 
+          const itemRubricLevels = Array.isArray(item.rubricLevels)
+            ? item.rubricLevels.map((lvl) => ({
+                level: Number(lvl.level),
+                label: lvl.label || `Level ${lvl.level}`,
+                description: lvl.desc || lvl.description || ""
+              }))
+            : [];
+
           return {
             itemId: item.id || "",
             prompt: item.prompt || item.title || item.question || "",
@@ -4600,7 +4618,8 @@ export function buildSelectedReportContext({
             rubricLevel,
             rubricLabel,
             rubricDescription,
-            teacherNote
+            teacherNote,
+            rubricLevels: itemRubricLevels
           };
         });
 
