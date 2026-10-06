@@ -83,7 +83,7 @@ export function formatAiDiagnosticText(diag) {
   const errorCode = diag.errorCode || "-";
   const error = diag.errorMessage || "-";
 
-  return [
+  const lines = [
     "AI REPORT DIAGNOSTIC",
     `Run ID: ${runId}`,
     `Stage: ${stage}`,
@@ -98,5 +98,28 @@ export function formatAiDiagnosticText(diag) {
     `Last completed stage: ${lastCompletedStage}`,
     `Error code: ${errorCode}`,
     `Error: ${error}`
-  ].join("\n");
+  ];
+
+  if (diag.lastFailure) {
+    const lf = diag.lastFailure;
+    const lfProgress = (diag.totalStudents != null && diag.totalStudents > 0)
+      ? `${lf.studentIndex || 0} / ${diag.totalStudents}`
+      : (lf.studentIndex != null ? String(lf.studentIndex) : "-");
+    const lfElapsed = lf.elapsedMs != null ? `${lf.elapsedMs}ms` : "-";
+
+    lines.push(
+      "",
+      "LAST FAILURE",
+      `Student: ${lf.studentName || "-"}`,
+      `Progress: ${lfProgress}`,
+      `Stage: ${lf.stage || "-"}`,
+      `Last completed stage: ${lf.lastCompletedStage || "-"}`,
+      `HTTP status: ${lf.httpStatus != null ? String(lf.httpStatus) : "-"}`,
+      `Elapsed: ${lfElapsed}`,
+      `Error code: ${lf.errorCode || "-"}`,
+      `Error: ${lf.errorMessage || "-"}`
+    );
+  }
+
+  return lines.join("\n");
 }

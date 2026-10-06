@@ -841,6 +841,7 @@ export function renderClassesScreen(state, actions) {
 
     // Batch Status / Progress Indicator Box
     const hasDiagError = Boolean(
+      classUi.batchState.diagnostic?.lastFailure ||
       classUi.batchState.diagnostic?.errorCode ||
       classUi.batchState.diagnostic?.errorMessage ||
       (classUi.batchState.failedCount && classUi.batchState.failedCount > 0)
@@ -961,7 +962,8 @@ export function renderClassesScreen(state, actions) {
         httpStatus: null,
         lastCompletedStage: null,
         errorCode: null,
-        errorMessage: null
+        errorMessage: null,
+        lastFailure: null
       };
 
       function updateDiag(newStage, updates = {}) {
@@ -974,12 +976,12 @@ export function renderClassesScreen(state, actions) {
         Object.assign(diag, updates);
       }
 
-      render();
-      if (actions?.requestAppRender) {
-        actions.requestAppRender();
-      }
-
       try {
+        render();
+        if (actions?.requestAppRender) {
+          actions.requestAppRender();
+        }
+
         for (let i = 0; i < targetStudents.length; i++) {
           const student = targetStudents[i];
           classUi.batchState.currentStudentIndex = i + 1;
@@ -1118,6 +1120,19 @@ export function renderClassesScreen(state, actions) {
                 errorCode: "INVALID_AI_RESPONSE",
                 errorMessage: "Format respon AI tidak valid"
               });
+              classUi.batchState.diagnostic.lastFailure = {
+                studentId: student.id,
+                studentName: student.name,
+                studentIndex: i + 1,
+                stage: BATCH_STAGES.ERROR,
+                lastCompletedStage: classUi.batchState.diagnostic.lastCompletedStage,
+                errorCode: "INVALID_AI_RESPONSE",
+                errorMessage: "Format respon AI tidak valid",
+                httpStatus: classUi.batchState.diagnostic.httpStatus,
+                requestStartedAt: classUi.batchState.diagnostic.requestStartedAt,
+                responseReceivedAt: classUi.batchState.diagnostic.responseReceivedAt,
+                elapsedMs: classUi.batchState.diagnostic.elapsedMs
+              };
             }
           } catch (err) {
             console.error("[BATCH REPORT AI ERROR for student]", student.name, err);
@@ -1130,6 +1145,20 @@ export function renderClassesScreen(state, actions) {
               errorCode,
               errorMessage
             });
+
+            classUi.batchState.diagnostic.lastFailure = {
+              studentId: student.id,
+              studentName: student.name,
+              studentIndex: i + 1,
+              stage: BATCH_STAGES.ERROR,
+              lastCompletedStage: classUi.batchState.diagnostic.lastCompletedStage,
+              errorCode,
+              errorMessage,
+              httpStatus: classUi.batchState.diagnostic.httpStatus,
+              requestStartedAt: classUi.batchState.diagnostic.requestStartedAt,
+              responseReceivedAt: classUi.batchState.diagnostic.responseReceivedAt,
+              elapsedMs: classUi.batchState.diagnostic.elapsedMs
+            };
 
             if (isKeyError) {
               classUi.batchState.isBatchGenerating = false;
@@ -1156,6 +1185,21 @@ export function renderClassesScreen(state, actions) {
           errorCode: outerErr?.code || "FATAL_BATCH_ERROR",
           errorMessage: outerErr?.message || String(outerErr)
         });
+        if (classUi.batchState.diagnostic) {
+          classUi.batchState.diagnostic.lastFailure = {
+            studentId: classUi.batchState.diagnostic.studentId,
+            studentName: classUi.batchState.diagnostic.studentName,
+            studentIndex: classUi.batchState.diagnostic.studentIndex,
+            stage: BATCH_STAGES.ERROR,
+            lastCompletedStage: classUi.batchState.diagnostic.lastCompletedStage,
+            errorCode: outerErr?.code || "FATAL_BATCH_ERROR",
+            errorMessage: outerErr?.message || String(outerErr),
+            httpStatus: classUi.batchState.diagnostic.httpStatus,
+            requestStartedAt: classUi.batchState.diagnostic.requestStartedAt,
+            responseReceivedAt: classUi.batchState.diagnostic.responseReceivedAt,
+            elapsedMs: classUi.batchState.diagnostic.elapsedMs
+          };
+        }
         classUi.batchState.statusSummary = `Terjadi kendala pada proses batch: ${outerErr?.message || "Gagal memproses batch"}`;
       } finally {
         classUi.batchState.isBatchGenerating = false;
