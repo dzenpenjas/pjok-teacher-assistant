@@ -988,10 +988,14 @@ function createGlobalAiBanner(batchState, actions) {
   const titleGroup = document.createElement("div");
   titleGroup.className = "global-ai-banner-title";
 
+  const classSpan = document.createElement("span");
+  classSpan.className = "font-normal opacity-80";
+  classSpan.textContent = `• ${batchState.className || "Kelas"}`;
+
   if (isRunning) {
-    titleGroup.innerHTML = `✨ AI sedang membuat laporan <span class="font-normal opacity-80">• ${batchState.className || "Kelas"}</span>`;
+    titleGroup.append(document.createTextNode("✨ AI sedang membuat laporan "), classSpan);
   } else {
-    titleGroup.innerHTML = `✓ Laporan AI selesai <span class="font-normal opacity-80">• ${batchState.className || "Kelas"}</span>`;
+    titleGroup.append(document.createTextNode("✓ Laporan AI selesai "), classSpan);
   }
 
   const actionsGroup = document.createElement("div");
