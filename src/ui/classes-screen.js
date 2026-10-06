@@ -4,6 +4,7 @@ import { createStudentAvatar } from "./student-avatar.js";
 import { ICONS } from "./icons.js";
 import { generateRubricWithAI } from "../services/rubric-ai-service.js";
 import { generateStudentReportWithAI } from "../services/report-ai-service.js";
+import { analyzeGrowth } from "../services/growth-analysis-service.js";
 import { renderAssessmentImportModal } from "./assessment-import-modal.js";
 import { exportAssessmentSessionToJsonFile } from "../services/assessment-package-service.js";
 import { exportAssessmentSessionToExcelFile } from "../services/assessment-xlsx-adapter.js";
@@ -938,7 +939,8 @@ export function renderClassesScreen(state, actions) {
           classRoom,
           assessmentSelections: selectedAssessments,
           growthSelections: selectedGrowth,
-          observationSelections: selectedObs
+          observationSelections: selectedObs,
+          allGrowthRecords: state.growthRecords || []
         });
 
         try {
@@ -1477,6 +1479,30 @@ export function renderClassesScreen(state, actions) {
         growthList.append(card);
       });
       growthSection.append(growthList);
+
+      const docPanel = createElement("details", "mt-3 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-lg text-xs p-3 cursor-pointer");
+      const docSummary = createElement("summary", "font-semibold text-slate-700 dark:text-slate-300 focus:outline-none", "Dasar Analisis Pertumbuhan");
+      
+      const docContent = createElement("div", "mt-2 space-y-2 text-subtle text-xs cursor-default");
+      docContent.innerHTML = `
+        <p><strong>Data yang digunakan:</strong></p>
+        <ul class="list-disc pl-4 space-y-1">
+          <li>Tanggal lahir</li>
+          <li>Jenis kelamin</li>
+          <li>Tanggal pengukuran</li>
+          <li>Tinggi badan</li>
+          <li>Berat badan</li>
+        </ul>
+        <p class="mt-2"><strong>Keterangan perhitungan:</strong></p>
+        <ul class="list-disc pl-4 space-y-1">
+          <li>BMI dihitung dari perbandingan berat badan dan tinggi badan kuadrat.</li>
+          <li>Usia siswa dihitung secara presisi pada tanggal pengukuran (bukan usia hari ini).</li>
+          <li>Tren berasal dari perbandingan hasil pengukuran terbaru dengan sebelumnya.</li>
+          <li>Tahap pemantauan ini belum menentukan diagnosis atau status medis klinis apa pun.</li>
+        </ul>
+      `;
+      docPanel.append(docSummary, docContent);
+      growthSection.append(docPanel);
     }
     sectionsWrap.append(growthSection);
 
@@ -1732,7 +1758,8 @@ export function renderClassesScreen(state, actions) {
         classRoom,
         assessmentSelections: selectedAssessments,
         growthSelections: selectedGrowth,
-        observationSelections: selectedObs
+        observationSelections: selectedObs,
+        allGrowthRecords: state.growthRecords || []
       });
 
       const rcSection = createElement("div", "report-context-section mt-4 pt-3 border-t border-slate-200 dark:border-slate-700");
@@ -1828,7 +1855,8 @@ export function renderClassesScreen(state, actions) {
         classRoom,
         assessmentSelections: currentSelectedAssessments,
         growthSelections: currentSelectedGrowth,
-        observationSelections: currentSelectedObs
+        observationSelections: currentSelectedObs,
+        allGrowthRecords: state.growthRecords || []
       });
 
       const {
@@ -2027,7 +2055,8 @@ export function renderClassesScreen(state, actions) {
         classRoom,
         assessmentSelections: currentSelectedAssessments,
         growthSelections: currentSelectedGrowth,
-        observationSelections: currentSelectedObs
+        observationSelections: currentSelectedObs,
+        allGrowthRecords: state.growthRecords || []
       });
 
       const validLearningItems = (reportAiDraft?.learning || [])
@@ -2492,7 +2521,8 @@ export function renderClassesScreen(state, actions) {
         classRoom,
         assessmentSelections: selectedAssessments,
         growthSelections: selectedGrowth,
-        observationSelections: selectedObs
+        observationSelections: selectedObs,
+        allGrowthRecords: state.growthRecords || []
       });
 
       isAiDraftLoading = true;
@@ -4543,7 +4573,8 @@ export function buildSelectedReportContext({
   classRoom,
   assessmentSelections = [],
   growthSelections = [],
-  observationSelections = []
+  observationSelections = [],
+  allGrowthRecords = []
 }) {
   const rawGrade = classRoom?.grade;
   const gradeNumber =
@@ -4664,12 +4695,15 @@ export function buildSelectedReportContext({
       }))
     : [];
 
+  const growthAnalysis = analyzeGrowth(student, growthSelections, allGrowthRecords);
+
   return {
     student: studentData,
     selectedSections,
     assessments,
     growth,
-    observations
+    observations,
+    growthAnalysis
   };
 }
 
