@@ -749,7 +749,7 @@ function createCrudActions() {
       }
     },
     setSettingsActiveTab: (tabId) => {
-      const allowed = ["school-teacher", "academic", "tags", "assessments", "backup"];
+      const allowed = ["school-teacher", "academic", "tags", "assessments", "ai", "backup"];
       settingsActiveTab = allowed.includes(tabId) ? tabId : "school-teacher";
       renderApp();
     }
