@@ -1225,30 +1225,6 @@ export function renderClassesScreen(state, actions) {
     const aiHelperText = createElement("p", "text-subtle text-xs mt-2");
     summaryPanel.append(aiHelperText);
 
-    // API Key Box inside report page
-    const apiKeyBox = createElement("div", "report-api-key-box mt-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700");
-    const apiKeyLabel = createElement("label", "block font-semibold text-xs text-slate-700 dark:text-slate-300 mb-1", "API Key Gemini");
-    const apiKeyRow = createElement("div", "flex items-center gap-2");
-    const apiKeyInput = document.createElement("input");
-    apiKeyInput.type = "password";
-    apiKeyInput.className = "input-text text-xs flex-1";
-    apiKeyInput.placeholder = "Masukkan Gemini API Key...";
-    const apiKeySaveBtn = createElement("button", "btn-tool btn-tool-primary text-xs whitespace-nowrap", "Simpan untuk Sesi Ini");
-    apiKeySaveBtn.type = "button";
-    apiKeySaveBtn.addEventListener("click", () => {
-      const val = apiKeyInput.value.trim();
-      if (val) {
-        try {
-          window.sessionStorage.setItem("pjok_gemini_api_key", val);
-        } catch (_) {}
-        apiKeyInput.value = "";
-        updateSummaryAndPreview();
-      }
-    });
-    apiKeyRow.append(apiKeyInput, apiKeySaveBtn);
-    apiKeyBox.append(apiKeyLabel, apiKeyRow);
-    summaryPanel.append(apiKeyBox);
-
     // Preview Container
     const previewContainer = createElement("div", "report-preview-container report-preview-panel mt-4 pt-4 border-t border-slate-200 dark:border-slate-800");
     summaryPanel.append(previewContainer);
@@ -1287,7 +1263,6 @@ export function renderClassesScreen(state, actions) {
       renderPreviewContent();
 
       const hasApiKey = Boolean(storedApiKey && storedApiKey.trim());
-      apiKeyBox.style.display = hasApiKey ? "none" : "block";
 
       const canGenerate = totalCount > 0 && hasApiKey && !isAiDraftLoading;
 
@@ -1302,7 +1277,7 @@ export function renderClassesScreen(state, actions) {
         aiHelperText.textContent = "✨ AI sedang menyusun draf narasi laporan...";
         aiHelperText.className = "text-primary text-xs mt-2 font-medium";
       } else if (!hasApiKey) {
-        aiHelperText.textContent = "Masukkan API key terlebih dahulu di pembuat rubrik AI atau pada formulir di bawah ini.";
+        aiHelperText.textContent = "AI belum dikonfigurasi. Atur Gemini API Key di Pengaturan → AI.";
         aiHelperText.className = "text-amber-600 dark:text-amber-400 text-xs mt-2";
       } else if (totalCount === 0) {
         aiHelperText.textContent = "Pilih minimal satu sumber data untuk membuat laporan AI.";
@@ -2167,8 +2142,12 @@ export function renderClassesScreen(state, actions) {
         reportAiDraft = draft;
       } catch (err) {
         console.error("[AI REPORT GENERATION ERROR]", err);
-        const message = err?.message || "Gagal membuat laporan AI";
-        window.alert(`Pembuatan laporan AI gagal.\n\nDetail: ${message}`);
+        if (err?.isApiKeyError || (err?.message && (err.message.includes("API key") || err.message.includes("API_KEY")))) {
+          window.alert("Periksa Gemini API Key di Pengaturan → AI.");
+        } else {
+          const message = err?.message || "Gagal membuat laporan AI";
+          window.alert(`Pembuatan laporan AI gagal.\n\nDetail: ${message}`);
+        }
       } finally {
         isAiDraftLoading = false;
         aiReportBtn.textContent = "✨ Buat Laporan AI";
@@ -3213,65 +3192,15 @@ export function renderClassesScreen(state, actions) {
       createElement("span", "text-subtle text-xs", "Gemini AI")
     );
 
-    const aiKeyField = createElement("div", "field");
-    const aiKeyLabel = createElement("label", "font-medium text-xs", "Gemini API Key");
-
-    const aiKeyRow = createElement("div", "ai-rubric-key-row");
-
-    const aiKeyInput = document.createElement("input");
-    aiKeyInput.type = "password";
-    aiKeyInput.className = "input-text";
-    aiKeyInput.placeholder = "Masukkan Gemini API Key";
-    aiKeyInput.value = rubricAiApiKey;
-
-    const toggleShowKeyBtn = createElement("button", "btn-tool text-xs", "👁️ Tampilkan");
-    toggleShowKeyBtn.type = "button";
-    toggleShowKeyBtn.addEventListener("click", () => {
-      if (aiKeyInput.type === "password") {
-        aiKeyInput.type = "text";
-        toggleShowKeyBtn.textContent = "🙈 Sembunyikan";
-      } else {
-        aiKeyInput.type = "password";
-        toggleShowKeyBtn.textContent = "👁️ Tampilkan";
-      }
-    });
-
-    const saveKeyBtn = createElement("button", "btn-tool btn-tool-primary text-xs", "Simpan Key untuk Sesi Ini");
-    saveKeyBtn.type = "button";
-
-    aiKeyRow.append(aiKeyInput, toggleShowKeyBtn, saveKeyBtn);
-
-    const aiKeyHelper = createElement(
-      "p",
-      "text-subtle text-xs mt-1",
-      "API key hanya digunakan pada tab ini dan tidak disimpan ke data aplikasi."
-    );
-
     const aiStatus = createElement(
       "p",
       "ai-rubric-status",
-      rubricAiApiKey
-        ? "API key siap digunakan pada sesi ini."
-        : "Masukkan Gemini API Key untuk menggunakan Generate Rubrik AI."
+      rubricAiApiKey.trim()
+        ? "AI siap digunakan."
+        : "AI belum dikonfigurasi. Atur Gemini API Key di Pengaturan → AI."
     );
 
-    saveKeyBtn.addEventListener("click", () => {
-      const value = aiKeyInput.value.trim();
-      if (!value) {
-        window.alert("Masukkan Gemini API Key.");
-        return;
-      }
-      rubricAiApiKey = value;
-      try {
-        window.sessionStorage.setItem("pjok_gemini_api_key", value);
-      } catch (_) {
-        // Jangan gagalkan jika sessionStorage tidak tersedia
-      }
-      aiStatus.textContent = "API key siap digunakan pada sesi ini.";
-    });
-
-    aiKeyField.append(aiKeyLabel, aiKeyRow, aiKeyHelper, aiStatus);
-    aiConfigPanel.append(aiConfigHeader, aiKeyField);
+    aiConfigPanel.append(aiConfigHeader, aiStatus);
     form.append(aiConfigPanel);
 
     let currentScale = 5;
@@ -3383,16 +3312,14 @@ export function renderClassesScreen(state, actions) {
             return;
           }
 
-          let apiKey = rubricAiApiKey.trim();
-          if (!apiKey) {
-            try {
-              apiKey = window.sessionStorage.getItem("pjok_gemini_api_key") || "";
-            } catch (_) {}
-          }
+          let apiKey = "";
+          try {
+            apiKey = (window.sessionStorage.getItem("pjok_gemini_api_key") || "").trim();
+          } catch (_) {}
 
           if (!apiKey) {
-            aiStatus.textContent = "Masukkan Gemini API Key terlebih dahulu.";
-            aiKeyInput.focus();
+            aiStatus.textContent = "AI belum dikonfigurasi. Atur Gemini API Key di Pengaturan → AI.";
+            window.alert("AI belum dikonfigurasi. Atur Gemini API Key di Pengaturan → AI.");
             return;
           }
 
@@ -3425,16 +3352,13 @@ export function renderClassesScreen(state, actions) {
           } catch (err) {
             console.error("[AI RUBRIC GENERATION ERROR]", err);
             const message = err?.message || "Unknown AI error";
-            aiStatus.textContent = `AI gagal: ${message}`;
-            if (err?.isApiKeyError) {
-              rubricAiApiKey = "";
-              try {
-                window.sessionStorage.removeItem("pjok_gemini_api_key");
-              } catch (_) {}
-              aiKeyInput.value = "";
-              aiStatus.textContent = "API key ditolak. Masukkan API key yang valid.";
+            if (err?.isApiKeyError || (message && (message.includes("API key") || message.includes("API_KEY")))) {
+              aiStatus.textContent = "Periksa Gemini API Key di Pengaturan → AI.";
+              window.alert("Periksa Gemini API Key di Pengaturan → AI.");
+            } else {
+              aiStatus.textContent = `AI gagal: ${message}`;
+              window.alert(`Rubrik AI gagal dibuat.\n\nDetail: ${message}`);
             }
-            window.alert(`Rubrik AI gagal dibuat.\n\nDetail: ${message}`);
           } finally {
             aiBusy = false;
             aiBtn.classList.remove("is-ai-loading");

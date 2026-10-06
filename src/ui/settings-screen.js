@@ -18,6 +18,7 @@ const SETTINGS_TABS = [
   { id: "academic", label: "Tahun & Semester", icon: () => ICONS.calendar(16) },
   { id: "tags", label: "Tag Siswa", icon: () => ICONS.tag(16) },
   { id: "assessments", label: "Perencanaan Asesmen", icon: () => ICONS.chart(16) },
+  { id: "ai", label: "AI", icon: () => ICONS.target(16) },
   { id: "backup", label: "Cadangan Data", icon: () => ICONS.database(16) }
 ];
 
@@ -29,6 +30,7 @@ export function renderSettingsScreen(state, actions, options = {}) {
     "academic",
     "tags",
     "assessments",
+    "ai",
     "backup"
   ];
 
@@ -92,9 +94,98 @@ export function renderSettingsScreen(state, actions, options = {}) {
       renderTagsSection(contentBox);
     } else if (activeTab === "assessments") {
       renderAssessmentsSection(contentBox);
+    } else if (activeTab === "ai") {
+      renderAiSection(contentBox);
     } else if (activeTab === "backup") {
       renderBackupSection(contentBox);
     }
+  }
+
+  // --- SECTION AI: GEMINI API KEY CONFIGURATION ---
+  function renderAiSection(target) {
+    const card = createElement("section", "settings-card");
+    const header = createElement("div", "settings-card-header");
+    header.append(
+      createElement("h2", "section-title", "Pengaturan AI"),
+      createElement(
+        "p",
+        "screen-copy",
+        "API key digunakan untuk fitur AI seperti pembuatan rubrik dan draf laporan siswa."
+      )
+    );
+    card.append(header);
+
+    let storedKey = "";
+    try {
+      storedKey = window.sessionStorage.getItem("pjok_gemini_api_key") || "";
+    } catch (_) {
+      storedKey = "";
+    }
+    const hasKey = Boolean(storedKey && storedKey.trim());
+
+    // Status display
+    const statusBox = createElement(
+      "div",
+      `status-banner p-3 rounded-lg text-xs font-semibold mb-4 ${
+        hasKey
+          ? "bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+          : "bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+      }`
+    );
+    statusBox.textContent = `Status: ${hasKey ? "AI siap digunakan" : "API key belum dikonfigurasi"}`;
+    card.append(statusBox);
+
+    const form = createElement("form", "master-form");
+
+    const keyField = createElement("label", "field");
+    keyField.append(createElement("span", "field-label", "Gemini API Key"));
+
+    const keyInput = document.createElement("input");
+    keyInput.type = "password";
+    keyInput.name = "geminiApiKey";
+    keyInput.className = "input-text";
+    keyInput.placeholder = "Masukkan Gemini API Key...";
+    if (hasKey) {
+      keyInput.value = storedKey;
+    }
+    keyField.append(keyInput);
+
+    const btnGroup = createElement("div", "flex items-center gap-2 mt-2");
+
+    const saveBtn = createElement("button", "primary-action compact-action", "Simpan API Key");
+    saveBtn.type = "submit";
+
+    const deleteBtn = createElement("button", "text-button danger-button compact-action", "Hapus API Key");
+    deleteBtn.type = "button";
+    deleteBtn.disabled = !hasKey;
+    deleteBtn.addEventListener("click", () => {
+      try {
+        window.sessionStorage.removeItem("pjok_gemini_api_key");
+      } catch (_) {}
+      keyInput.value = "";
+      showToast("API Key dihapus");
+      render();
+    });
+
+    btnGroup.append(saveBtn, deleteBtn);
+    form.append(keyField, btnGroup);
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const val = keyInput.value.trim();
+      if (!val) {
+        showToast("Masukkan API Key yang valid");
+        return;
+      }
+      try {
+        window.sessionStorage.setItem("pjok_gemini_api_key", val);
+      } catch (_) {}
+      showToast("API Key disimpan");
+      render();
+    });
+
+    card.append(form);
+    target.append(card);
   }
 
   // --- SECTION 1: SINGLETON SCHOOL & TEACHER ---
