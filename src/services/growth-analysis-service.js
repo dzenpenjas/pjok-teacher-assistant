@@ -156,13 +156,30 @@ export function buildGrowthSummary(growthSelections = [], student = null, allGro
 export function calculateReportScoring({ assessmentSelections = [], scoringConfig = null }) {
   const isEnabled = Boolean(scoringConfig && scoringConfig.enabled);
   if (!isEnabled) {
+    const rawScores = (assessmentSelections || [])
+      .map((item) => {
+        const result = item?.result;
+        const score = (result?.numericScore !== null && result?.numericScore !== undefined) ? result.numericScore : item?.numericScore;
+        return (score !== null && score !== undefined && score !== "" && Number.isFinite(Number(score)))
+          ? Number(score)
+          : null;
+      })
+      .filter((s) => s !== null);
+
+    const overallReportScore = rawScores.length > 0
+      ? Math.round(rawScores.reduce((acc, curr) => acc + curr, 0) / rawScores.length)
+      : null;
+
     return {
       enabled: false,
       minimum: null,
       maximum: null,
       roundingRule: "round",
       formulaVersion: "item-proportion-v1",
+      overallReportScore,
       overallConvertedScore: null,
+      overallCanCalculate: rawScores.length > 0,
+      overallReason: rawScores.length > 0 ? null : "NO_VALID_SCORES",
       sessions: {}
     };
   }
@@ -190,12 +207,33 @@ export function calculateReportScoring({ assessmentSelections = [], scoringConfi
 
   const sessions = {};
   const convertedScoresList = [];
+  let allConverted = true;
+  let firstFailureReason = null;
+
+  if (!Array.isArray(assessmentSelections) || assessmentSelections.length === 0) {
+    return {
+      enabled: true,
+      minimum,
+      maximum,
+      roundingRule: "round",
+      formulaVersion: "item-proportion-v1",
+      overallReportScore: null,
+      overallConvertedScore: null,
+      overallCanCalculate: false,
+      overallReason: "NO_ASSESSMENTS",
+      sessions: {}
+    };
+  }
 
   for (const item of assessmentSelections) {
     const sess = item.assessmentSession;
     const result = item.result;
     const sessionId = sess?.id || result?.assessmentSessionId || "";
-    if (!sessionId) continue;
+    if (!sessionId) {
+      allConverted = false;
+      if (!firstFailureReason) firstFailureReason = "INVALID_SESSION_ID";
+      continue;
+    }
 
     const rawScore = (result?.numericScore !== null && result?.numericScore !== undefined && Number.isFinite(Number(result.numericScore)))
       ? Number(result.numericScore)
@@ -215,6 +253,8 @@ export function calculateReportScoring({ assessmentSelections = [], scoringConfi
         canConvert: false,
         reason: "TIDAK_ADA_SNAPSHOT_SOAL"
       };
+      allConverted = false;
+      if (!firstFailureReason) firstFailureReason = "INCOMPLETE_CONVERSION";
       continue;
     }
 
@@ -228,6 +268,8 @@ export function calculateReportScoring({ assessmentSelections = [], scoringConfi
         canConvert: false,
         reason: "SNAPSHOT_SOAL_TIDAK_VALID"
       };
+      allConverted = false;
+      if (!firstFailureReason) firstFailureReason = "INCOMPLETE_CONVERSION";
       continue;
     }
 
@@ -297,6 +339,8 @@ export function calculateReportScoring({ assessmentSelections = [], scoringConfi
         canConvert: false,
         reason: failureReason || "DATA_RUBRIK_BELUM_LENGKAP"
       };
+      allConverted = false;
+      if (!firstFailureReason) firstFailureReason = "INCOMPLETE_CONVERSION";
       continue;
     }
 
@@ -315,7 +359,8 @@ export function calculateReportScoring({ assessmentSelections = [], scoringConfi
     convertedScoresList.push(convertedScore);
   }
 
-  const overallConvertedScore = convertedScoresList.length > 0
+  const canCalculate = allConverted && convertedScoresList.length === assessmentSelections.length && convertedScoresList.length > 0;
+  const overallConvertedScore = canCalculate
     ? Math.round(convertedScoresList.reduce((a, b) => a + b, 0) / convertedScoresList.length)
     : null;
 
@@ -325,7 +370,10 @@ export function calculateReportScoring({ assessmentSelections = [], scoringConfi
     maximum,
     roundingRule: "round",
     formulaVersion: "item-proportion-v1",
+    overallReportScore: overallConvertedScore,
     overallConvertedScore,
+    overallCanCalculate: canCalculate,
+    overallReason: canCalculate ? null : (firstFailureReason || "INCOMPLETE_CONVERSION"),
     sessions
   };
 }

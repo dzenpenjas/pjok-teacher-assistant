@@ -3,9 +3,19 @@ import { getXLSX } from "./xlsx-runtime.js";
 export { getXLSX };
 
 /**
- * Exact minimal headers and order for Sheet NILAI.
+ * Headers for Sheet 1: NILAI_AKHIR (1 row per student).
  */
-export const REPORT_SCORE_HEADERS = Object.freeze([
+export const FINAL_SCORE_HEADERS = Object.freeze([
+  "Nama Siswa",
+  "NIS",
+  "Nilai Akhir",
+  "Rentang Konversi"
+]);
+
+/**
+ * Headers for Sheet 2: DETAIL_ASESMEN (1 row per student × assessment).
+ */
+export const DETAIL_ASSESSMENT_HEADERS = Object.freeze([
   "Nama Siswa",
   "NIS",
   "Asesmen",
@@ -14,12 +24,70 @@ export const REPORT_SCORE_HEADERS = Object.freeze([
   "Rentang Konversi"
 ]);
 
+export const REPORT_SCORE_HEADERS = DETAIL_ASSESSMENT_HEADERS;
+
+/**
+ * Builds final summary rows from report data.
+ * Granularity: 1 row = 1 student.
+ *
+ * @param {Array} studentReports List of { student, savedReport } or report items
+ * @returns {Array<Array>} Array of row arrays matching FINAL_SCORE_HEADERS
+ */
+export function buildFinalScoreRows(studentReports = []) {
+  const rows = [];
+
+  for (const item of studentReports) {
+    if (!item) continue;
+
+    const student = item.student || item.savedReport?.student || item.reportContext?.student || {};
+    const report = item.savedReport || item.report || item;
+    const reportContext = report?.reportContext || item.reportContext || {};
+
+    const studentName = student.name || reportContext.student?.name || "";
+    const studentNis = student.studentNumber || reportContext.student?.studentNumber || "";
+
+    const reportScoring = reportContext.reportScoring || null;
+    const isConversionEnabled = Boolean(reportScoring && reportScoring.enabled);
+
+    let rentangKonversi = "";
+    if (
+      isConversionEnabled &&
+      reportScoring?.minimum !== null &&
+      reportScoring?.minimum !== undefined &&
+      reportScoring?.maximum !== null &&
+      reportScoring?.maximum !== undefined
+    ) {
+      rentangKonversi = `${reportScoring.minimum}–${reportScoring.maximum}`;
+    }
+
+    const rawFinalScore = reportScoring?.overallReportScore;
+    let nilaiAkhir = "";
+    if (
+      rawFinalScore !== null &&
+      rawFinalScore !== undefined &&
+      rawFinalScore !== "" &&
+      Number.isFinite(Number(rawFinalScore))
+    ) {
+      nilaiAkhir = Number(rawFinalScore);
+    }
+
+    rows.push([
+      studentName,
+      studentNis,
+      nilaiAkhir,
+      rentangKonversi
+    ]);
+  }
+
+  return rows;
+}
+
 /**
  * Builds table rows from report data.
  * Granularity: 1 row = 1 student × 1 assessment.
  *
  * @param {Array} studentReports List of { student, savedReport } or report items
- * @returns {Array<Array>} Array of row arrays matching REPORT_SCORE_HEADERS
+ * @returns {Array<Array>} Array of row arrays matching DETAIL_ASSESSMENT_HEADERS
  */
 export function buildReportScoreRows(studentReports = []) {
   const rows = [];
@@ -93,22 +161,35 @@ export function buildReportScoreRows(studentReports = []) {
 }
 
 /**
- * Generates an XLSX workbook for report scores.
+ * Generates an XLSX workbook for report scores with 2 sheets:
+ * 1. NILAI_AKHIR (1 row per student)
+ * 2. DETAIL_ASESMEN (1 row per student × assessment)
  *
- * @param {Array} data Either raw rows aoa or studentReports array
+ * @param {Array} studentReports List of student report items
  * @returns {object} XLSX workbook
  */
-export function generateReportScoreWorkbook(data = []) {
+export function generateReportScoreWorkbook(studentReports = []) {
   const XLSX = getXLSX();
   const wb = XLSX.utils.book_new();
 
-  const isAoa = Array.isArray(data) && (data.length === 0 || Array.isArray(data[0]));
-  const rows = isAoa ? data : buildReportScoreRows(data);
+  const finalRows = buildFinalScoreRows(studentReports);
+  const detailRows = buildReportScoreRows(studentReports);
 
-  const sheetData = [REPORT_SCORE_HEADERS, ...rows];
-  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+  // Sheet 1: NILAI_AKHIR
+  const finalSheetData = [FINAL_SCORE_HEADERS, ...finalRows];
+  const wsFinal = XLSX.utils.aoa_to_sheet(finalSheetData);
+  wsFinal["!cols"] = [
+    { wch: 28 }, // Nama Siswa
+    { wch: 16 }, // NIS
+    { wch: 16 }, // Nilai Akhir
+    { wch: 18 }  // Rentang Konversi
+  ];
+  XLSX.utils.book_append_sheet(wb, wsFinal, "NILAI_AKHIR");
 
-  ws["!cols"] = [
+  // Sheet 2: DETAIL_ASESMEN
+  const detailSheetData = [DETAIL_ASSESSMENT_HEADERS, ...detailRows];
+  const wsDetail = XLSX.utils.aoa_to_sheet(detailSheetData);
+  wsDetail["!cols"] = [
     { wch: 28 }, // Nama Siswa
     { wch: 16 }, // NIS
     { wch: 30 }, // Asesmen
@@ -116,8 +197,8 @@ export function generateReportScoreWorkbook(data = []) {
     { wch: 16 }, // Nilai Konversi
     { wch: 18 }  // Rentang Konversi
   ];
+  XLSX.utils.book_append_sheet(wb, wsDetail, "DETAIL_ASESMEN");
 
-  XLSX.utils.book_append_sheet(wb, ws, "NILAI");
   return wb;
 }
 
@@ -141,10 +222,9 @@ export function generateScoreExportFilename(classRoom = null) {
  */
 export function exportReportScoresToExcel({ classRoom = null, studentReports = [], filename = null } = {}) {
   const XLSX = getXLSX();
-  const rows = buildReportScoreRows(studentReports);
-  const wb = generateReportScoreWorkbook(rows);
+  const wb = generateReportScoreWorkbook(studentReports);
   const finalFilename = filename || generateScoreExportFilename(classRoom);
 
   XLSX.writeFile(wb, finalFilename);
-  return { success: true, filename: finalFilename, rowCount: rows.length };
+  return { success: true, filename: finalFilename, rowCount: studentReports.length };
 }

@@ -65,12 +65,14 @@ export function createFinalReportPage({
     .filter(Boolean);
 
   let overallScore = null;
-  if (isScoringConverted) {
-    if (reportScoring?.overallConvertedScore !== null && reportScoring?.overallConvertedScore !== undefined) {
-      overallScore = reportScoring.overallConvertedScore;
-    } else {
-      overallScore = null;
-    }
+  if (reportScoring && reportScoring.overallReportScore !== undefined) {
+    overallScore = reportScoring.overallReportScore !== null && Number.isFinite(Number(reportScoring.overallReportScore))
+      ? Number(reportScoring.overallReportScore)
+      : null;
+  } else if (isScoringConverted) {
+    overallScore = (reportScoring?.overallConvertedScore !== null && reportScoring?.overallConvertedScore !== undefined && Number.isFinite(Number(reportScoring.overallConvertedScore)))
+      ? Number(reportScoring.overallConvertedScore)
+      : null;
   } else {
     const scoresWithVal = (currentContext.assessments || [])
       .map((a) => a.numericScore)
