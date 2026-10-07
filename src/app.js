@@ -978,28 +978,34 @@ function renderApp() {
 
   // Render modal on top if active
   if (activeModalStudentId) {
-    appRoot.append(
-      renderStudentDetailModal(
-        activeModalStudentId,
-        {
-          ...appState,
-          growthRecords: repositories.growthRecords.findAll(),
-          attendanceRecords: repositories.attendanceRecords.findAll(),
-          assessmentResults: repositories.assessmentResults.findAll(),
-          assessmentDefinitions: repositories.assessmentDefinitions.findAll(),
-          observations: repositories.studentObservations.findAll(),
-          sessions: repositories.sessions.findAll(),
-          classes: appState.classes,
-          students: appState.students,
-          tags: appState.studentTags,
-          actions: appActions
-        },
-        () => {
-          activeModalStudentId = null;
-          renderApp();
-        }
-      )
-    );
+    try {
+      appRoot.append(
+        renderStudentDetailModal(
+          activeModalStudentId,
+          {
+            ...appState,
+            growthRecords: repositories.growthRecords.findAll(),
+            attendanceRecords: repositories.attendanceRecords.findAll(),
+            assessmentResults: repositories.assessmentResults.findAll(),
+            assessmentDefinitions: repositories.assessmentDefinitions.findAll(),
+            assessmentSessions: repositories.assessmentSessions.findAll(),
+            observations: repositories.observations.findAll(),
+            sessions: repositories.sessions.findAll(),
+            classes: repositories.classes.findAll(),
+            students: repositories.students.findAll(),
+            tags: repositories.tags.findAll(),
+            studentNotes: repositories.notes.findAll(),
+            actions: appActions
+          },
+          () => {
+            activeModalStudentId = null;
+            renderApp();
+          }
+        )
+      );
+    } catch (modalErr) {
+      console.error("[RUNTIME ERROR] Failed to render student detail modal:", modalErr);
+    }
   }
 }
 
