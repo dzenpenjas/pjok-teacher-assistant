@@ -12,6 +12,7 @@ import {
   parseStudentExcelFile,
   downloadStudentTemplateExcel
 } from "../services/student-xlsx-adapter.js";
+import { exportReportScoresToExcel } from "../services/report-score-xlsx-adapter.js";
 import {
   showToast,
   registerDirtyGuard,
@@ -1141,6 +1142,37 @@ export function renderClassesScreen(state, actions) {
     });
 
     batchActionRow.append(downloadAllBtn);
+
+    const downloadExcelBtn = createElement(
+      "button",
+      "btn-tool btn-tool-primary text-xs flex items-center gap-1.5 font-bold",
+      "📊 Unduh Excel Nilai"
+    );
+    downloadExcelBtn.type = "button";
+    downloadExcelBtn.disabled = classUi.batchState.isBatchGenerating || readyStudentsWithReports.length === 0;
+    if (downloadExcelBtn.disabled) {
+      downloadExcelBtn.classList.add("opacity-50", "cursor-not-allowed");
+    }
+
+    downloadExcelBtn.addEventListener("click", () => {
+      if (readyStudentsWithReports.length === 0) {
+        showToast("Belum ada data laporan yang dapat diekspor.");
+        return;
+      }
+
+      try {
+        exportReportScoresToExcel({
+          classRoom,
+          studentReports: readyStudentsWithReports
+        });
+        showToast("Berhasil mengunduh Excel nilai");
+      } catch (err) {
+        console.error("[EXCEL EXPORT ERROR]", err);
+        showToast("Gagal mengunduh Excel nilai: " + (err?.message || ""));
+      }
+    });
+
+    batchActionRow.append(downloadExcelBtn);
 
     batchPanel.append(batchActionRow);
 
