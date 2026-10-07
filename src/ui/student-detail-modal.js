@@ -22,11 +22,11 @@ export function renderStudentDetailModal(studentId, context, onClose) {
 
   const student = (context.students || []).find((s) => s.id === studentId);
   if (!student) {
+    backdrop.append(modal);
     modal.append(createElement("p", "empty-copy", "Data siswa tidak ditemukan."));
     const closeBtn = createElement("button", "primary-action compact-action", "Tutup");
     closeBtn.addEventListener("click", onClose);
     modal.append(closeBtn);
-    backdrop.append(modal);
     return backdrop;
   }
 
@@ -85,25 +85,27 @@ export function renderStudentDetailModal(studentId, context, onClose) {
   );
 
   const headerActions = createElement("div", "flex items-center gap-2 mt-2");
-  const editLink = createElement("button", "btn-tool btn-tool-primary text-xs py-1 px-2");
-  editLink.textContent = "✏️ Edit Profil";
-  editLink.addEventListener("click", () => {
+  const editBtn = createElement("button", "btn-tool btn-tool-primary text-xs py-1 px-2");
+  editBtn.textContent = "✏️ Edit Profil";
+  editBtn.addEventListener("click", () => {
     identitySection.open = true;
     identitySection.scrollIntoView({ behavior: "smooth" });
   });
 
   const deleteBtn = createElement("button", "btn-tool text-red-600 dark:text-red-400 text-xs py-1 px-2");
-  deleteBtn.textContent = "🗑️ Hapus";
+  deleteBtn.textContent = "🗑️ Hapus Siswa";
   deleteBtn.addEventListener("click", () => {
     if (context.actions?.deleteStudent) {
-      const success = context.actions.deleteStudent(student.id);
-      if (success) {
+      const result = context.actions.deleteStudent(student.id);
+      if (result && result.success) {
         onClose();
         showToast("Siswa berhasil dihapus");
+      } else if (result && !result.cancelled) {
+        showToast("Penghapusan gagal: data tidak dapat dihapus ke penyimpanan perangkat.");
       }
     }
   });
-  headerActions.append(editLink, deleteBtn);
+  headerActions.append(editBtn, deleteBtn);
   textGroup.append(headerActions);
 
   // Tag list

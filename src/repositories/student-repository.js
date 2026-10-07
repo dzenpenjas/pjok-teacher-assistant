@@ -21,6 +21,11 @@ export class StudentRepository extends BaseRepository {
 
   deleteCascade(studentId) {
     const state = this.loadState();
+    const student = (state.students || []).find(s => s.id === studentId);
+    if (!student) {
+      return { success: false, data: null, error: new Error("Siswa tidak ditemukan.") };
+    }
+
     const students = (state.students || []).filter((s) => s.id !== studentId);
     const attendanceRecords = (state.attendanceRecords || []).filter((r) => r.studentId !== studentId);
     const assessmentResults = (state.assessmentResults || []).filter((r) => r.studentId !== studentId);
@@ -40,6 +45,11 @@ export class StudentRepository extends BaseRepository {
       studentReports
     };
     const result = this.saveState(nextState);
-    return result.success;
+    
+    return {
+      success: result.success,
+      data: result.success ? student : null,
+      error: result.error
+    };
   }
 }

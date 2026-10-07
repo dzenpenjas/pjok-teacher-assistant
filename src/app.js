@@ -524,15 +524,27 @@ function createCrudActions() {
     },
     deleteStudent: (id) => {
       const student = repositories.students.findById(id);
-      const studentName = student?.name ? `"${student.name}"` : "siswa ini";
-      const msg = `Hapus ${studentName}?\n` +
-        `Semua data riwayat absensi, hasil tes penilaian fisik, grafik pertumbuhan, dan observasi siswa ini akan dihapus secara permanen. Lanjutkan?`;
-      if (window.confirm(msg)) {
-        const success = repositories.students.deleteCascade(id);
-        refreshState();
-        return success;
+      if (!student) {
+        return { success: false, error: new Error("Siswa tidak ditemukan.") };
       }
-      return false;
+      
+      const studentName = student?.name ? `"${student.name}"` : "siswa ini";
+      const msg = `Hapus ${studentName}?\n\n` +
+        `Seluruh riwayat absensi, hasil tes penilaian fisik, grafik pertumbuhan, draf laporan, dan observasi siswa ini akan dihapus secara permanen. Lanjutkan?`;
+      
+      if (window.confirm(msg)) {
+        const result = repositories.students.deleteCascade(id);
+        if (result.success) {
+          refreshState();
+          return result;
+        } else {
+          // If persistence failed, we refresh state from storage to ensure UI is in sync with valid data
+          appState = loadState();
+          renderApp();
+          return result;
+        }
+      }
+      return { success: false, cancelled: true };
     },
 
     // ATTENDANCE ACTIONS
@@ -710,8 +722,9 @@ function createCrudActions() {
 
     // OBSERVATIONS
     createObservation: (input) => {
-      repositories.observations.create(input);
+      const result = repositories.observations.create(input);
       refreshState();
+      return result;
     },
 
     // STUDENT REPORTS PERSISTENCE

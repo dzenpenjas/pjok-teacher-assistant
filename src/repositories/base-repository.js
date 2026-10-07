@@ -49,10 +49,15 @@ export class BaseRepository {
   }
 
   persistCollection(state, collection) {
-    this.saveState({
+    const nextState = {
       ...state,
       [this.collectionName]: collection
-    });
-    return collection;
+    };
+    const result = this.saveState(nextState);
+    return {
+      success: result.success,
+      data: collection,
+      error: result.error
+    };
   }
 }
