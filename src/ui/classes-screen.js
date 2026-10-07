@@ -13,6 +13,7 @@ import {
   downloadStudentTemplateExcel
 } from "../services/student-xlsx-adapter.js";
 import { exportReportScoresToExcel } from "../services/report-score-xlsx-adapter.js";
+import { getGeminiApiKey } from "../services/gemini-api-key-storage.js";
 import {
   showToast,
   registerDirtyGuard,
@@ -1265,10 +1266,7 @@ export function renderClassesScreen(state, actions) {
     container.append(batchPanel);
 
     async function runBatchReportGeneration(targetStudents, isRetry = false) {
-      let apiKey = "";
-      try {
-        apiKey = (window.sessionStorage.getItem("pjok_gemini_api_key") || "").trim();
-      } catch (_) {}
+      const apiKey = getGeminiApiKey();
 
       if (!apiKey) {
         window.alert("AI belum dikonfigurasi. Atur Gemini API Key di Pengaturan → AI.");
@@ -2448,11 +2446,8 @@ export function renderClassesScreen(state, actions) {
       const oCount = (classUi.reportSelection.observationIds || []).length;
       const totalCount = aCount + gCount + oCount;
       
-      let storedApiKey = "";
-      try {
-        storedApiKey = window.sessionStorage.getItem("pjok_gemini_api_key") || "";
-      } catch (_) {}
-      const hasApiKey = Boolean(storedApiKey && storedApiKey.trim());
+      const storedApiKey = getGeminiApiKey();
+      const hasApiKey = Boolean(storedApiKey);
 
       if (val.isValid) {
         singleValidationErrorEl.style.display = "none";
@@ -2528,10 +2523,7 @@ export function renderClassesScreen(state, actions) {
     aiDraftContainer.style.display = "none";
 
     function updateSummaryAndPreview() {
-      let storedApiKey = "";
-      try {
-        storedApiKey = window.sessionStorage.getItem("pjok_gemini_api_key") || "";
-      } catch (_) {}
+      const storedApiKey = getGeminiApiKey();
 
       const aCount = (classUi.reportSelection.assessmentSessionIds || []).length;
       const gCount = (classUi.reportSelection.growthRecordIds || []).length;
@@ -3195,12 +3187,9 @@ export function renderClassesScreen(state, actions) {
     }
 
     aiReportBtn.addEventListener("click", async () => {
-      let currentApiKey = "";
-      try {
-        currentApiKey = window.sessionStorage.getItem("pjok_gemini_api_key") || "";
-      } catch (_) {}
+      const currentApiKey = getGeminiApiKey();
 
-      if (!currentApiKey || !currentApiKey.trim()) {
+      if (!currentApiKey) {
         updateSummaryAndPreview();
         return;
       }
@@ -4319,12 +4308,7 @@ export function renderClassesScreen(state, actions) {
     form.append(nameField, materialField, purposeField, typeField, scaleField);
 
     // AI Config Panel
-    let rubricAiApiKey = "";
-    try {
-      rubricAiApiKey = window.sessionStorage.getItem("pjok_gemini_api_key") || "";
-    } catch (_) {
-      rubricAiApiKey = "";
-    }
+    const rubricAiApiKey = getGeminiApiKey();
 
     const aiConfigPanel = createElement("div", "ai-rubric-config");
     const aiConfigHeader = createElement("div", "ai-rubric-config-header");
@@ -4453,10 +4437,7 @@ export function renderClassesScreen(state, actions) {
             return;
           }
 
-          let apiKey = "";
-          try {
-            apiKey = (window.sessionStorage.getItem("pjok_gemini_api_key") || "").trim();
-          } catch (_) {}
+          const apiKey = getGeminiApiKey();
 
           if (!apiKey) {
             aiStatus.textContent = "AI belum dikonfigurasi. Atur Gemini API Key di Pengaturan → AI.";

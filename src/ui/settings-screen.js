@@ -1,6 +1,11 @@
 import { createField, createSelectField, formToObject } from "./form-controls.js";
 import { ICONS } from "./icons.js";
 import { showToast } from "./feedback.js";
+import {
+  getGeminiApiKey,
+  setGeminiApiKey,
+  removeGeminiApiKey
+} from "../services/gemini-api-key-storage.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -115,12 +120,7 @@ export function renderSettingsScreen(state, actions, options = {}) {
     );
     card.append(header);
 
-    let storedKey = "";
-    try {
-      storedKey = window.sessionStorage.getItem("pjok_gemini_api_key") || "";
-    } catch (_) {
-      storedKey = "";
-    }
+    const storedKey = getGeminiApiKey();
     const hasKey = Boolean(storedKey && storedKey.trim());
 
     // Status display
@@ -159,9 +159,7 @@ export function renderSettingsScreen(state, actions, options = {}) {
     deleteBtn.type = "button";
     deleteBtn.disabled = !hasKey;
     deleteBtn.addEventListener("click", () => {
-      try {
-        window.sessionStorage.removeItem("pjok_gemini_api_key");
-      } catch (_) {}
+      removeGeminiApiKey();
       keyInput.value = "";
       showToast("API Key dihapus");
       render();
@@ -177,9 +175,7 @@ export function renderSettingsScreen(state, actions, options = {}) {
         showToast("Masukkan API Key yang valid");
         return;
       }
-      try {
-        window.sessionStorage.setItem("pjok_gemini_api_key", val);
-      } catch (_) {}
+      setGeminiApiKey(val);
       showToast("API Key disimpan");
       render();
     });
