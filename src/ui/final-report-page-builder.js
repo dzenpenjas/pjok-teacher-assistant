@@ -456,16 +456,22 @@ export function createFinalReportPage({
 
       const whoItems = [];
       if (whoRef.heightForAge && whoRef.heightForAge.available && whoRef.heightForAge.interpretationCode) {
-        const label = codeMap[whoRef.heightForAge.interpretationCode] || "Dalam rentang rujukan";
-        whoItems.push(`Tinggi menurut usia: ${label}`);
+        const label = codeMap[whoRef.heightForAge.interpretationCode];
+        if (label) {
+          whoItems.push(`Tinggi menurut usia: ${label}`);
+        }
       }
       if (whoRef.bmiForAge && whoRef.bmiForAge.available && whoRef.bmiForAge.interpretationCode) {
-        const label = codeMap[whoRef.bmiForAge.interpretationCode] || "Dalam rentang rujukan";
-        whoItems.push(`BMI menurut usia: ${label}`);
+        const label = codeMap[whoRef.bmiForAge.interpretationCode];
+        if (label) {
+          whoItems.push(`BMI menurut usia: ${label}`);
+        }
       }
       if (whoRef.weightForAge && whoRef.weightForAge.available && whoRef.weightForAge.interpretationCode) {
-        const label = codeMap[whoRef.weightForAge.interpretationCode] || "Dalam rentang rujukan";
-        whoItems.push(`Berat menurut usia: ${label}`);
+        const label = codeMap[whoRef.weightForAge.interpretationCode];
+        if (label) {
+          whoItems.push(`Berat menurut usia: ${label}`);
+        }
       }
 
       if (whoItems.length > 0) {
