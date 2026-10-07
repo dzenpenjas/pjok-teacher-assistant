@@ -19,6 +19,72 @@ import {
   isFormDirty,
   confirmIfDirty
 } from "./feedback.js";
+import {
+  BATCH_STAGES,
+  getDiagnosticStageLabel,
+  formatAiDiagnosticText
+} from "../services/ai-diagnostic-service.js";
+import {
+  createFinalReportPage,
+  formatClassName
+} from "./final-report-page-builder.js";
+
+const pendingReports = new Map();
+
+function getPendingKey(studentId, classId, academicYearId, semesterId) {
+  return JSON.stringify([
+    studentId || "",
+    classId || "",
+    academicYearId || null,
+    semesterId || null
+  ]);
+}
+
+function deepClone(obj) {
+  if (obj === null || typeof obj !== "object") return obj;
+  return JSON.parse(JSON.stringify(obj));
+}
+
+function validateScoringConfig(config) {
+  if (!config || !config.enabled) {
+    return { isValid: true, error: null };
+  }
+  const minStr = String(config.minScore ?? "").trim();
+  const maxStr = String(config.maxScore ?? "").trim();
+  if (!minStr || !maxStr) {
+    return { isValid: false, error: "Rentang konversi tidak boleh kosong. Masukkan nilai minimum dan maksimum." };
+  }
+  const minNum = Number(minStr);
+  const maxNum = Number(maxStr);
+  if (!Number.isFinite(minNum) || !Number.isFinite(maxNum)) {
+    return { isValid: false, error: "Rentang konversi harus berupa angka." };
+  }
+  if (minNum < 0 || maxNum > 100 || minNum >= maxNum) {
+    return { isValid: false, error: "Rentang konversi tidak valid (0 ≤ minimum < maksimum ≤ 100)." };
+  }
+  return { isValid: true, error: null, minScore: minNum, maxScore: maxNum };
+}
+
+function isDraftUnsaved(currentDraft, savedDraft) {
+  if (!currentDraft) return false;
+  if (!savedDraft) return true;
+  const fields = ['summary', 'understanding', 'attitude', 'growth', 'homeActivity', 'nutritionAdvice', 'followUp'];
+  for (const f of fields) {
+    if ((currentDraft[f] || "").trim() !== (savedDraft[f] || "").trim()) {
+      return true;
+    }
+  }
+  const currentLearning = currentDraft.learning || [];
+  const savedLearning = savedDraft.learning || [];
+  if (currentLearning.length !== savedLearning.length) return true;
+  for (let i = 0; i < currentLearning.length; i++) {
+    if (currentLearning[i].assessmentSessionId !== savedLearning[i].assessmentSessionId) return true;
+    if ((currentLearning[i].description || "").trim() !== (savedLearning[i].description || "").trim()) {
+      return true;
+    }
+  }
+  return false;
+}
 
 let isClassHistoryListening = false;
 let currentClassUi = null;
@@ -41,6 +107,14 @@ function pushClassHistory(mode, classId, extra = {}) {
 function initClassHistoryListener() {
   if (isClassHistoryListening || typeof window === "undefined") return;
   isClassHistoryListening = true;
+
+  window.addEventListener("beforeunload", (e) => {
+    if (isFormDirty()) {
+      e.preventDefault();
+      e.returnValue = "Ada perubahan yang belum disimpan.";
+      return "Ada perubahan yang belum disimpan.";
+    }
+  });
 
   window.addEventListener("popstate", () => {
     if (currentAppScreen && currentAppScreen !== "classes") {
@@ -173,6 +247,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function openClassDetail(classId) {
+    if (!confirmIfDirty()) return;
     classUi.selectedClassId = classId;
     classUi.mode = "detail";
     pushClassHistory("detail", classId);
@@ -180,6 +255,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function openGrowthScreening(classId) {
+    if (!confirmIfDirty()) return;
     classUi.selectedClassId = classId;
     classUi.mode = "growth";
     pushClassHistory("growth", classId);
@@ -187,6 +263,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function openCreateAssessment(classId) {
+    if (!confirmIfDirty()) return;
     classUi.selectedClassId = classId;
     classUi.mode = "create-assessment";
     pushClassHistory("create-assessment", classId);
@@ -194,6 +271,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function openScoring(classId, sessionId) {
+    if (!confirmIfDirty()) return;
     classUi.selectedClassId = classId;
     classUi.activeAssessmentSessionId = sessionId;
     classUi.activeAssessmentStudentIndex = 0;
@@ -204,6 +282,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function openStudentReport(classId, studentId) {
+    if (!confirmIfDirty()) return;
     if (classUi.reportStudentId !== studentId) {
       classUi.reportSelection = {
         assessmentSessionIds: [],
@@ -219,6 +298,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function navigateBackToClassList() {
+    if (!confirmIfDirty()) return;
     if (typeof window !== "undefined" && window.history.state?.pjokClass) {
       window.history.back();
     } else {
@@ -262,6 +342,7 @@ export function renderClassesScreen(state, actions) {
   }
 
   function navigateBackFromStudentReport() {
+    if (!confirmIfDirty()) return;
     if (typeof window !== "undefined" && window.history.state?.pjokClass) {
       window.history.back();
     } else {
@@ -908,20 +989,35 @@ export function renderClassesScreen(state, actions) {
 
     const readyStudentsWithReports = students
       .map((student) => {
-        const savedReport = (state.studentReports || []).find(
-          (r) =>
-            r &&
-            r.studentId === student.id &&
-            r.classId === classRoom.id &&
-            (r.academicYearId || null) === activeAcademicYearId &&
-            (r.semesterId || null) === activeSemesterId &&
-            r.draft &&
-            typeof r.draft === "object" &&
-            r.reportContext &&
-            typeof r.reportContext === "object"
-        );
-        if (!savedReport) return null;
-        return { student, savedReport };
+        const pendingKey = getPendingKey(student.id, classRoom.id, activeAcademicYearId, activeSemesterId);
+        const pending = pendingReports.get(pendingKey);
+        
+        let reportToUse = null;
+        if (pending && pending.draft && pending.reportContext) {
+          reportToUse = {
+            draft: pending.draft,
+            reportContext: pending.reportContext
+          };
+        } else {
+          const savedReport = (state.studentReports || []).find(
+            (r) =>
+              r &&
+              r.studentId === student.id &&
+              r.classId === classRoom.id &&
+              (r.academicYearId || null) === activeAcademicYearId &&
+              (r.semesterId || null) === activeSemesterId &&
+              r.draft &&
+              typeof r.draft === "object" &&
+              r.reportContext &&
+              typeof r.reportContext === "object"
+          );
+          if (savedReport) {
+            reportToUse = savedReport;
+          }
+        }
+        
+        if (!reportToUse) return null;
+        return { student, savedReport: reportToUse };
       })
       .filter(Boolean);
 
@@ -1127,7 +1223,7 @@ export function renderClassesScreen(state, actions) {
 
     container.append(batchPanel);
 
-    async function runBatchReportGeneration(targetStudents) {
+    async function runBatchReportGeneration(targetStudents, isRetry = false) {
       let apiKey = "";
       try {
         apiKey = (window.sessionStorage.getItem("pjok_gemini_api_key") || "").trim();
@@ -1140,6 +1236,38 @@ export function renderClassesScreen(state, actions) {
 
       if (classUi.batchState.isBatchGenerating) return;
 
+      let frozenScoringConfig;
+      if (isRetry) {
+        if (classUi.batchState.classId !== classRoom.id || !classUi.batchState.frozenScoringConfig) {
+          window.alert("Snapshot batch awal tidak tersedia atau milik kelas lain. Tidak dapat melakukan retry.");
+          return;
+        }
+        frozenScoringConfig = classUi.batchState.frozenScoringConfig;
+      } else {
+        frozenScoringConfig = { enabled: false };
+        if (classUi.batchScoringConfig && classUi.batchScoringConfig.enabled) {
+          const minStr = String(classUi.batchScoringConfig.minScore ?? "").trim();
+          const maxStr = String(classUi.batchScoringConfig.maxScore ?? "").trim();
+          if (!minStr || !maxStr) {
+            window.alert("Rentang konversi tidak boleh kosong. Masukkan nilai minimum dan maksimum.");
+            return;
+          }
+          const minNum = Number(minStr);
+          const maxNum = Number(maxStr);
+          if (!Number.isFinite(minNum) || !Number.isFinite(maxNum) || minNum < 0 || maxNum > 100 || minNum >= maxNum) {
+            window.alert("Rentang konversi tidak valid (0 ≤ minimum < maksimum ≤ 100).");
+            return;
+          }
+          frozenScoringConfig = { enabled: true, minScore: minNum, maxScore: maxNum };
+        }
+        classUi.batchState.frozenScoringConfig = frozenScoringConfig;
+      }
+
+      const runId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const startedAt = new Date().toISOString();
+
+      classUi.batchState.classId = classRoom.id;
+      classUi.batchState.className = classRoom.name;
       classUi.batchState.isBatchGenerating = true;
       classUi.batchState.totalStudents = targetStudents.length;
       classUi.batchState.currentStudentIndex = 0;
@@ -1149,6 +1277,36 @@ export function renderClassesScreen(state, actions) {
       classUi.batchState.skippedCount = 0;
       classUi.batchState.failedStudentIds = [];
       classUi.batchState.statusSummary = null;
+      classUi.batchState.diagnostic = {
+        runId,
+        startedAt,
+        stage: BATCH_STAGES.BATCH_STARTED,
+        studentId: null,
+        studentName: null,
+        studentIndex: 0,
+        totalStudents: targetStudents.length,
+        assessmentCount: 0,
+        growthCount: 0,
+        observationCount: 0,
+        requestStartedAt: null,
+        responseReceivedAt: null,
+        elapsedMs: null,
+        httpStatus: null,
+        lastCompletedStage: null,
+        errorCode: null,
+        errorMessage: null,
+        lastFailure: null
+      };
+
+      function updateDiag(newStage, updates = {}) {
+        if (!classUi.batchState.diagnostic) return;
+        const diag = classUi.batchState.diagnostic;
+        if (diag.stage !== newStage) {
+          diag.lastCompletedStage = diag.stage;
+          diag.stage = newStage;
+        }
+        Object.assign(diag, updates);
+      }
 
       try {
         render();
@@ -1161,11 +1319,24 @@ export function renderClassesScreen(state, actions) {
           classUi.batchState.currentStudentIndex = i + 1;
           classUi.batchState.currentStudentName = student.name;
 
+          updateDiag(BATCH_STAGES.STUDENT_SELECTED, {
+            studentId: student.id,
+            studentName: student.name,
+            studentIndex: i + 1,
+            requestStartedAt: null,
+            responseReceivedAt: null,
+            elapsedMs: null,
+            httpStatus: null,
+            errorCode: null,
+            errorMessage: null
+          });
+
           render();
           if (actions?.requestAppRender) {
             actions.requestAppRender();
           }
 
+          updateDiag(BATCH_STAGES.CONTEXT_BUILDING);
           render();
           if (actions?.requestAppRender) {
             actions.requestAppRender();
@@ -1194,6 +1365,7 @@ export function renderClassesScreen(state, actions) {
             ? (state.studentObservations || []).filter((o) => o.studentId === student.id)
             : [];
 
+          updateDiag(BATCH_STAGES.CONTEXT_READY, {
             assessmentCount: selectedAssessments.length,
             growthCount: selectedGrowth.length,
             observationCount: selectedObs.length
@@ -1204,6 +1376,7 @@ export function renderClassesScreen(state, actions) {
           if (totalSources === 0) {
             classUi.batchState.skippedCount++;
             classUi.batchState.studentStatuses[student.id] = "Dilewati — data tidak tersedia";
+            updateDiag(BATCH_STAGES.STUDENT_DONE);
             continue;
           }
 
@@ -1225,19 +1398,23 @@ export function renderClassesScreen(state, actions) {
               onDiagnosticStage: (stageName, meta = {}) => {
                 if (stageName === "API_REQUEST_START") {
                   reqStartTime = Date.now();
+                  updateDiag(BATCH_STAGES.API_REQUEST_START, {
                     requestStartedAt: new Date(reqStartTime).toISOString(),
                     responseReceivedAt: null,
                     elapsedMs: null,
                     httpStatus: null
                   });
                 } else if (stageName === "API_WAITING") {
+                  updateDiag(BATCH_STAGES.API_WAITING);
                 } else if (stageName === "API_RESPONSE_RECEIVED") {
                   const now = Date.now();
+                  updateDiag(BATCH_STAGES.API_RESPONSE_RECEIVED, {
                     responseReceivedAt: new Date(now).toISOString(),
                     elapsedMs: reqStartTime ? (now - reqStartTime) : null,
                     httpStatus: meta?.httpStatus ?? null
                   });
                 } else if (stageName === "RESPONSE_PARSING") {
+                  updateDiag(BATCH_STAGES.RESPONSE_PARSING);
                 }
                 render();
                 if (actions?.requestAppRender) {
@@ -1247,11 +1424,14 @@ export function renderClassesScreen(state, actions) {
             });
 
             if (draft && typeof draft === "object") {
+              updateDiag(BATCH_STAGES.REPORT_SAVING);
               render();
               if (actions?.requestAppRender) {
                 actions.requestAppRender();
               }
 
+              const key = getPendingKey(student.id, classRoom.id, state.activeAcademicYearId, state.activeSemesterId);
+              pendingReports.set(key, { draft, reportContext });
 
               let saveResult = { success: false, error: new Error("saveStudentReport is not defined") };
               if (actions?.saveStudentReport) {
@@ -1266,12 +1446,15 @@ export function renderClassesScreen(state, actions) {
               }
 
               if (saveResult && saveResult.success) {
+                pendingReports.delete(key);
                 classUi.batchState.successCount++;
                 classUi.batchState.studentStatuses[student.id] = "Berhasil";
+                updateDiag(BATCH_STAGES.STUDENT_DONE);
               } else {
                 classUi.batchState.failedCount++;
                 classUi.batchState.failedStudentIds.push(student.id);
                 classUi.batchState.studentStatuses[student.id] = "Gagal simpan";
+                updateDiag(BATCH_STAGES.ERROR, {
                   errorCode: "SAVE_ERROR",
                   errorMessage: saveResult?.error?.message || "Gagal menyimpan laporan ke penyimpanan lokal"
                 });
@@ -1279,6 +1462,8 @@ export function renderClassesScreen(state, actions) {
                   studentId: student.id,
                   studentName: student.name,
                   studentIndex: i + 1,
+                  stage: BATCH_STAGES.REPORT_SAVING,
+                  lastCompletedStage: BATCH_STAGES.RESPONSE_PARSING,
                   errorCode: "SAVE_ERROR",
                   errorMessage: saveResult?.error?.message || "Gagal menyimpan laporan ke penyimpanan lokal",
                   httpStatus: classUi.batchState.diagnostic.httpStatus,
@@ -1291,6 +1476,7 @@ export function renderClassesScreen(state, actions) {
               classUi.batchState.failedCount++;
               classUi.batchState.failedStudentIds.push(student.id);
               classUi.batchState.studentStatuses[student.id] = "Gagal — respon AI tidak valid";
+              updateDiag(BATCH_STAGES.ERROR, {
                 errorCode: "INVALID_AI_RESPONSE",
                 errorMessage: "Format respon AI tidak valid"
               });
@@ -1298,6 +1484,7 @@ export function renderClassesScreen(state, actions) {
                 studentId: student.id,
                 studentName: student.name,
                 studentIndex: i + 1,
+                stage: BATCH_STAGES.ERROR,
                 lastCompletedStage: classUi.batchState.diagnostic.lastCompletedStage,
                 errorCode: "INVALID_AI_RESPONSE",
                 errorMessage: "Format respon AI tidak valid",
@@ -1314,6 +1501,7 @@ export function renderClassesScreen(state, actions) {
             const errorCode = isKeyError ? "AUTH_ERROR" : (isTimeout ? "AI_REQUEST_TIMEOUT" : (err?.code || "AI_REQUEST_ERROR"));
             const errorMessage = err?.message || "Error network/API";
 
+            updateDiag(BATCH_STAGES.ERROR, {
               errorCode,
               errorMessage
             });
@@ -1322,6 +1510,7 @@ export function renderClassesScreen(state, actions) {
               studentId: student.id,
               studentName: student.name,
               studentIndex: i + 1,
+              stage: BATCH_STAGES.ERROR,
               lastCompletedStage: classUi.batchState.diagnostic.lastCompletedStage,
               errorCode,
               errorMessage,
@@ -1348,9 +1537,11 @@ export function renderClassesScreen(state, actions) {
           }
         }
 
+        updateDiag(BATCH_STAGES.BATCH_DONE);
         classUi.batchState.statusSummary = `Ringkasan: ${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati`;
       } catch (outerErr) {
         console.error("[BATCH REPORT OUTER ERROR]", outerErr);
+        updateDiag(BATCH_STAGES.ERROR, {
           errorCode: outerErr?.code || "FATAL_BATCH_ERROR",
           errorMessage: outerErr?.message || String(outerErr)
         });
@@ -1359,6 +1550,7 @@ export function renderClassesScreen(state, actions) {
             studentId: classUi.batchState.diagnostic.studentId,
             studentName: classUi.batchState.diagnostic.studentName,
             studentIndex: classUi.batchState.diagnostic.studentIndex,
+            stage: BATCH_STAGES.ERROR,
             lastCompletedStage: classUi.batchState.diagnostic.lastCompletedStage,
             errorCode: outerErr?.code || "FATAL_BATCH_ERROR",
             errorMessage: outerErr?.message || String(outerErr),
@@ -1485,6 +1677,9 @@ export function renderClassesScreen(state, actions) {
         const activeAcademicYearId = state.activeAcademicYearId || null;
         const activeSemesterId = state.activeSemesterId || null;
         
+        const pendingKey = getPendingKey(student.id, classRoom.id, activeAcademicYearId, activeSemesterId);
+        const pendingReport = pendingReports.get(pendingKey);
+
         const studentSavedReport = (state.studentReports || []).find(
           (r) =>
             r &&
@@ -1505,6 +1700,8 @@ export function renderClassesScreen(state, actions) {
             `results-stat-pill ${isOk ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold" : isSkip ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold" : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 font-semibold"}`,
             st
           );
+        } else if (pendingReport) {
+          reportStatusPill = createElement("span", "results-stat-pill bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold", "Draf Belum Tersimpan");
         } else if (studentSavedReport) {
           reportStatusPill = createElement("span", "results-stat-pill bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold", "✨ Laporan AI Tersimpan");
         }
@@ -1587,7 +1784,7 @@ export function renderClassesScreen(state, actions) {
     const activeAcademicYearId = state.activeAcademicYearId || null;
     const activeSemesterId = state.activeSemesterId || null;
 
-    const savedReport = (state.studentReports || []).find(
+    let savedReport = (state.studentReports || []).find(
       (r) =>
         r &&
         r.studentId === student.id &&
@@ -1596,16 +1793,54 @@ export function renderClassesScreen(state, actions) {
         (r.semesterId || null) === activeSemesterId
     );
 
-    let activeReportContext = savedReport ? savedReport.reportContext : null;
-    let reportAiDraft = savedReport ? savedReport.draft : null;
-    let isAiDraftLoading = false;
+    const pendingKey = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
+    const pendingReport = pendingReports.get(pendingKey);
 
-    async function handleSaveReport(saveBtn) {
-      if (!actions?.saveStudentReport) return;
+    let activeReportContext = deepClone(pendingReport 
+      ? pendingReport.reportContext 
+      : (savedReport ? savedReport.reportContext : null));
+
+    let reportAiDraft = deepClone(pendingReport 
+      ? pendingReport.draft 
+      : (savedReport ? savedReport.draft : null));
+
+    let isAiDraftLoading = false;
+    let isSaving = false;
+
+    registerDirtyGuard(() => {
+      const pKey = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
+      if (pendingReports.has(pKey)) {
+        return true;
+      }
+      if (reportAiDraft) {
+        const savedDraft = savedReport ? savedReport.draft : null;
+        if (isDraftUnsaved(reportAiDraft, savedDraft)) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    async function persistCurrentDraft({ manual = false } = {}, ...saveBtns) {
+      if (!actions?.saveStudentReport || isSaving) return { success: false };
       
-      const originalText = saveBtn.textContent;
-      saveBtn.disabled = true;
-      saveBtn.textContent = "⏳ Menyimpan...";
+      const contextToSave = deepClone(activeReportContext);
+      const draftToSave = deepClone(reportAiDraft);
+      const key = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
+      
+      const entry = { draft: draftToSave, reportContext: contextToSave };
+      pendingReports.set(key, entry);
+      
+      const buttons = saveBtns.filter(Boolean);
+      const originalTexts = buttons.map(b => b.textContent);
+      
+      if (manual) {
+        isSaving = true;
+        buttons.forEach(b => {
+          b.disabled = true;
+          b.textContent = "⏳ Menyimpan...";
+        });
+      }
 
       try {
         const res = await actions.saveStudentReport({
@@ -1614,23 +1849,44 @@ export function renderClassesScreen(state, actions) {
           classId: classId,
           academicYearId: activeAcademicYearId,
           semesterId: activeSemesterId,
-          reportContext: activeReportContext,
-          draft: reportAiDraft
+          reportContext: contextToSave,
+          draft: draftToSave
         });
 
         if (res && res.success) {
-          showToast("Laporan berhasil disimpan");
-          render();
+          if (pendingReports.get(key) === entry) {
+            pendingReports.delete(key);
+          }
+          if (res.report) {
+            // Update baseline
+            savedReport = res.report;
+            // Also update the local state to match saved version if needed, 
+            // but we keep current edited state in activeReportContext/reportAiDraft.
+            // Actually, if it's successful, we might want to sync them if they haven't changed further.
+          }
+          if (manual) showToast("Laporan berhasil disimpan");
+          return res;
         } else {
-          showToast("Gagal menyimpan laporan");
+          if (manual) showToast("Belum tersimpan — gagal menyimpan");
+          return { success: false, error: res?.error };
         }
       } catch (err) {
         console.error("Error saving report:", err);
-        showToast("Terjadi kesalahan saat menyimpan");
+        if (manual) showToast("Belum tersimpan — gagal menyimpan");
+        return { success: false, error: err };
       } finally {
-        saveBtn.disabled = false;
-        saveBtn.textContent = originalText;
+        if (manual) {
+          isSaving = false;
+          buttons.forEach((b, i) => {
+            b.disabled = false;
+            b.textContent = originalTexts[i];
+          });
+        }
       }
+    }
+
+    async function handleSaveReport(...btns) {
+      await persistCurrentDraft({ manual: true }, ...btns);
     }
 
     // Build Data Sets
@@ -2885,6 +3141,8 @@ export function renderClassesScreen(state, actions) {
         reportAiDraft = draft;
         activeReportContext = reportContext;
 
+        const key = getPendingKey(student.id, classRoom.id, state.activeAcademicYearId || null, state.activeSemesterId || null);
+        pendingReports.set(key, { draft, reportContext });
 
         let saveResult = { success: false, error: new Error("saveStudentReport is not defined") };
         if (actions?.saveStudentReport) {
@@ -2898,6 +3156,7 @@ export function renderClassesScreen(state, actions) {
           });
         }
         if (saveResult && saveResult.success) {
+          pendingReports.delete(key);
         } else {
           console.error("[SINGLE STUDENT REPORT SAVE FAILED]", saveResult?.error);
           window.alert("Draf AI berhasil dibuat tetapi gagal disimpan ke penyimpanan lokal. Draf masih tampil di layar.");

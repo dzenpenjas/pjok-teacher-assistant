@@ -15,10 +15,6 @@ export class StudentRepository extends BaseRepository {
     return this.list().filter((student) => student.classId === classId);
   }
 
-  delete(studentId) {
-    return this.deleteCascade(studentId);
-  }
-
   deleteCascade(studentId) {
     const state = this.loadState();
     const student = (state.students || []).find(s => s.id === studentId);
