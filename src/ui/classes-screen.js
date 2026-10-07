@@ -1822,7 +1822,7 @@ export function renderClassesScreen(state, actions) {
     });
 
     async function persistCurrentDraft({ manual = false } = {}, ...saveBtns) {
-      if (!actions?.saveStudentReport || isSaving) return { success: false };
+      if (!actions?.saveStudentReport) return { success: false };
       
       const contextToSave = deepClone(activeReportContext);
       const draftToSave = deepClone(reportAiDraft);
@@ -1830,6 +1830,10 @@ export function renderClassesScreen(state, actions) {
       
       const entry = { draft: draftToSave, reportContext: contextToSave };
       pendingReports.set(key, entry);
+
+      if (isSaving) {
+        return { success: false, pending: true };
+      }
       
       const buttons = saveBtns.filter(Boolean);
       const originalTexts = buttons.map(b => b.textContent);
@@ -1856,23 +1860,25 @@ export function renderClassesScreen(state, actions) {
         if (res && res.success) {
           if (pendingReports.get(key) === entry) {
             pendingReports.delete(key);
+            if (res.report) {
+              savedReport = deepClone(res.report);
+            }
+            if (manual) {
+              showToast("Laporan berhasil disimpan");
+            }
           }
-          if (res.report) {
-            // Update baseline
-            savedReport = res.report;
-            // Also update the local state to match saved version if needed, 
-            // but we keep current edited state in activeReportContext/reportAiDraft.
-            // Actually, if it's successful, we might want to sync them if they haven't changed further.
-          }
-          if (manual) showToast("Laporan berhasil disimpan");
           return res;
         } else {
-          if (manual) showToast("Belum tersimpan — gagal menyimpan");
+          if (pendingReports.get(key) === entry) {
+            showToast("Belum tersimpan — gagal menyimpan");
+          }
           return { success: false, error: res?.error };
         }
       } catch (err) {
         console.error("Error saving report:", err);
-        if (manual) showToast("Belum tersimpan — gagal menyimpan");
+        if (pendingReports.get(key) === entry) {
+          showToast("Belum tersimpan — gagal menyimpan");
+        }
         return { success: false, error: err };
       } finally {
         if (manual) {
@@ -1881,6 +1887,9 @@ export function renderClassesScreen(state, actions) {
             b.disabled = false;
             b.textContent = originalTexts[i];
           });
+          if (pendingReports.has(key) && pendingReports.get(key) !== entry) {
+            persistCurrentDraft();
+          }
         }
       }
     }
