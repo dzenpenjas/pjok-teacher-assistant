@@ -1110,7 +1110,7 @@ export function renderClassesScreen(state, actions) {
             classRoom,
             draft: savedReport.draft,
             reportContext: savedReport.reportContext,
-            school: state.school || { name: state.schoolName, address: state.schoolAddress }
+            school: (state.schools || [])[0] || null
           });
 
           // 1. Append page to staging DOM
@@ -3054,7 +3054,7 @@ export function renderClassesScreen(state, actions) {
         classRoom,
         draft: reportAiDraft,
         reportContext: currentContext,
-        school: state.school || { name: state.schoolName, address: state.schoolAddress }
+        school: (state.schools || [])[0] || null
       });
       a4Paper.id = "a4-report-preview-document";
 

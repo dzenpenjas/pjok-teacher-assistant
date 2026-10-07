@@ -149,7 +149,7 @@ export function createFinalReportPage({
     }
   }
 
-  const schoolName = school?.name || "SD NEGERI PJOK";
+  const schoolName = (school?.name && school.name.trim()) || "Nama sekolah belum diatur";
   const schoolAddress = school?.address ? school.address.trim() : "";
 
   let genderText = "-";
@@ -442,6 +442,52 @@ export function createFinalReportPage({
     dateNote.textContent = finalReportData.growth.date;
     growthSection.append(dateNote);
 
+    const whoRef = currentContext.whoReference || currentContext.growthAnalysis?.whoReference || null;
+    if (whoRef && whoRef.available) {
+      const codeMap = {
+        REFERENCE_RANGE: "Dalam rentang rujukan",
+        LOW_FOR_AGE: "Di bawah rentang rujukan",
+        VERY_LOW_FOR_AGE: "Jauh di bawah rentang rujukan",
+        LOW_BMI_FOR_AGE: "Di bawah rentang rujukan",
+        VERY_LOW_BMI_FOR_AGE: "Jauh di bawah rentang rujukan",
+        HIGH_BMI_FOR_AGE: "Di atas rentang rujukan",
+        VERY_HIGH_BMI_FOR_AGE: "Jauh di atas rentang rujukan"
+      };
+
+      const whoItems = [];
+      if (whoRef.heightForAge && whoRef.heightForAge.available && whoRef.heightForAge.interpretationCode) {
+        const label = codeMap[whoRef.heightForAge.interpretationCode] || "Dalam rentang rujukan";
+        whoItems.push(`Tinggi menurut usia: ${label}`);
+      }
+      if (whoRef.bmiForAge && whoRef.bmiForAge.available && whoRef.bmiForAge.interpretationCode) {
+        const label = codeMap[whoRef.bmiForAge.interpretationCode] || "Dalam rentang rujukan";
+        whoItems.push(`BMI menurut usia: ${label}`);
+      }
+      if (whoRef.weightForAge && whoRef.weightForAge.available && whoRef.weightForAge.interpretationCode) {
+        const label = codeMap[whoRef.weightForAge.interpretationCode] || "Dalam rentang rujukan";
+        whoItems.push(`Berat menurut usia: ${label}`);
+      }
+
+      if (whoItems.length > 0) {
+        const whoBox = document.createElement("div");
+        whoBox.className = "a4-who-summary text-[11px] mb-1.5 p-1.5 bg-slate-50 dark:bg-slate-900/40 rounded border border-slate-200 dark:border-slate-800 leading-tight";
+        const whoTitle = document.createElement("p");
+        whoTitle.className = "font-semibold text-slate-700 dark:text-slate-300 mb-0.5";
+        whoTitle.textContent = "Acuan Pertumbuhan WHO 2007:";
+        whoBox.append(whoTitle);
+
+        const whoList = document.createElement("ul");
+        whoList.className = "list-disc list-inside space-y-0.5 text-slate-600 dark:text-slate-400";
+        whoItems.forEach((text) => {
+          const li = document.createElement("li");
+          li.textContent = text;
+          whoList.append(li);
+        });
+        whoBox.append(whoList);
+        growthSection.append(whoBox);
+      }
+    }
+
     if (finalReportData.growth.interpretation) {
       const p = document.createElement("p");
       p.className = "a4-body-text mb-1";
@@ -493,10 +539,15 @@ export function createFinalReportPage({
 
   const leftFooter = document.createElement("div");
   leftFooter.className = "a4-footer-left";
+
+  const refText = document.createElement("p");
+  refText.className = "a4-footer-reference text-[9px] text-slate-500 mb-0.5";
+  refText.textContent = "Referensi pertumbuhan: WHO Growth Reference 2007, World Health Organization (usia 5–19 tahun).";
+
   const disclaimer = document.createElement("p");
-  disclaimer.className = "a4-footer-disclaimer";
-  disclaimer.textContent = "Pengukuran ini membantu pemantauan awal dan bukan diagnosis medis.";
-  leftFooter.append(disclaimer);
+  disclaimer.className = "a4-footer-disclaimer text-[9px]";
+  disclaimer.textContent = "Pengukuran ini membantu pemantauan pertumbuhan dan bukan diagnosis medis.";
+  leftFooter.append(refText, disclaimer);
 
   const rightFooter = document.createElement("div");
   rightFooter.className = "a4-footer-right";
