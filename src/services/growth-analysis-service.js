@@ -1,4 +1,5 @@
 import { calculateBmi } from "../data/models.js";
+import { evaluateStudentWhoGrowth } from "./who-growth-reference-service.js";
 
 export function calculateAgeAtDate(birthDateStr, measurementDateStr) {
   if (!birthDateStr || !measurementDateStr) return null;
@@ -341,12 +342,14 @@ export function analyzeGrowth(student, growthSelections = [], allGrowthRecords =
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
 
   if (selectedSorted.length === 0) {
+    const whoReference = evaluateStudentWhoGrowth({ student, growthSummary });
     return {
       latest: null,
       previous: null,
       trend: null,
       historyCount,
-      growthSummary
+      growthSummary,
+      whoReference
     };
   }
 
@@ -407,11 +410,14 @@ export function analyzeGrowth(student, growthSelections = [], allGrowthRecords =
     };
   }
 
+  const whoReference = evaluateStudentWhoGrowth({ student, growthSummary });
+
   return {
     latest,
     previous,
     trend,
     historyCount,
-    growthSummary
+    growthSummary,
+    whoReference
   };
 }

@@ -5460,6 +5460,7 @@ export function buildSelectedReportContext({
     observations,
     growthAnalysis,
     growthSummary: growthAnalysis.growthSummary,
+    whoReference: growthAnalysis.whoReference,
     reportScoring
   };
 }
