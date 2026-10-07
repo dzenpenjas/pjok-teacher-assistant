@@ -1821,15 +1821,29 @@ export function renderClassesScreen(state, actions) {
       return false;
     });
 
-    async function persistCurrentDraft({ manual = false } = {}, ...saveBtns) {
+    async function persistCurrentDraft({ manual = false, entryToSave = null } = {}, ...saveBtns) {
       if (!actions?.saveStudentReport) return { success: false };
       
-      const contextToSave = deepClone(activeReportContext);
-      const draftToSave = deepClone(reportAiDraft);
       const key = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
-      
-      const entry = { draft: draftToSave, reportContext: contextToSave };
-      pendingReports.set(key, entry);
+
+      if (entryToSave && (pendingReports.get(key) !== entryToSave || entryToSave.attempted)) {
+        return { success: false };
+      }
+
+      let entry;
+      let contextToSave;
+      let draftToSave;
+
+      if (entryToSave) {
+        entry = entryToSave;
+        contextToSave = entryToSave.reportContext;
+        draftToSave = entryToSave.draft;
+      } else {
+        contextToSave = deepClone(activeReportContext);
+        draftToSave = deepClone(reportAiDraft);
+        entry = { draft: draftToSave, reportContext: contextToSave, attempted: false };
+        pendingReports.set(key, entry);
+      }
 
       if (isSaving) {
         return { success: false, pending: true };
@@ -1845,6 +1859,8 @@ export function renderClassesScreen(state, actions) {
           b.textContent = "⏳ Menyimpan...";
         });
       }
+
+      entry.attempted = true;
 
       try {
         const res = await actions.saveStudentReport({
@@ -1887,8 +1903,9 @@ export function renderClassesScreen(state, actions) {
             b.disabled = false;
             b.textContent = originalTexts[i];
           });
-          if (pendingReports.has(key) && pendingReports.get(key) !== entry) {
-            persistCurrentDraft();
+          const latestEntry = pendingReports.get(key);
+          if (latestEntry && latestEntry !== entry && !latestEntry.attempted) {
+            persistCurrentDraft({ entryToSave: latestEntry });
           }
         }
       }
