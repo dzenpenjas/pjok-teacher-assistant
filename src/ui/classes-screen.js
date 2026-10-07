@@ -1052,8 +1052,9 @@ export function renderClassesScreen(state, actions) {
       const exportContainer = document.createElement("div");
       exportContainer.className = "batch-pdf-export-container";
       exportContainer.style.position = "fixed";
-      exportContainer.style.left = "-9999px";
       exportContainer.style.top = "0";
+      exportContainer.style.left = "0";
+      exportContainer.style.zIndex = "-9999";
       exportContainer.style.width = "210mm";
       exportContainer.style.background = "#ffffff";
       document.body.appendChild(exportContainer);
@@ -1097,6 +1098,8 @@ export function renderClassesScreen(state, actions) {
 
           renderedPageCount++;
         }
+
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
         if (renderedPageCount === 0) {
           window.alert("Tidak ada laporan valid yang dapat diekspor.");
