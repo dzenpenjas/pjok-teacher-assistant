@@ -175,9 +175,13 @@ export function renderSettingsScreen(state, actions, options = {}) {
         showToast("Masukkan API Key yang valid");
         return;
       }
-      setGeminiApiKey(val);
-      showToast("API Key disimpan");
-      render();
+      const saved = setGeminiApiKey(val);
+      if (saved) {
+        showToast("API Key disimpan");
+        render();
+      } else {
+        showToast("API Key gagal disimpan di browser. Periksa izin penyimpanan atau coba kembali.");
+      }
     });
 
     card.append(form);

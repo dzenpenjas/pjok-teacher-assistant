@@ -49,14 +49,20 @@ export function getGeminiApiKey() {
       const sessionVal = sessionStore.getItem(GEMINI_API_KEY_STORAGE_KEY);
       if (typeof sessionVal === "string" && sessionVal.trim()) {
         const trimmed = sessionVal.trim();
+        let migratedSuccessfully = false;
         if (localStore) {
           try {
             localStore.setItem(GEMINI_API_KEY_STORAGE_KEY, trimmed);
+            migratedSuccessfully = true;
+          } catch (_) {
+            migratedSuccessfully = false;
+          }
+        }
+        if (migratedSuccessfully) {
+          try {
+            sessionStore.removeItem(GEMINI_API_KEY_STORAGE_KEY);
           } catch (_) {}
         }
-        try {
-          sessionStore.removeItem(GEMINI_API_KEY_STORAGE_KEY);
-        } catch (_) {}
         return trimmed;
       }
     }
