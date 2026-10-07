@@ -1056,63 +1056,18 @@ export function renderClassesScreen(state, actions) {
       downloadAllBtn.disabled = true;
       downloadAllBtn.textContent = `⏳ Menyiapkan PDF (${readyStudentsWithReports.length} siswa)...`;
 
-      const exportContainer = document.createElement("div");
-      exportContainer.className = "batch-pdf-export-container";
-      exportContainer.style.position = "fixed";
-      exportContainer.style.top = "0";
-      exportContainer.style.left = "0";
-      exportContainer.style.zIndex = "-9999";
-      exportContainer.style.width = "210mm";
-      exportContainer.style.background = "#ffffff";
-      document.body.appendChild(exportContainer);
+      const stagingContainer = document.createElement("div");
+      stagingContainer.className = "batch-pdf-export-staging";
+      stagingContainer.style.position = "fixed";
+      stagingContainer.style.top = "0";
+      stagingContainer.style.left = "0";
+      stagingContainer.style.width = "210mm";
+      stagingContainer.style.background = "#ffffff";
+      stagingContainer.style.pointerEvents = "none";
+      stagingContainer.style.overflow = "hidden";
+      document.body.appendChild(stagingContainer);
 
       try {
-        let renderedPageCount = 0;
-
-        for (let i = 0; i < readyStudentsWithReports.length; i++) {
-          const { student, savedReport } = readyStudentsWithReports[i];
-          if (
-            !savedReport ||
-            !savedReport.draft ||
-            typeof savedReport.draft !== "object" ||
-            !savedReport.reportContext ||
-            typeof savedReport.reportContext !== "object"
-          ) {
-            continue;
-          }
-
-          const pageEl = createFinalReportPage({
-            student,
-            classRoom,
-            draft: savedReport.draft,
-            reportContext: savedReport.reportContext,
-            school: state.school || { name: state.schoolName, address: state.schoolAddress }
-          });
-
-          if (renderedPageCount > 0) {
-            pageEl.style.pageBreakBefore = "always";
-            pageEl.style.breakBefore = "page";
-          }
-          pageEl.style.pageBreakInside = "avoid";
-          pageEl.style.breakInside = "avoid";
-          pageEl.style.marginBottom = "0";
-
-          exportContainer.appendChild(pageEl);
-
-          if (pageEl.scrollHeight > pageEl.clientHeight) {
-            pageEl.classList.add("a4-compact");
-          }
-
-          renderedPageCount++;
-        }
-
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-        if (renderedPageCount === 0) {
-          window.alert("Tidak ada laporan valid yang dapat diekspor.");
-          return;
-        }
-
         const opt = {
           margin: 0,
           filename: pdfFilename,
@@ -1130,21 +1085,97 @@ export function renderClassesScreen(state, actions) {
             unit: "mm",
             format: "a4",
             orientation: "portrait"
-          },
-          pagebreak: {
-            mode: ["css", "legacy"]
           }
         };
 
-        downloadAllBtn.textContent = `⏳ Mengekspor PDF (${renderedPageCount} siswa)...`;
-        await window.html2pdf().set(opt).from(exportContainer).save();
+        let pdfDoc = null;
+        let renderedPageCount = 0;
+
+        for (let i = 0; i < readyStudentsWithReports.length; i++) {
+          const { student, savedReport } = readyStudentsWithReports[i];
+          if (
+            !savedReport ||
+            !savedReport.draft ||
+            typeof savedReport.draft !== "object" ||
+            !savedReport.reportContext ||
+            typeof savedReport.reportContext !== "object"
+          ) {
+            continue;
+          }
+
+          downloadAllBtn.textContent = `⏳ Mengekspor PDF (${renderedPageCount + 1}/${readyStudentsWithReports.length})...`;
+
+          const pageEl = createFinalReportPage({
+            student,
+            classRoom,
+            draft: savedReport.draft,
+            reportContext: savedReport.reportContext,
+            school: state.school || { name: state.schoolName, address: state.schoolAddress }
+          });
+
+          // 1. Append page to staging DOM
+          stagingContainer.replaceChildren(pageEl);
+
+          // 2. Remove a4-compact
+          pageEl.classList.remove("a4-compact");
+
+          // 3. Allow layout
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+
+          // 4. Measure: scrollHeight vs clientHeight
+          if (pageEl.scrollHeight > pageEl.clientHeight) {
+            // 5. If overflowing: add a4-compact
+            pageEl.classList.add("a4-compact");
+            // 6. Allow layout again
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+          }
+
+          // Validation before capture
+          const textContent = (pageEl.textContent || "").trim();
+          if (!pageEl.isConnected || pageEl.offsetWidth <= 0 || pageEl.offsetHeight <= 0 || textContent.length < 10) {
+            throw new Error(`Validasi halaman laporan siswa "${student?.name || "Siswa"}" gagal: ukuran atau konten tidak valid.`);
+          }
+
+          // Per-page canvas capture through html2pdf Worker
+          if (!pdfDoc) {
+            // First valid student: create/obtain the jsPDF document from existing html2pdf Worker
+            const worker = window.html2pdf().set(opt).from(pageEl);
+            pdfDoc = await worker.toPdf().get("pdf");
+
+            // Guarantee single page for first student if html2pdf split due to minor rounding
+            while (pdfDoc.internal.getNumberOfPages() > 1) {
+              pdfDoc.deletePage(pdfDoc.internal.getNumberOfPages());
+            }
+          } else {
+            // Subsequent students: render only this pageEl to canvas, add A4 page to the SAME jsPDF document
+            const worker = window.html2pdf().set(opt).from(pageEl);
+            const canvas = await worker.toCanvas().get("canvas");
+            const imgData = canvas.toDataURL("image/jpeg", 0.98);
+            pdfDoc.addPage("a4", "portrait");
+            pdfDoc.addImage(imgData, "JPEG", 0, 0, 210, 297);
+          }
+
+          // Release page between iterations
+          pageEl.remove();
+          stagingContainer.replaceChildren();
+
+          renderedPageCount++;
+        }
+
+        if (renderedPageCount === 0 || !pdfDoc) {
+          window.alert("Tidak ada laporan valid yang dapat diekspor.");
+          return;
+        }
+
+        // Final save
+        pdfDoc.save(pdfFilename);
         showToast(`Berhasil mengunduh semua laporan kelas (${renderedPageCount} siswa)`);
       } catch (pdfErr) {
         console.error("[BATCH PDF GENERATION ERROR]", pdfErr);
         window.alert("Terjadi kendala saat membuat PDF gabungan kelas: " + (pdfErr?.message || ""));
       } finally {
-        if (exportContainer && exportContainer.parentNode) {
-          exportContainer.parentNode.removeChild(exportContainer);
+        if (stagingContainer && stagingContainer.parentNode) {
+          stagingContainer.parentNode.removeChild(stagingContainer);
         }
         downloadAllBtn.disabled = false;
         downloadAllBtn.textContent = `📥 Unduh Semua Laporan (${readyStudentsWithReports.length}/${students.length})`;
