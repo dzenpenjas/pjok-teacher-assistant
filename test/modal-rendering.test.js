@@ -86,4 +86,16 @@ test("M1: openStudentDetail sets activeModalStudentId and renders modal", async 
     const modal = renderStudentDetailModal("st-1", context, () => {});
     assert.ok(modal, "Modal should be rendered");
     assert.equal(modal.tagName, "DIV");
+
+    // Verify presence of Edit Profil and Hapus buttons added in dd0a845
+    const findTextInTree = (el, text) => {
+        if (el.textContent === text || el.text === text) return true;
+        if (el.children) {
+            return el.children.some(child => findTextInTree(child, text));
+        }
+        return false;
+    };
+
+    assert.ok(findTextInTree(modal, "✏️ Edit Profil"), "Edit Profil button should be present");
+    assert.ok(findTextInTree(modal, "🗑️ Hapus"), "Hapus button should be present");
 });

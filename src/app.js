@@ -710,7 +710,7 @@ function createCrudActions() {
 
     // OBSERVATIONS
     createObservation: (input) => {
-      repositories.studentObservations.create(input);
+      repositories.observations.create(input);
       refreshState();
     },
 
