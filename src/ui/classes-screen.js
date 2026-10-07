@@ -1784,7 +1784,7 @@ export function renderClassesScreen(state, actions) {
     const activeAcademicYearId = state.activeAcademicYearId || null;
     const activeSemesterId = state.activeSemesterId || null;
 
-    const savedReport = (state.studentReports || []).find(
+    let savedReport = (state.studentReports || []).find(
       (r) =>
         r &&
         r.studentId === student.id &&
@@ -1805,6 +1805,7 @@ export function renderClassesScreen(state, actions) {
       : (savedReport ? savedReport.draft : null));
 
     let isAiDraftLoading = false;
+    let isSaving = false;
 
     registerDirtyGuard(() => {
       const pKey = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
@@ -1820,20 +1821,25 @@ export function renderClassesScreen(state, actions) {
       return false;
     });
 
-    async function persistCurrentDraft({ manual = false } = {}, saveBtn = null) {
-      if (!actions?.saveStudentReport) return { success: false };
+    async function persistCurrentDraft({ manual = false } = {}, ...saveBtns) {
+      if (!actions?.saveStudentReport || isSaving) return { success: false };
       
-      const contextToSave = activeReportContext;
+      const contextToSave = deepClone(activeReportContext);
       const draftToSave = deepClone(reportAiDraft);
       const key = getPendingKey(student.id, classId, activeAcademicYearId, activeSemesterId);
       
-      pendingReports.set(key, { draft: draftToSave, reportContext: contextToSave });
+      const entry = { draft: draftToSave, reportContext: contextToSave };
+      pendingReports.set(key, entry);
       
-      let originalText = "";
-      if (saveBtn) {
-        originalText = saveBtn.textContent;
-        saveBtn.disabled = true;
-        saveBtn.textContent = "⏳ Menyimpan...";
+      const buttons = saveBtns.filter(Boolean);
+      const originalTexts = buttons.map(b => b.textContent);
+      
+      if (manual) {
+        isSaving = true;
+        buttons.forEach(b => {
+          b.disabled = true;
+          b.textContent = "⏳ Menyimpan...";
+        });
       }
 
       try {
@@ -1848,34 +1854,39 @@ export function renderClassesScreen(state, actions) {
         });
 
         if (res && res.success) {
-          if (pendingReports.get(key)?.draft === draftToSave) {
+          if (pendingReports.get(key) === entry) {
             pendingReports.delete(key);
           }
           if (res.report) {
             // Update baseline
-            reportAiDraft = deepClone(res.report.draft);
-            activeReportContext = deepClone(res.report.reportContext);
+            savedReport = res.report;
+            // Also update the local state to match saved version if needed, 
+            // but we keep current edited state in activeReportContext/reportAiDraft.
+            // Actually, if it's successful, we might want to sync them if they haven't changed further.
           }
           if (manual) showToast("Laporan berhasil disimpan");
           return res;
         } else {
-          showToast("Belum tersimpan — gagal menyimpan");
+          if (manual) showToast("Belum tersimpan — gagal menyimpan");
           return { success: false, error: res?.error };
         }
       } catch (err) {
         console.error("Error saving report:", err);
-        showToast("Belum tersimpan — gagal menyimpan");
+        if (manual) showToast("Belum tersimpan — gagal menyimpan");
         return { success: false, error: err };
       } finally {
-        if (saveBtn) {
-          saveBtn.disabled = false;
-          saveBtn.textContent = originalText;
+        if (manual) {
+          isSaving = false;
+          buttons.forEach((b, i) => {
+            b.disabled = false;
+            b.textContent = originalTexts[i];
+          });
         }
       }
     }
 
-    async function handleSaveReport(saveBtn) {
-      await persistCurrentDraft({ manual: true }, saveBtn);
+    async function handleSaveReport(...btns) {
+      await persistCurrentDraft({ manual: true }, ...btns);
     }
 
     // Build Data Sets
@@ -2652,7 +2663,7 @@ export function renderClassesScreen(state, actions) {
       summaryTextarea.placeholder = "Tuliskan ringkasan perkembangan umum siswa...";
       summaryTextarea.addEventListener("input", (e) => {
         reportAiDraft.summary = e.target.value;
-        handleSaveReport();
+        persistCurrentDraft();
       });
       summaryBox.append(summaryLabel, summaryTextarea);
       sectionsList.append(summaryBox);
@@ -2740,7 +2751,7 @@ export function renderClassesScreen(state, actions) {
             descTextarea.placeholder = "Deskripsi capaian belajar siswa...";
             descTextarea.addEventListener("input", (e) => {
               item.description = e.target.value;
-              handleSaveReport();
+              persistCurrentDraft();
             });
 
             itemCard.append(itemHeader, descTextarea);
@@ -2761,7 +2772,7 @@ export function renderClassesScreen(state, actions) {
         understandTextarea.placeholder = "Deskripsi pemahaman konsep materi...";
         understandTextarea.addEventListener("input", (e) => {
           reportAiDraft.understanding = e.target.value;
-          handleSaveReport();
+          persistCurrentDraft();
         });
         understandBox.append(understandLabel, understandTextarea);
         sectionsList.append(understandBox);
@@ -2778,7 +2789,7 @@ export function renderClassesScreen(state, actions) {
         attitudeTextarea.placeholder = "Deskripsi sikap dan partisipasi siswa...";
         attitudeTextarea.addEventListener("input", (e) => {
           reportAiDraft.attitude = e.target.value;
-          handleSaveReport();
+          persistCurrentDraft();
         });
         attitudeBox.append(attitudeLabel, attitudeTextarea);
         sectionsList.append(attitudeBox);
@@ -2795,7 +2806,7 @@ export function renderClassesScreen(state, actions) {
         growthTextarea.placeholder = "Deskripsi pertumbuhan fisik siswa...";
         growthTextarea.addEventListener("input", (e) => {
           reportAiDraft.growth = e.target.value;
-          handleSaveReport();
+          persistCurrentDraft();
         });
         growthBox.append(growthLabel, growthTextarea);
         sectionsList.append(growthBox);

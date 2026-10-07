@@ -84,6 +84,28 @@ export function renderStudentDetailModal(studentId, context, onClose) {
     )
   );
 
+  const headerActions = createElement("div", "flex items-center gap-2 mt-2");
+  const editLink = createElement("button", "btn-tool btn-tool-primary text-xs py-1 px-2");
+  editLink.textContent = "✏️ Edit Profil";
+  editLink.addEventListener("click", () => {
+    identitySection.open = true;
+    identitySection.scrollIntoView({ behavior: "smooth" });
+  });
+
+  const deleteBtn = createElement("button", "btn-tool text-red-600 dark:text-red-400 text-xs py-1 px-2");
+  deleteBtn.textContent = "🗑️ Hapus";
+  deleteBtn.addEventListener("click", () => {
+    if (context.actions?.deleteStudent) {
+      const success = context.actions.deleteStudent(student.id);
+      if (success) {
+        onClose();
+        showToast("Siswa berhasil dihapus");
+      }
+    }
+  });
+  headerActions.append(editLink, deleteBtn);
+  textGroup.append(headerActions);
+
   // Tag list
   const tagsWrap = createElement("div", "student-tags-inline");
   if (Array.isArray(student.tagIds)) {
@@ -133,6 +155,12 @@ export function renderStudentDetailModal(studentId, context, onClose) {
 
   idForm.append(
     createField({ label: "Nama Lengkap", name: "name", value: student.name || "", required: true }),
+    createSelectField({
+      label: "Kelas",
+      name: "classId",
+      value: student.classId || "",
+      options: (context.classes || []).map((c) => ({ value: c.id, label: c.name }))
+    }),
     createField({ label: "NIS", name: "studentNumber", value: student.studentNumber || "" }),
     createSelectField({
       label: "Jenis Kelamin",
@@ -157,6 +185,7 @@ export function renderStudentDetailModal(studentId, context, onClose) {
       const result = context.actions.updateStudent(student.id, {
         ...student,
         name: data.name?.trim() || student.name,
+        classId: data.classId || student.classId,
         studentNumber: (data.studentNumber || "").trim(),
         gender: data.gender || student.gender,
         birthDate: data.birthDate || ""

@@ -27,6 +27,7 @@ export class StudentRepository extends BaseRepository {
     const growthRecords = (state.growthRecords || []).filter((r) => r.studentId !== studentId);
     const studentObservations = (state.studentObservations || []).filter((r) => r.studentId !== studentId);
     const studentNotes = (state.studentNotes || []).filter((r) => r.studentId !== studentId);
+    const studentReports = (state.studentReports || []).filter((r) => r.studentId !== studentId);
 
     const nextState = {
       ...state,
@@ -35,9 +36,10 @@ export class StudentRepository extends BaseRepository {
       assessmentResults,
       growthRecords,
       studentObservations,
-      studentNotes
+      studentNotes,
+      studentReports
     };
-    this.saveState(nextState);
-    return students;
+    const result = this.saveState(nextState);
+    return result.success;
   }
 }

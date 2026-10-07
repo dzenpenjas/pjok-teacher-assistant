@@ -528,9 +528,11 @@ function createCrudActions() {
       const msg = `Hapus ${studentName}?\n` +
         `Semua data riwayat absensi, hasil tes penilaian fisik, grafik pertumbuhan, dan observasi siswa ini akan dihapus secara permanen. Lanjutkan?`;
       if (window.confirm(msg)) {
-        repositories.students.deleteCascade(id);
+        const success = repositories.students.deleteCascade(id);
         refreshState();
+        return success;
       }
+      return false;
     },
 
     // ATTENDANCE ACTIONS
