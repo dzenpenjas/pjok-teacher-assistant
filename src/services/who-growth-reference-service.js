@@ -6,7 +6,7 @@ import {
 
 /**
  * Parses date string (YYYY-MM-DD or other valid date string) to UTC timestamp (ms).
- * Avoids timezone and DST shifts.
+ * Avoids timezone and DST shifts, and strictly verifies real calendar dates.
  */
 export function parseDateUtc(dateStr) {
   if (!dateStr || typeof dateStr !== "string") return null;
@@ -14,9 +14,22 @@ export function parseDateUtc(dateStr) {
   const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (match) {
     const year = parseInt(match[1], 10);
-    const month = parseInt(match[2], 10) - 1;
+    const month = parseInt(match[2], 10);
     const day = parseInt(match[3], 10);
-    return Date.UTC(year, month, day);
+    if (month < 1 || month > 12 || day < 1 || day > 31) {
+      return null;
+    }
+    const monthIndex = month - 1;
+    const utcTimestamp = Date.UTC(year, monthIndex, day);
+    const checkDate = new Date(utcTimestamp);
+    if (
+      checkDate.getUTCFullYear() !== year ||
+      checkDate.getUTCMonth() !== monthIndex ||
+      checkDate.getUTCDate() !== day
+    ) {
+      return null;
+    }
+    return utcTimestamp;
   }
   const d = new Date(trimmed);
   if (isNaN(d.getTime())) return null;
@@ -168,11 +181,19 @@ export function calculateWhoZScore({ measurement, ageMonths, sex, indicator }) {
     }
   }
 
-  const roundedZ = Math.round(finalZ * 100) / 100 || 0;
+  if (!Number.isFinite(finalZ)) {
+    return {
+      available: false,
+      reason: "INVALID_Z_SCORE"
+    };
+  }
+
+  const roundedZ = Math.round(finalZ * 100) / 100;
+  const normalizedZ = roundedZ === 0 ? 0 : roundedZ;
 
   return {
     available: true,
-    zScore: roundedZ,
+    zScore: normalizedZ,
     lms
   };
 }
