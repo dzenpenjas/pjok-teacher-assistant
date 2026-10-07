@@ -812,6 +812,12 @@ export function renderClassesScreen(state, actions) {
     );
 
     const classSessions = (state.assessmentSessions || []).filter((as) => as.classId === classRoom.id);
+    const validSessionIdSet = new Set(classSessions.map((as) => as.id));
+    if (Array.isArray(classUi.batchReportSelection.assessmentSessionIds) && classUi.batchReportSelection.assessmentSessionIds.length > 0) {
+      classUi.batchReportSelection.assessmentSessionIds = classUi.batchReportSelection.assessmentSessionIds.filter(
+        (id) => validSessionIdSet.has(id)
+      );
+    }
     if (classSessions.length === 0) {
       sourceConfigBox.append(createElement("p", "text-subtle italic", "Belum ada sesi asesmen di kelas ini."));
     } else {
@@ -1271,6 +1277,56 @@ export function renderClassesScreen(state, actions) {
 
       if (classUi.batchState.isBatchGenerating) return;
 
+      if (!targetStudents || targetStudents.length === 0) {
+        return;
+      }
+
+      // 1. Normalize assessment selection to current classRoom.id
+      const validClassSessionIds = new Set(
+        (state.assessmentSessions || [])
+          .filter((as) => as && as.classId === classRoom.id)
+          .map((as) => as.id)
+      );
+
+      if (!classUi.batchReportSelection) {
+        classUi.batchReportSelection = {
+          assessmentSessionIds: [],
+          includeGrowth: false,
+          includeObservations: false
+        };
+      } else if (Array.isArray(classUi.batchReportSelection.assessmentSessionIds)) {
+        classUi.batchReportSelection.assessmentSessionIds = classUi.batchReportSelection.assessmentSessionIds.filter(
+          (id) => validClassSessionIds.has(id)
+        );
+      } else {
+        classUi.batchReportSelection.assessmentSessionIds = [];
+      }
+
+      // 2. Preflight source validation: Check if there is at least one usable source across target students
+      const selectedAssessmentSessionIds = classUi.batchReportSelection?.assessmentSessionIds || [];
+      const effectiveSessionIdSet = selectedAssessmentSessionIds.length > 0
+        ? new Set(selectedAssessmentSessionIds)
+        : validClassSessionIds;
+
+      const targetStudentIdSet = new Set(targetStudents.map((s) => s.id));
+
+      const hasAssessmentData = (state.assessmentResults || []).some(
+        (r) => targetStudentIdSet.has(r.studentId) && effectiveSessionIdSet.has(r.assessmentSessionId)
+      );
+
+      const hasGrowthData = Boolean(classUi.batchReportSelection?.includeGrowth) &&
+        (state.growthRecords || []).some((g) => targetStudentIdSet.has(g.studentId));
+
+      const hasObservationData = Boolean(classUi.batchReportSelection?.includeObservations) &&
+        (state.studentObservations || []).some((o) => targetStudentIdSet.has(o.studentId));
+
+      const hasAnyDataSource = hasAssessmentData || hasGrowthData || hasObservationData;
+
+      if (!hasAnyDataSource) {
+        window.alert("Tidak ada data yang dapat digunakan untuk membuat laporan. Periksa pilihan asesmen atau sumber data.");
+        return;
+      }
+
       let frozenScoringConfig;
       if (isRetry) {
         if (classUi.batchState.classId !== classRoom.id || !classUi.batchState.frozenScoringConfig) {
@@ -1312,6 +1368,9 @@ export function renderClassesScreen(state, actions) {
       classUi.batchState.skippedCount = 0;
       classUi.batchState.failedStudentIds = [];
       classUi.batchState.statusSummary = null;
+      if (!isRetry) {
+        classUi.batchState.studentStatuses = {};
+      }
       classUi.batchState.diagnostic = {
         runId,
         startedAt,
