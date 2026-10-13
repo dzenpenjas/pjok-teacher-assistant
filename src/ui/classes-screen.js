@@ -2796,22 +2796,6 @@ export function renderClassesScreen(state, actions) {
 
       const sectionsList = createElement("div", "space-y-4");
 
-      // 1. Ringkasan
-      const summaryBox = createElement("div", "report-ai-draft-section space-y-2");
-      const summaryLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "1. Ringkasan");
-      const summaryTextarea = document.createElement("textarea");
-      summaryTextarea.className = "input-text text-xs w-full";
-      summaryTextarea.rows = 3;
-      summaryTextarea.value = reportAiDraft.summary || "";
-      summaryTextarea.placeholder = "Tuliskan ringkasan perkembangan umum siswa...";
-      summaryTextarea.addEventListener("input", (e) => {
-        reportAiDraft.summary = e.target.value;
-        persistCurrentDraft();
-      });
-      summaryBox.append(summaryLabel, summaryTextarea);
-      sectionsList.append(summaryBox);
-
-      // 2. Hasil Belajar
       const currentSelectedAssessments = studentAssessments.filter(({ assessmentSession: sess }) =>
         (classUi.reportSelection.assessmentSessionIds || []).includes(sess.id)
       );
@@ -2843,166 +2827,120 @@ export function renderClassesScreen(state, actions) {
       }
 
       const {
-        learning: isLearningActive,
-        understanding: isUnderstandingActive,
-        attitude: isAttitudeActive,
-        growth: isGrowthActive
+        learning: isLearningActive = true,
+        growth: isGrowthActive = true
       } = currentContext.selectedSections || {};
 
+      // 1. Anak Saya Sudah Bisa Apa? (Kekuatan)
       if (isLearningActive) {
-        const validLearningItems = (reportAiDraft.learning || [])
-          .map((item) => {
-            const matchSource = (currentContext.assessments || []).find(
-              (a) => a.assessmentSessionId === item.assessmentSessionId
-            );
-            if (!matchSource) return null;
-            return { item, matchSource };
-          })
-          .filter(Boolean);
+        const strengthsBox = createElement("div", "report-ai-draft-section space-y-2");
+        const strengthsLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "1. Anak Saya Sudah Bisa Apa? (Kekuatan)");
+        const strengthsTextarea = document.createElement("textarea");
+        strengthsTextarea.className = "input-text text-xs w-full";
+        strengthsTextarea.rows = 3;
+        strengthsTextarea.value = reportAiDraft.strengths || reportAiDraft.summary || "";
+        strengthsTextarea.placeholder = "Penjelasan kemampuan dan kekuatan yang sudah dikuasai anak...";
+        strengthsTextarea.addEventListener("input", (e) => {
+          reportAiDraft.strengths = e.target.value;
+          reportAiDraft.summary = e.target.value;
+          persistCurrentDraft();
+        });
+        strengthsBox.append(strengthsLabel, strengthsTextarea);
+        sectionsList.append(strengthsBox);
 
-        const learningBox = createElement("div", "report-ai-draft-section space-y-3");
-        learningBox.append(
-          createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", `2. Hasil Belajar (${validLearningItems.length})`)
-        );
-
-        if (validLearningItems.length === 0) {
-          learningBox.append(createElement("p", "empty-copy text-xs", "Belum ada capaian hasil belajar dari asesmen terpilih."));
-        } else {
-          validLearningItems.forEach(({ item, matchSource }) => {
-            const itemCard = createElement("div", "report-ai-learning-card space-y-2");
-            
-            const itemHeader = createElement("div", "flex items-center justify-between gap-2");
-            const titleEl = createElement("strong", "text-xs text-slate-900 dark:text-slate-100 flex-1", matchSource.title || "Asesmen PJOK");
-
-            const scoreText =
-              matchSource.numericScore !== null && matchSource.numericScore !== undefined
-                ? `Nilai: ${matchSource.numericScore}`
-                : "Belum ada nilai final";
-
-            const scoreBadge = createElement(
-              "span",
-              "badge badge-success text-xs font-bold whitespace-nowrap",
-              scoreText
-            );
-
-            itemHeader.append(titleEl, scoreBadge);
-
-            const descTextarea = document.createElement("textarea");
-            descTextarea.className = "input-text text-xs w-full";
-            descTextarea.rows = 3;
-            descTextarea.value = item.description || "";
-            descTextarea.placeholder = "Deskripsi capaian belajar siswa...";
-            descTextarea.addEventListener("input", (e) => {
-              item.description = e.target.value;
-              persistCurrentDraft();
-            });
-
-            itemCard.append(itemHeader, descTextarea);
-            learningBox.append(itemCard);
-          });
-        }
-        sectionsList.append(learningBox);
-      }
-
-      // 3. Pemahaman
-      if (isUnderstandingActive) {
-        const understandBox = createElement("div", "report-ai-draft-section space-y-2");
-        const understandLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "3. Pemahaman");
-        const understandTextarea = document.createElement("textarea");
-        understandTextarea.className = "input-text text-xs w-full";
-        understandTextarea.rows = 3;
-        understandTextarea.value = reportAiDraft.understanding || "";
-        understandTextarea.placeholder = "Deskripsi pemahaman konsep materi...";
-        understandTextarea.addEventListener("input", (e) => {
+        // 2. Apa yang Masih Berkembang?
+        const developingBox = createElement("div", "report-ai-draft-section space-y-2");
+        const developingLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "2. Apa yang Masih Berkembang?");
+        const developingTextarea = document.createElement("textarea");
+        developingTextarea.className = "input-text text-xs w-full";
+        developingTextarea.rows = 3;
+        developingTextarea.value = reportAiDraft.developing || reportAiDraft.understanding || "";
+        developingTextarea.placeholder = "Penjelasan aspek gerak/pemahaman yang masih berkembang dan prioritas belajar...";
+        developingTextarea.addEventListener("input", (e) => {
+          reportAiDraft.developing = e.target.value;
           reportAiDraft.understanding = e.target.value;
           persistCurrentDraft();
         });
-        understandBox.append(understandLabel, understandTextarea);
-        sectionsList.append(understandBox);
-      }
+        developingBox.append(developingLabel, developingTextarea);
+        sectionsList.append(developingBox);
 
-      // 4. Sikap
-      if (isAttitudeActive) {
-        const attitudeBox = createElement("div", "report-ai-draft-section space-y-2");
-        const attitudeLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "4. Sikap");
-        const attitudeTextarea = document.createElement("textarea");
-        attitudeTextarea.className = "input-text text-xs w-full";
-        attitudeTextarea.rows = 3;
-        attitudeTextarea.value = reportAiDraft.attitude || "";
-        attitudeTextarea.placeholder = "Deskripsi sikap dan partisipasi siswa...";
-        attitudeTextarea.addEventListener("input", (e) => {
-          reportAiDraft.attitude = e.target.value;
+        // 3. Apa yang Akan Dilakukan Guru Berikutnya?
+        const teacherActionBox = createElement("div", "report-ai-draft-section space-y-2");
+        const teacherActionLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "3. Apa yang Akan Dilakukan Guru Berikutnya? (Tindakan Guru)");
+        const teacherActionTextarea = document.createElement("textarea");
+        teacherActionTextarea.className = "input-text text-xs w-full";
+        teacherActionTextarea.rows = 3;
+        teacherActionTextarea.value = reportAiDraft.teacherAction || reportAiDraft.followUp || "";
+        teacherActionTextarea.placeholder = "Rencana bimbingan dan tindakan nyata guru di sekolah...";
+        teacherActionTextarea.addEventListener("input", (e) => {
+          reportAiDraft.teacherAction = e.target.value;
+          reportAiDraft.followUp = e.target.value;
           persistCurrentDraft();
         });
-        attitudeBox.append(attitudeLabel, attitudeTextarea);
-        sectionsList.append(attitudeBox);
+        teacherActionBox.append(teacherActionLabel, teacherActionTextarea);
+        sectionsList.append(teacherActionBox);
+
+        // 4. Apa yang Bisa Dilakukan Orang Tua?
+        const parentSupportBox = createElement("div", "report-ai-draft-section space-y-2");
+        const parentSupportLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "4. Apa yang Bisa Dilakukan Orang Tua? (Dukungan Orang Tua)");
+        const parentSupportTextarea = document.createElement("textarea");
+        parentSupportTextarea.className = "input-text text-xs w-full";
+        parentSupportTextarea.rows = 3;
+        parentSupportTextarea.value = reportAiDraft.parentSupport || reportAiDraft.homeActivity || "";
+        parentSupportTextarea.placeholder = "Dukungan dan aktivitas menyenangkan bersama di rumah...";
+        parentSupportTextarea.addEventListener("input", (e) => {
+          reportAiDraft.parentSupport = e.target.value;
+          reportAiDraft.homeActivity = e.target.value;
+          persistCurrentDraft();
+        });
+        parentSupportBox.append(parentSupportLabel, parentSupportTextarea);
+        sectionsList.append(parentSupportBox);
       }
 
-      // 5. Pertumbuhan
+      // 5. Pertumbuhan Fisik
       if (isGrowthActive) {
         const growthBox = createElement("div", "report-ai-draft-section space-y-2");
-        const growthLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "5. Pertumbuhan");
+        const growthLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "5. Pertumbuhan Fisik");
         const growthTextarea = document.createElement("textarea");
         growthTextarea.className = "input-text text-xs w-full";
         growthTextarea.rows = 3;
         growthTextarea.value = reportAiDraft.growth || "";
-        growthTextarea.placeholder = "Deskripsi pertumbuhan fisik siswa...";
+        growthTextarea.placeholder = "Deskripsi pertumbuhan fisik siswa dan rujukan WHO...";
         growthTextarea.addEventListener("input", (e) => {
           reportAiDraft.growth = e.target.value;
           persistCurrentDraft();
         });
-        growthBox.append(growthLabel, growthTextarea);
-        sectionsList.append(growthBox);
-      }
 
-      // 6. Aktivitas di Rumah
-      const homeBox = createElement("div", "report-ai-draft-section space-y-2");
-      const homeLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "6. Aktivitas di Rumah");
-      const homeTextarea = document.createElement("textarea");
-      homeTextarea.className = "input-text text-xs w-full";
-      homeTextarea.rows = 3;
-      homeTextarea.value = reportAiDraft.homeActivity || "";
-      homeTextarea.placeholder = "Rekomendasi aktivitas gerak di rumah...";
-      homeTextarea.addEventListener("input", (e) => {
-        reportAiDraft.homeActivity = e.target.value;
-        persistCurrentDraft();
-      });
-      homeBox.append(homeLabel, homeTextarea);
-      sectionsList.append(homeBox);
-
-      // 7. Saran Makanan
-      if (isGrowthActive) {
-        const nutritionBox = createElement("div", "report-ai-draft-section space-y-2");
-        const nutritionLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "7. Saran Makanan");
+        const nutritionLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200 mt-2", "Saran Pola Makan & Kebiasaan Sehat");
         const nutritionTextarea = document.createElement("textarea");
         nutritionTextarea.className = "input-text text-xs w-full";
-        nutritionTextarea.rows = 3;
+        nutritionTextarea.rows = 2;
         nutritionTextarea.value = reportAiDraft.nutritionAdvice || "";
-        nutritionTextarea.placeholder = "Saran makanan sehat dan kebiasaan gizi...";
+        nutritionTextarea.placeholder = "Saran makanan sehat dan kebiasaan gizi seimbang...";
         nutritionTextarea.addEventListener("input", (e) => {
           reportAiDraft.nutritionAdvice = e.target.value;
           persistCurrentDraft();
         });
-        nutritionBox.append(nutritionLabel, nutritionTextarea);
-        sectionsList.append(nutritionBox);
+
+        growthBox.append(growthLabel, growthTextarea, nutritionLabel, nutritionTextarea);
+        sectionsList.append(growthBox);
       }
 
-      // 8. Tindak Lanjut
-      if (isGrowthActive) {
-        const followUpBox = createElement("div", "report-ai-draft-section space-y-2");
-        const followUpLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "8. Tindak Lanjut");
-        const followUpTextarea = document.createElement("textarea");
-        followUpTextarea.className = "input-text text-xs w-full";
-        followUpTextarea.rows = 3;
-        followUpTextarea.value = reportAiDraft.followUp || "";
-        followUpTextarea.placeholder = "Rencana tindak lanjut bimbingan guru...";
-        followUpTextarea.addEventListener("input", (e) => {
-          reportAiDraft.followUp = e.target.value;
-          persistCurrentDraft();
-        });
-        followUpBox.append(followUpLabel, followUpTextarea);
-        sectionsList.append(followUpBox);
-      }
+      // 6. Catatan Guru (Opsional)
+      const teacherNoteBox = createElement("div", "report-ai-draft-section space-y-2");
+      const teacherNoteLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200", "6. Catatan Guru (Opsional)");
+      const teacherNoteTextarea = document.createElement("textarea");
+      teacherNoteTextarea.className = "input-text text-xs w-full";
+      teacherNoteTextarea.rows = 3;
+      teacherNoteTextarea.value = reportAiDraft.teacherNote || reportAiDraft.attitude || "";
+      teacherNoteTextarea.placeholder = "Catatan profesional dari guru PJOK untuk orang tua (dapat dikosongkan jika tidak diperlukan)...";
+      teacherNoteTextarea.addEventListener("input", (e) => {
+        reportAiDraft.teacherNote = e.target.value;
+        reportAiDraft.attitude = e.target.value;
+        persistCurrentDraft();
+      });
+      teacherNoteBox.append(teacherNoteLabel, teacherNoteTextarea);
+      sectionsList.append(teacherNoteBox);
 
       // Final Action Bar for 1-Page A4 Preview
       const finalActionPanel = createElement("div", "mt-6 pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl");
@@ -5373,7 +5311,7 @@ export function buildSelectedReportContext({
           let rubricLevel = null;
           let rubricLabel = "";
           let rubricDescription = "";
-          let teacherNote = "";
+          let teacherNote = itemResult?.note || "";
 
           if (hasRating) {
             rubricLevel = Number(itemResult.rubricLevel);
@@ -5382,7 +5320,6 @@ export function buildSelectedReportContext({
             );
             rubricLabel = matchedLevel?.label || `Level ${rubricLevel}`;
             rubricDescription = matchedLevel?.desc || "";
-            teacherNote = itemResult.note || "";
           }
 
           const itemRubricLevels = Array.isArray(item.rubricLevels)

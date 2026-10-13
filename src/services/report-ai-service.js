@@ -15,110 +15,74 @@ export async function generateStudentReportWithAI({ apiKey, reportContext, onDia
   }
 
   const promptText = `Anda adalah sintesis pakar asesmen PJOK (Pendidikan Jasmani, Olahraga, dan Kesehatan) Sekolah Dasar (SD).
-Tugas Anda: Menganalisis bukti asesmen (evidence-based assessment synthesizer) dan menyusun narasi laporan perkembangan siswa yang objektif, ramah, konstruktif, serta bermakna bagi orang tua.
+Tugas Anda: Menganalisis bukti asesmen (evidence-based assessment synthesizer) dan menyusun narasi laporan perkembangan siswa yang ramah, objektif, bermakna, dan mudah dipahami orang tua dengan pola komunikasi:
+KEKUATAN → YANG MASIH BERKEMBANG → TINDAKAN
 
 Data ReportContext siswa:
 ${JSON.stringify(reportContext, null, 2)}
 
-PRINSIP SINTESIS & ANALISIS BUKTI ASESMEN (EVIDENCE-BASED SYNTHESIS RULES):
-1. BACA & ANALISIS DETAIL PER BUTIR (ITEM-BY-ITEM EVIDENCE):
-   - Periksa setiap asesmen dalam "assessments":
-     * assessmentType: "practice" (praktik), "oral" (lisan/diskusi), "written" (tertulis), "observation" (observasi/sikap).
-     * materials & title: topik materi/kompetensi.
-     * items: perhatikan "prompt" (pertanyaan/instruksi), "rubricLevels" (seluruh level rubrik sesuai rubricScale pada item), "rubricLevel" + "rubricLabel" + "rubricDescription" (capaian siswa), serta "teacherNote".
-     * teacherNote keseluruhan asesmen & numericScore.
-
-2. LAKUKAN SINTESIS LINTAS ASESMEN (CROSS-ASSESSMENT SYNTHESIS):
-   - Bandingkan hasil antar-asesmen yang materinya/kompetensinya berkaitan.
-   - Bandingkan capaian lintas modalitas/jenis asesmen (misal: praktik vs lisan, tertulis vs observasi).
-   - Identifikasi pola bermakna:
+PRINSIP SINTESIS & ANALISIS BUKTI ASESMEN:
+1. POLA KEMAMPUAN LINTAS ASESMEN (CROSS-ASSESSMENT SYNTHESIS):
+   - Periksa setiap asesmen, butir soal (items), rubrik yang dicapai (rubricLevel, rubricLabel, rubricDescription), dan catatan guru autentik (teacherNote pada butir maupun sesi asesmen).
+   - Bandingkan capaian lintas modalitas/jenis asesmen (praktik vs lisan, tertulis vs observasi).
+   - Kenali pola bermakna:
      * Praktik gerakan kuat tetapi penjelasan lisan/konsep masih berkembang (atau sebaliknya).
      * Mampu menjelaskan teori/konsep tetapi praktik belum konsisten.
-     * Pemahaman dan praktik sama-sama kuat dan konsisten.
-     * Perbedaan capaian antar-butir pada kompetensi yang sama.
-   - Bedakan dengan jelas tingkat kemampuan: melakukan (fisik/motorik), mengenali/menyebutkan (lisan), menjelaskan (konsep), dan menerapkan. JANGAN menyamakan semua kemampuan sebagai "memahami".
+     * Pemahaman dan praktik sama-sama konsisten dan matang.
+     * Perbedaan capaian antar-butir pada materi yang berkaitan.
+   - Bedakan tingkat kemampuan: melakukan (fisik/motorik), mengenali/menyebutkan (lisan), menjelaskan (konsep), dan menerapkan. JANGAN menyamakan semua kemampuan sebagai "memahami".
 
-3. ATURAN PERTUMBUHAN & ACUAN WHO 2007 (DETERMINISTIC WHO GROWTH INTERPRETATION RULES):
-   - Gunakan "whoReference" (atau "growthAnalysis.whoReference") pada ReportContext sebagai otoritas rujukan pertumbuhan standar WHO 2007 yang telah dihitung secara deterministik.
-   - Gunakan "growthSummary" (atau "growthAnalysis.growthSummary") sebagai ringkasan fakta pengukuran fisik terbaru (tinggi, berat, tanggal ukur).
-   - Otoritas & Larangan Keras:
-     * DILARANG menghitung ulang z-score atau membuat asumsi standar sendiri. Gunakan hasil snapshot yang sudah ada di "whoReference".
-     * DILARANG menyebut angka teknis z-score kepada orang tua. Terjemahkan kode interpretasi ke dalam bahasa yang ramah, santun, dan mudah dipahami.
-     * DILARANG memberikan diagnosis medis/klinis seperti "stunting", "pendek kronis", "gizi buruk", "obesitas", "wasting", atau "malnutrisi".
-     * DILARANG melabeli anak atau menggunakan bahasa yang menakut-nakuti.
-   - Panduan Penerjemahan Kode Acuan WHO 2007:
-     * Height-for-age (Tinggi menurut usia):
-       - "REFERENCE_RANGE": tinggi badan berada dalam rentang rujukan WHO untuk usia dan jenis kelamin anak.
-       - "LOW_FOR_AGE": tinggi badan berada di bawah rentang rujukan WHO dan perlu dipantau secara berkala dari waktu ke waktu.
-       - "VERY_LOW_FOR_AGE": tinggi badan berada cukup jauh di bawah rentang rujukan WHO dan sebaiknya dipantau lebih lanjut.
-     * BMI-for-age (Perbandingan berat dan tinggi menurut usia):
-       - "REFERENCE_RANGE": perbandingan berat dan tinggi badan berada dalam rentang rujukan WHO.
-       - "LOW_BMI_FOR_AGE": perbandingan berat dan tinggi badan berada di bawah rentang rujukan WHO.
-       - "VERY_LOW_BMI_FOR_AGE": perbandingan berat dan tinggi badan berada cukup jauh di bawah rentang rujukan WHO.
-       - "HIGH_BMI_FOR_AGE": perbandingan berat dan tinggi badan berada di atas rentang rujukan WHO.
-       - "VERY_HIGH_BMI_FOR_AGE": perbandingan berat dan tinggi badan berada cukup jauh di atas rentang rujukan WHO.
-     * Weight-for-age (Berat menurut usia, jika tersedia):
-       - "REFERENCE_RANGE": berat badan berada dalam rentang rujukan WHO untuk usia dan jenis kelaminnya.
-       - "LOW_FOR_AGE" / "VERY_LOW_FOR_AGE": berat badan berada di bawah / cukup jauh di bawah rentang rujukan WHO. (Jangan gunakan weight-for-age untuk menyimpulkan kelebihan berat badan).
-   - Jika "whoReference.available === false" atau ada indikator yang tidak tersedia:
-     * JANGAN mengarang status WHO. Jelaskan hanya fakta pengukuran yang ada (tinggi, berat, BMI jika valid, tanggal ukur, dan tren).
-   - Jika tanggal pengukuran tinggi badan dan berat badan berbeda (latestHeight.date !== latestWeight.date), sebutkan tanggal masing-masing secara terpisah.
-   - Posisikan diri Anda sebagai GURU PJOK yang berbicara kepada ORANG TUA: hangat, suportif, faktual, dan tidak menghakimi.
+2. STRUKTUR UTAMA KOMUNIKASI KEPADA ORANG TUA:
+   - "strengths" (Anak saya sudah bisa apa?):
+     * Menjelaskan kekuatan nyata siswa berdasarkan bukti butir dan asesmen dengan capaian optimal.
+     * Bahasa hangat, positif, dan menghargai usaha anak (sekitar 50–70 kata).
+   - "developing" (Apa yang masih berkembang?):
+     * Menjelaskan aspek gerak, konsep, atau partisipasi yang masih membutuhkan latihan dan waktu untuk berkembang.
+     * Tentukan prioritas pembelajaran berikutnya secara jelas tanpa melabeli negatif atau mengecilkan hati anak (sekitar 40–60 kata).
+   - "teacherAction" (Apa yang akan dilakukan guru berikutnya?):
+     * Rencana tindakan nyata dan bimbingan guru di sekolah untuk mendukung prioritas pembelajaran anak (sekitar 35–50 kata).
+   - "parentSupport" (Apa yang bisa dilakukan orang tua?):
+     * Rekomendasi dukungan dan aktivitas bermain gerak bersama di rumah yang menargetkan gap/prioritas anak, menyenangkan, dan mudah dilakukan bersama keluarga (sekitar 40–55 kata).
 
-ATURAN BUKTI UMUM:
-- Seluruh narasi dan interpretasi harus berdasarkan bukti autentik dalam ReportContext.
-- Dilarang mengarang fakta yang tidak tersedia.
-- Dilarang menyimpulkan diagnosis medis/psikologis.
-- Dilarang memberi label kepribadian seperti "anak kinestetik".
-- Dilarang menyimpulkan masalah bahasa, motivasi internal, sifat, atau penyebab perilaku tanpa bukti.
-- Gunakan bahasa objektif, santun, suportif.
+3. ATURAN PERTUMBUHAN & ACUAN WHO 2007 (DETERMINISTIC WHO GROWTH):
+   - Gunakan "whoReference" (atau "growthAnalysis.whoReference") pada ReportContext sebagai otoritas rujukan standar WHO 2007 yang telah dihitung secara deterministik.
+   - Gunakan "growthSummary" sebagai ringkasan fakta pengukuran fisik terbaru (tinggi, berat, tanggal ukur).
+   - DILARANG menghitung ulang z-score atau membuat asumsi standar sendiri.
+   - DILARANG menyebut angka z-score teknis kepada orang tua.
+   - DILARANG mendiagnosis medis/klinis seperti "stunting", "gizi buruk", "obesitas", "wasting", atau "malnutrisi".
+   - Panduan penerjemahan kode WHO:
+     * Height-for-age: "REFERENCE_RANGE" (dalam rentang rujukan), "LOW_FOR_AGE" (di bawah rentang rujukan), "VERY_LOW_FOR_AGE" (jauh di bawah rentang rujukan).
+     * BMI-for-age: "REFERENCE_RANGE" (dalam rentang rujukan), "LOW_BMI_FOR_AGE" / "VERY_LOW_BMI_FOR_AGE" (di bawah / jauh di bawah rentang rujukan), "HIGH_BMI_FOR_AGE" / "VERY_HIGH_BMI_FOR_AGE" (di atas / jauh di atas rentang rujukan).
+     * Weight-for-age: "REFERENCE_RANGE" (dalam rentang rujukan), "LOW_FOR_AGE" / "VERY_LOW_FOR_AGE" (di bawah / jauh di bawah rentang rujukan).
+   - Jika data pengukuran tinggi badan dan berat badan berbeda tanggal (latestHeight.date !== latestWeight.date), sebutkan tanggal masing-masing.
+   - "growth": Menjelaskan fakta pengukuran fisik terbaru dan acuan WHO 2007 secara objektif dan ramah (sekitar 40–60 kata).
+   - "nutritionAdvice": Rekomendasi kebiasaan makan sehat dan pola gizi seimbang yang aman secara umum (sekitar 30–45 kata). Dilarang diet ketat/target angka berat badan.
 
-4. SELEKSI SECTION (Sesuai selectedSections di ReportContext):
-   - Jika selectedSections.learning === false: WAJIB "learning": []
-   - Jika selectedSections.understanding === false: WAJIB "understanding": ""
-   - Jika selectedSections.attitude === false: WAJIB "attitude": ""
-   - Jika selectedSections.growth === false: WAJIB "growth": "", "nutritionAdvice": "", "followUp": ""
+4. CATATAN GURU PROFESIONAL (BERBASIS BUKTI AUTENTIK YANG SUDAH ADA):
+   - Periksa apakah ada catatan guru pada:
+     * ReportContext.assessments[].items[].teacherNote
+     * ReportContext.assessments[].teacherNote
+     * ReportContext.observations[].text
+   - Jika ADA bukti catatan guru autentik tersebut:
+     * Sintesiskan menjadi "teacherNote" (Catatan Guru profesional) yang personal, hangat, dan konstruktif dari guru PJOK untuk siswa dan orang tua (sekitar 30–45 kata).
+   - Jika TIDAK ADA catatan guru autentik sama sekali pada data yang dipilih:
+     * Isi "teacherNote" dengan string kosong ("").
 
-5. ATURAN SPESIFIK TIAP FIELD JSON:
-   - "summary" (INTERPRETASI TERPADU):
-     * Merangkum gambaran perkembangan umum dan pola utama hasil sintesis lintas asesmen (sekitar 50–70 kata).
-     * BUKAN sekadar daftar nilai/angka.
-     * Menjawab: apa yang sudah kuat, apa yang masih berkembang, perbedaan antar-jenis asesmen (misal: praktik vs lisan), dan artinya secara praktis bagi orang tua.
-     * Jika hanya ada 1 asesmen, interpretasikan asesmen tersebut secara bermakna tanpa perbandingan palsu.
-   - "learning":
-     * Array objek { "assessmentSessionId", "description" }.
-     * Tepat 1 item per asesmen di context.
-     * "description": rangkum capaian berdasarkan butir soal dan rubrik yang dicapai (sekitar 30–50 kata). DILARANG hanya mengulang nilai angka.
-   - "understanding":
-     * Menjelaskan pola pemahaman konsep berdasarkan bukti butir soal yang menilai mengenali/menyebutkan/menjelaskan. DILARANG menganggap semua praktik fisik sebagai bukti kemampuan menjelaskan konsep (sekitar 35–50 kata).
-   - "attitude":
-     * Narasi sikap, disiplin, kerja sama, dan sportivitas berdasarkan bukti observasi (sekitar 30–45 kata).
-   - "growth":
-     * Menjelaskan fakta pengukuran fisik terbaru (tinggi, berat, tanggal ukur) serta interpretasi acuan pertumbuhan WHO 2007 (jika tersedia) dan perubahan/tren dibanding sebelumnya secara objektif dan ramah (sekitar 50–70 kata).
-     * Contoh: "Berdasarkan usia dan jenis kelamin Ananda saat pengukuran, tinggi badan dan perbandingan berat terhadap tinggi badan berada dalam rentang rujukan pertumbuhan WHO. Pengukuran berkala tetap penting untuk melihat pola pertumbuhan dari waktu ke waktu." (DILARANG menyebut diagnosis medis).
-   - "nutritionAdvice" (Saran Gizi):
-     * Berikan rekomendasi kebiasaan pola makan sehat dan gizi seimbang yang aman secara umum (makanan beraneka ragam dan bergizi seimbang, protein, sayur dan buah, cukup air putih, istirahat cukup, dan aktivitas fisik aktif). DILARANG menetapkan target berat badan spesifik, diet ketat, kalori spesifik, suplemen, atau obat.
-   - "followUp":
-     * Rencana bimbingan guru dan pemantauan berkala dari sudut pandang pendidik (sekitar 35–50 kata). Sampaikan pentingnya pemantauan berkala secara rutin: "Pengukuran berkala berikutnya akan membantu melihat pola pertumbuhan Ananda dari waktu ke waktu."
-     * Jika indikator berada cukup jauh di luar rentang rujukan atau ada data berkelanjutan yang memerlukan perhatian lebih, gunakan gaya ramah: "Jika Ayah/Bunda ingin memahami pertumbuhan Ananda lebih lanjut, akan lebih baik berkonsultasi dengan tenaga kesehatan atau puskesmas agar pengukuran dapat dinilai secara lebih lengkap." (DILARANG menggunakan bahasa menakutkan seperti "harus segera ke dokter").
-   - "homeActivity":
-     * Rekomendasi aktivitas gerak bersama di rumah yang menargetkan GAP/pola yang ditemukan. Contoh: Jika praktik kuat tapi lisan berkembang, sarankan anak melakukan gerakan sambil menyebutkan nama gerakannya. Jika lisan kuat tapi praktik perlu dilatih, sarankan permainan gerak fisik sederhana (sekitar 40–55 kata).
+5. SELEKSI SECTION:
+   - Jika selectedSections.learning === false:
+     * "strengths": "", "developing": "", "teacherAction": "", "parentSupport": ""
+   - Jika selectedSections.growth === false:
+     * "growth": "", "nutritionAdvice": ""
 
 STRUKTUR KELUARAN JSON (HARUS PERSIS FORMAT BERIKUT):
 {
-  "summary": "Interpretasi terpadu lintas asesmen (50-70 kata)",
-  "learning": [
-    {
-      "assessmentSessionId": "id-asesmen-dari-context",
-      "description": "Rangkuman capaian belajar berbasis rubrik item (30-50 kata)"
-    }
-  ],
-  "understanding": "Narasi pemahaman konsep berbasis bukti lisan/tertulis (35-50 kata, atau \"\" jika selectedSections.understanding === false)",
-  "attitude": "Narasi sikap & sportivitas berbasis observasi (30-45 kata, atau \"\" jika selectedSections.attitude === false)",
-  "growth": "Interpretasi objektif pertumbuhan fisik (50-70 kata, atau \"\" jika selectedSections.growth === false)",
-  "homeActivity": "Rekomendasi aktivitas rumah berbasis gap yang ditemukan (40-55 kata)",
-  "nutritionAdvice": "Saran gizi sehat (40-60 kata, atau \"\" jika selectedSections.growth === false)",
-  "followUp": "Rencana tindak lanjut bimbingan (35-50 kata, atau \"\" jika selectedSections.growth === false)"
+  "strengths": "Penjelasan apa yang sudah bisa dilakukan anak (50-70 kata)",
+  "developing": "Penjelasan apa yang masih berkembang dan prioritas belajar selanjutnya (40-60 kata)",
+  "teacherAction": "Tindakan bimbingan nyata yang akan dilakukan guru berikutnya di sekolah (35-50 kata)",
+  "parentSupport": "Dukungan dan aktivitas menyenangkan yang bisa dilakukan orang tua di rumah (40-55 kata)",
+  "growth": "Interpretasi objektif pertumbuhan fisik & rujukan WHO 2007 (40-60 kata, atau \\\"\\\" jika selectedSections.growth === false)",
+  "nutritionAdvice": "Saran pola makan dan kebiasaan sehat (30-45 kata, atau \\\"\\\" jika selectedSections.growth === false)",
+  "teacherNote": "Sintesis catatan guru profesional berbasis bukti autentik (30-45 kata, atau \\\"\\\" jika tidak ada catatan autentik)"
 }
 
 KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
@@ -231,95 +195,77 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
     throw createInvalidAiResponseError("Format respon AI tidak valid: bukan plain object JSON");
   }
 
-  // 1. Summary validation
-  if (typeof parsed.summary !== "string" || !parsed.summary.trim()) {
-    throw createInvalidAiResponseError("AI response missing summary");
-  }
-
-  // 2. Home Activity validation
-  if (typeof parsed.homeActivity !== "string" || !parsed.homeActivity.trim()) {
-    throw createInvalidAiResponseError("AI response missing home activity");
-  }
-
   const selectedSections = reportContext.selectedSections || {};
-  const isLearningActive = Boolean(selectedSections.learning);
-  const isUnderstandingActive = Boolean(selectedSections.understanding);
-  const isAttitudeActive = Boolean(selectedSections.attitude);
-  const isGrowthActive = Boolean(selectedSections.growth);
+  const isLearningActive = selectedSections.learning !== false;
+  const isGrowthActive = selectedSections.growth !== false;
 
-  let sanitizedLearning = [];
+  const strengthsText = typeof parsed.strengths === "string"
+    ? parsed.strengths.trim()
+    : (typeof parsed.summary === "string" ? parsed.summary.trim() : "");
 
-  // 3. Learning validation
+  const developingText = typeof parsed.developing === "string"
+    ? parsed.developing.trim()
+    : (typeof parsed.understanding === "string" ? parsed.understanding.trim() : "");
+
+  const teacherActionText = typeof parsed.teacherAction === "string"
+    ? parsed.teacherAction.trim()
+    : (typeof parsed.followUp === "string" ? parsed.followUp.trim() : "");
+
+  const parentSupportText = typeof parsed.parentSupport === "string"
+    ? parsed.parentSupport.trim()
+    : (typeof parsed.homeActivity === "string" ? parsed.homeActivity.trim() : "");
+
+  const growthText = isGrowthActive
+    ? (typeof parsed.growth === "string" ? parsed.growth.trim() : "")
+    : "";
+
+  const nutritionAdviceText = isGrowthActive
+    ? (typeof parsed.nutritionAdvice === "string" ? parsed.nutritionAdvice.trim() : "")
+    : "";
+
+  const teacherNoteText = typeof parsed.teacherNote === "string"
+    ? parsed.teacherNote.trim()
+    : (typeof parsed.attitude === "string" ? parsed.attitude.trim() : "");
+
   if (isLearningActive) {
-    if (!Array.isArray(parsed.learning)) {
-      throw createInvalidAiResponseError("AI response missing learning array");
+    if (!strengthsText) {
+      throw createInvalidAiResponseError("AI response missing strengths (Anak saya sudah bisa apa)");
     }
-
-    const contextAssessments = Array.isArray(reportContext.assessments) ? reportContext.assessments : [];
-    if (contextAssessments.length > 0 && parsed.learning.length === 0) {
-      throw createInvalidAiResponseError("AI response learning array is empty");
+    if (!developingText) {
+      throw createInvalidAiResponseError("AI response missing developing section (Apa yang masih berkembang)");
     }
-
-    for (const assess of contextAssessments) {
-      const sessId = assess.assessmentSessionId;
-      const matched = parsed.learning.find(
-        (item) => item && typeof item === "object" && String(item.assessmentSessionId || "").trim() === String(sessId || "").trim()
-      );
-      if (!matched) {
-        throw createInvalidAiResponseError(`AI response missing learning item for assessment ${sessId}`);
-      }
-      if (typeof matched.description !== "string" || !matched.description.trim()) {
-        throw createInvalidAiResponseError(`AI response missing description for assessment ${sessId}`);
-      }
+    if (!teacherActionText) {
+      throw createInvalidAiResponseError("AI response missing teacherAction (Apa yang akan dilakukan guru berikutnya)");
     }
-
-    sanitizedLearning = parsed.learning.map((item) => ({
-      assessmentSessionId:
-        typeof item?.assessmentSessionId === "string"
-          ? item.assessmentSessionId.trim()
-          : (item?.assessmentSessionId !== undefined && item?.assessmentSessionId !== null ? String(item.assessmentSessionId).trim() : ""),
-      description:
-        typeof item?.description === "string"
-          ? item.description.trim()
-          : ""
-    }));
-  }
-
-  // 4. Understanding validation
-  if (isUnderstandingActive) {
-    if (typeof parsed.understanding !== "string" || !parsed.understanding.trim()) {
-      throw createInvalidAiResponseError("AI response missing understanding section");
+    if (!parentSupportText) {
+      throw createInvalidAiResponseError("AI response missing parentSupport (Apa yang bisa dilakukan orang tua)");
     }
   }
 
-  // 5. Attitude validation
-  if (isAttitudeActive) {
-    if (typeof parsed.attitude !== "string" || !parsed.attitude.trim()) {
-      throw createInvalidAiResponseError("AI response missing attitude section");
-    }
-  }
-
-  // 6. Growth validation
   if (isGrowthActive) {
-    if (typeof parsed.growth !== "string" || !parsed.growth.trim()) {
+    if (!growthText) {
       throw createInvalidAiResponseError("AI response missing growth section");
     }
-    if (typeof parsed.nutritionAdvice !== "string" || !parsed.nutritionAdvice.trim()) {
+    if (!nutritionAdviceText) {
       throw createInvalidAiResponseError("AI response missing nutrition advice");
-    }
-    if (typeof parsed.followUp !== "string" || !parsed.followUp.trim()) {
-      throw createInvalidAiResponseError("AI response missing follow-up recommendations");
     }
   }
 
   return {
-    summary: parsed.summary.trim(),
-    learning: sanitizedLearning,
-    understanding: isUnderstandingActive ? parsed.understanding.trim() : "",
-    attitude: isAttitudeActive ? parsed.attitude.trim() : "",
-    growth: isGrowthActive ? parsed.growth.trim() : "",
-    homeActivity: parsed.homeActivity.trim(),
-    nutritionAdvice: isGrowthActive ? parsed.nutritionAdvice.trim() : "",
-    followUp: isGrowthActive ? parsed.followUp.trim() : ""
+    strengths: strengthsText,
+    developing: developingText,
+    teacherAction: teacherActionText,
+    parentSupport: parentSupportText,
+    growth: growthText,
+    nutritionAdvice: nutritionAdviceText,
+    teacherNote: teacherNoteText,
+
+    // Backward compatibility aliases
+    summary: strengthsText,
+    homeActivity: parentSupportText,
+    followUp: teacherActionText,
+    understanding: developingText,
+    attitude: teacherNoteText,
+    learning: []
   };
 }

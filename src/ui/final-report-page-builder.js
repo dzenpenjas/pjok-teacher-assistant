@@ -234,10 +234,19 @@ export function createFinalReportPage({
 
   const {
     learning: isLearningActive = true,
-    understanding: isUnderstandingActive = true,
-    attitude: isAttitudeActive = true,
     growth: isGrowthActive = true
   } = currentContext.selectedSections || {};
+
+  let resolvedStrengths = (currentDraft.strengths || currentDraft.summary || "").trim();
+  if (!resolvedStrengths && validLearningItems.length > 0) {
+    resolvedStrengths = validLearningItems.map((item) => `${item.title}: ${item.description}`).join(" ");
+  }
+  const developingText = (currentDraft.developing || currentDraft.understanding || "").trim();
+  const teacherActionText = (currentDraft.teacherAction || currentDraft.followUp || "").trim();
+  const parentSupportText = (currentDraft.parentSupport || currentDraft.homeActivity || "").trim();
+  const growthInterpretationText = (currentDraft.growth || "").trim();
+  const nutritionAdviceText = (currentDraft.nutritionAdvice || "").trim();
+  const teacherNoteText = (currentDraft.teacherNote || currentDraft.teacherNotes || currentDraft.attitude || "").trim();
 
   // NILAI PJOK TENGAH SEMESTER HERO (JIKA ADA & LEARNING SELECTION ACTIVE)
   if (isLearningActive && finalReportData.overallScore !== null && finalReportData.overallScore !== undefined) {
@@ -271,135 +280,75 @@ export function createFinalReportPage({
     a4Paper.append(scoreHero);
   }
 
-  // GAMBARAN PERKEMBANGAN (SUMMARY)
-  if (finalReportData.summary && finalReportData.summary.trim()) {
-    const summarySection = document.createElement("section");
-    summarySection.className = "a4-section";
+  // 1. ANAK SAYA SUDAH BISA APA? (KEKUATAN)
+  if (isLearningActive && resolvedStrengths) {
+    const strengthsSection = document.createElement("section");
+    strengthsSection.className = "a4-section";
 
     const title = document.createElement("h2");
     title.className = "a4-section-title";
-    title.textContent = "Gambaran Perkembangan";
-
-    const p = document.createElement("p");
-    p.className = "a4-section-text text-xs leading-relaxed text-slate-800 dark:text-slate-200";
-    p.textContent = finalReportData.summary.trim();
-
-    summarySection.append(title, p);
-    a4Paper.append(summarySection);
-  }
-
-  // TABEL HASIL BELAJAR
-  if (isLearningActive && finalReportData.learning.length > 0) {
-    const learningSection = document.createElement("section");
-    learningSection.className = "a4-section";
-
-    const title = document.createElement("h2");
-    title.className = "a4-section-title";
-    title.textContent = `${finalReportData.studentName} sudah bisa apa`;
-    learningSection.append(title);
-
-    const table = document.createElement("table");
-    table.className = "a4-table";
-    const thead = document.createElement("thead");
-    thead.innerHTML = `
-      <tr>
-        <th style="width: 28%;">Yang Dipelajari</th>
-        <th style="width: 18%; text-align: center;">${isScoringConverted ? "Nilai Konversi" : "Nilai"}</th>
-        <th style="width: 54%;">Hasil Belajar</th>
-      </tr>
-    `;
-    const tbody = document.createElement("tbody");
-    finalReportData.learning.forEach((item) => {
-      const tr = document.createElement("tr");
-
-      const tdMat = document.createElement("td");
-      tdMat.className = "a4-td-mat";
-      tdMat.textContent = item.title || "Asesmen PJOK";
-
-      const tdScore = document.createElement("td");
-      tdScore.className = "a4-td-score";
-      const scoreBox = document.createElement("div");
-      scoreBox.className = "a4-cell-score-box";
-
-      if (isScoringConverted) {
-        if (item.canConvert && item.displayScore !== null && item.displayScore !== undefined) {
-          const scoreNum = document.createElement("span");
-          scoreNum.className = "a4-cell-score-num";
-          scoreNum.textContent = String(item.displayScore);
-          const scoreDenom = document.createElement("span");
-          scoreDenom.className = "a4-cell-score-denom";
-          scoreDenom.textContent = "/100";
-          scoreBox.append(scoreNum, scoreDenom);
-        } else {
-          const scoreText = document.createElement("span");
-          scoreText.className = "a4-cell-score-unconverted text-xs text-subtle italic";
-          scoreText.textContent = "Tidak dapat dikonversi";
-          scoreBox.append(scoreText);
-        }
-      } else {
-        const hasScore = item.displayScore !== null && item.displayScore !== undefined;
-        const scoreNum = document.createElement("span");
-        scoreNum.className = "a4-cell-score-num";
-        scoreNum.textContent = hasScore ? String(item.displayScore) : "-";
-        scoreBox.append(scoreNum);
-        if (hasScore) {
-          const scoreDenom = document.createElement("span");
-          scoreDenom.className = "a4-cell-score-denom";
-          scoreDenom.textContent = "/100";
-          scoreBox.append(scoreDenom);
-        }
-      }
-      tdScore.append(scoreBox);
-
-      const tdDesc = document.createElement("td");
-      tdDesc.className = "a4-td-desc";
-      tdDesc.textContent = item.description || "-";
-
-      tr.append(tdMat, tdScore, tdDesc);
-      tbody.append(tr);
-    });
-    table.append(thead, tbody);
-    learningSection.append(table);
-    a4Paper.append(learningSection);
-  }
-
-  // PEMAHAMAN DAN SIKAP
-  const showUnderstand = isUnderstandingActive && Boolean(finalReportData.understanding);
-  const showAttitude = isAttitudeActive && Boolean(finalReportData.attitude);
-
-  if (showUnderstand) {
-    const understandSection = document.createElement("section");
-    understandSection.className = "a4-section";
-
-    const title = document.createElement("h2");
-    title.className = "a4-section-title";
-    title.textContent = "Pemahaman";
+    title.textContent = "Anak saya sudah bisa apa?";
 
     const p = document.createElement("p");
     p.className = "a4-body-text";
-    p.textContent = finalReportData.understanding;
+    p.textContent = resolvedStrengths;
 
-    understandSection.append(title, p);
-    a4Paper.append(understandSection);
+    strengthsSection.append(title, p);
+    a4Paper.append(strengthsSection);
   }
 
-  if (showAttitude) {
-    const attitudeSection = document.createElement("section");
-    attitudeSection.className = "a4-section";
+  // 2. APA YANG MASIH BERKEMBANG?
+  if (isLearningActive && developingText) {
+    const developingSection = document.createElement("section");
+    developingSection.className = "a4-section";
 
     const title = document.createElement("h2");
     title.className = "a4-section-title";
-    title.textContent = "Sikap & Observasi";
+    title.textContent = "Apa yang masih berkembang?";
 
     const p = document.createElement("p");
     p.className = "a4-body-text";
-    p.textContent = finalReportData.attitude;
+    p.textContent = developingText;
 
-    attitudeSection.append(title, p);
-    a4Paper.append(attitudeSection);
+    developingSection.append(title, p);
+    a4Paper.append(developingSection);
   }
 
-  // PERTUMBUHAN & GROWTH INTERPRETATION
+  // 3. APA YANG AKAN DILAKUKAN GURU BERIKUTNYA? (TINDAKAN GURU)
+  if (isLearningActive && teacherActionText) {
+    const teacherActionSection = document.createElement("section");
+    teacherActionSection.className = "a4-section";
+
+    const title = document.createElement("h2");
+    title.className = "a4-section-title";
+    title.textContent = "Apa yang akan dilakukan guru berikutnya?";
+
+    const p = document.createElement("p");
+    p.className = "a4-body-text";
+    p.textContent = teacherActionText;
+
+    teacherActionSection.append(title, p);
+    a4Paper.append(teacherActionSection);
+  }
+
+  // 4. APA YANG BISA DILAKUKAN ORANG TUA? (DUKUNGAN ORANG TUA)
+  if (isLearningActive && parentSupportText) {
+    const parentSupportSection = document.createElement("section");
+    parentSupportSection.className = "a4-section";
+
+    const title = document.createElement("h2");
+    title.className = "a4-section-title";
+    title.textContent = "Apa yang bisa dilakukan orang tua?";
+
+    const p = document.createElement("p");
+    p.className = "a4-body-text";
+    p.textContent = parentSupportText;
+
+    parentSupportSection.append(title, p);
+    a4Paper.append(parentSupportSection);
+  }
+
+  // 5. BAGAIMANA PERTUMBUHAN FISIKNYA? (PERTUMBUHAN & WHO REFERENCE)
   if (isGrowthActive) {
     const growthSection = document.createElement("section");
     growthSection.className = "a4-section";
@@ -496,49 +445,40 @@ export function createFinalReportPage({
       }
     }
 
-    if (finalReportData.growth.interpretation) {
+    if (growthInterpretationText) {
       const p = document.createElement("p");
       p.className = "a4-body-text mb-1";
-      p.textContent = finalReportData.growth.interpretation;
+      p.textContent = growthInterpretationText;
       growthSection.append(p);
     }
 
-    if (finalReportData.growth.nutritionAdvice) {
+    if (nutritionAdviceText) {
       const p = document.createElement("p");
       p.className = "a4-body-text mb-1";
       const strong = document.createElement("strong");
       strong.textContent = "Saran Pola Makan & Kebiasaan Sehat: ";
-      p.append(strong, document.createTextNode(finalReportData.growth.nutritionAdvice));
-      growthSection.append(p);
-    }
-
-    if (finalReportData.growth.followUp) {
-      const p = document.createElement("p");
-      p.className = "a4-body-text";
-      const strong = document.createElement("strong");
-      strong.textContent = "Tindak Lanjut Pembelajaran: ";
-      p.append(strong, document.createTextNode(finalReportData.growth.followUp));
+      p.append(strong, document.createTextNode(nutritionAdviceText));
       growthSection.append(p);
     }
 
     a4Paper.append(growthSection);
   }
 
-  // AYO BERMAIN BERSAMA DI RUMAH (HOME ACTIVITY)
-  if (finalReportData.homeActivity) {
-    const homeSection = document.createElement("section");
-    homeSection.className = "a4-section";
+  // 6. CATATAN GURU (TAMBAHAN OPSIONAL)
+  if (teacherNoteText) {
+    const teacherNoteSection = document.createElement("section");
+    teacherNoteSection.className = "a4-section";
 
     const title = document.createElement("h2");
     title.className = "a4-section-title";
-    title.textContent = "Ayo bermain bersama di rumah";
+    title.textContent = "Catatan Guru";
 
     const p = document.createElement("p");
-    p.className = "a4-body-text";
-    p.textContent = finalReportData.homeActivity;
+    p.className = "a4-body-text italic";
+    p.textContent = teacherNoteText;
 
-    homeSection.append(title, p);
-    a4Paper.append(homeSection);
+    teacherNoteSection.append(title, p);
+    a4Paper.append(teacherNoteSection);
   }
 
   // FOOTER
