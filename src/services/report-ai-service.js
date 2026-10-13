@@ -32,19 +32,57 @@ PRINSIP SINTESIS & ANALISIS BUKTI ASESMEN:
      * Perbedaan capaian antar-butir pada materi yang berkaitan.
    - Bedakan tingkat kemampuan: melakukan (fisik/motorik), mengenali/menyebutkan (lisan), menjelaskan (konsep), dan menerapkan. JANGAN menyamakan semua kemampuan sebagai "memahami".
 
-2. STRUKTUR UTAMA KOMUNIKASI KEPADA ORANG TUA:
+2. REKONSILIASI CATATAN GURU VS ASESMEN (EVIDENCE CONFLICT RULE):
+   - Catatan guru autentik berasal dari:
+     * assessments[].items[].teacherNote
+     * assessments[].teacherNote
+     * observations[].text
+   - Jika teacher note membahas kompetensi yang juga dinilai oleh rubric/assessment:
+     * rubric + score = structured evidence utama (authority utama untuk kompetensi yang dinilai).
+     * teacherNote = contextual evidence.
+   - Aturan rekonsiliasi:
+     * Jika konsisten: sintesiskan bersama untuk memperkaya narasi.
+     * Jika berbeda/bertentangan:
+       - JANGAN diam-diam memilih teacher note sebagai fakta final.
+       - JANGAN menghapus structured assessment evidence.
+       - JANGAN menulis klaim tegas yang bertentangan dengan rubrik/skor.
+       - Gunakan bahasa hati-hati atau abaikan klaim catatan guru yang tidak cukup didukung bukti rubrik.
+       - Contoh: Jika rubrik Level 4 atau Level 5 (Baik/Sangat Baik), tetapi catatan guru menulis "belum mampu melakukan gerakan", DILARANG menulis bahwa siswa belum mampu. Gunakan structured assessment sebagai authority utama.
+
+3. ATURAN OBSERVASI PELENGKAP (OBSERVATION COMPLEMENT RULE):
+   - Jika catatan guru atau observasi memuat informasi yang TIDAK diukur oleh asesmen terstruktur (contoh: "membantu teman saat kegiatan kelompok", "menunggu giliran", "mau mencoba ulang"):
+     * Boleh digunakan sebagai evidence tambahan untuk memperkaya pemahaman konteks belajar anak.
+     * JANGAN memaksa semua catatan guru harus memiliki padanan skor/rubrik terstruktur.
+
+4. GUARDRAIL PSIKOLOGIS & LABEL PRIBADI (PSYCHOLOGICAL & TRAIT GUARDRAIL):
+   - DILARANG menyimpulkan:
+     * motivasi internal,
+     * kepribadian,
+     * diagnosis psikologis,
+     * penyebab perilaku internal,
+     * label personal atau tipe belajar.
+   - Contoh yang DILARANG:
+     * "malas" → "motivasi rendah"
+     * "kurang percaya diri" → "memiliki rasa percaya diri rendah"
+     * "bandel" → "sulit diatur"
+     * "anak kinestetik"
+   - Jika evidence berupa catatan observasi perilaku, tulis HANYA perilaku nyata yang terlihat secara faktual. JANGAN jadikan dugaan sebagai fakta psikologis. Contoh yang diizinkan jika relevan: "Pada beberapa kegiatan, Ananda masih memerlukan dorongan untuk terlibat secara konsisten."
+
+5. STRUKTUR UTAMA KOMUNIKASI KEPADA ORANG TUA (WORD BUDGET SINGKAT & REALISTIS UNTUK A4):
    - "strengths" (Anak saya sudah bisa apa?):
      * Menjelaskan kekuatan nyata siswa berdasarkan bukti butir dan asesmen dengan capaian optimal.
-     * Bahasa hangat, positif, dan menghargai usaha anak (sekitar 50–70 kata).
+     * Bahasa hangat, positif, dan menghargai usaha anak (25–45 kata).
    - "developing" (Apa yang masih berkembang?):
      * Menjelaskan aspek gerak, konsep, atau partisipasi yang masih membutuhkan latihan dan waktu untuk berkembang.
-     * Tentukan prioritas pembelajaran berikutnya secara jelas tanpa melabeli negatif atau mengecilkan hati anak (sekitar 40–60 kata).
+     * Tentukan prioritas pembelajaran berikutnya secara jelas tanpa melabeli negatif atau mengecilkan hati anak (20–35 kata).
    - "teacherAction" (Apa yang akan dilakukan guru berikutnya?):
-     * Rencana tindakan nyata dan bimbingan guru di sekolah untuk mendukung prioritas pembelajaran anak (sekitar 35–50 kata).
+     * Rencana tindakan nyata dan bimbingan guru di sekolah untuk mendukung prioritas pembelajaran anak (20–35 kata).
    - "parentSupport" (Apa yang bisa dilakukan orang tua?):
-     * Rekomendasi dukungan dan aktivitas bermain gerak bersama di rumah yang menargetkan gap/prioritas anak, menyenangkan, dan mudah dilakukan bersama keluarga (sekitar 40–55 kata).
+     * Rekomendasi dukungan sederhana yang dapat dilakukan orang tua di rumah sesuai prioritas perkembangan anak (20–35 kata).
+     * Boleh berupa: aktivitas gerak, percakapan santai, meminta anak menjelaskan gerakan, memberi kesempatan latihan mandiri, pengulangan sederhana, atau penguatan positif.
+     * Aktivitas bermain fisik hanya jika relevan, TIDAK dipaksakan harus selalu berbentuk permainan.
 
-3. ATURAN PERTUMBUHAN & ACUAN WHO 2007 (DETERMINISTIC WHO GROWTH):
+6. ATURAN PERTUMBUHAN & ACUAN WHO 2007 (DETERMINISTIC WHO GROWTH):
    - Gunakan "whoReference" (atau "growthAnalysis.whoReference") pada ReportContext sebagai otoritas rujukan standar WHO 2007 yang telah dihitung secara deterministik.
    - Gunakan "growthSummary" sebagai ringkasan fakta pengukuran fisik terbaru (tinggi, berat, tanggal ukur).
    - DILARANG menghitung ulang z-score atau membuat asumsi standar sendiri.
@@ -55,20 +93,19 @@ PRINSIP SINTESIS & ANALISIS BUKTI ASESMEN:
      * BMI-for-age: "REFERENCE_RANGE" (dalam rentang rujukan), "LOW_BMI_FOR_AGE" / "VERY_LOW_BMI_FOR_AGE" (di bawah / jauh di bawah rentang rujukan), "HIGH_BMI_FOR_AGE" / "VERY_HIGH_BMI_FOR_AGE" (di atas / jauh di atas rentang rujukan).
      * Weight-for-age: "REFERENCE_RANGE" (dalam rentang rujukan), "LOW_FOR_AGE" / "VERY_LOW_FOR_AGE" (di bawah / jauh di bawah rentang rujukan).
    - Jika data pengukuran tinggi badan dan berat badan berbeda tanggal (latestHeight.date !== latestWeight.date), sebutkan tanggal masing-masing.
-   - "growth": Menjelaskan fakta pengukuran fisik terbaru dan acuan WHO 2007 secara objektif dan ramah (sekitar 40–60 kata).
-   - "nutritionAdvice": Rekomendasi kebiasaan makan sehat dan pola gizi seimbang yang aman secara umum (sekitar 30–45 kata). Dilarang diet ketat/target angka berat badan.
+   - "growth": Menjelaskan fakta pengukuran fisik terbaru dan acuan WHO 2007 secara objektif dan ramah (35–55 kata).
+   - "nutritionAdvice" (Saran Pola Makan Sehat - OPTIONAL):
+     * HANYA diisi jika ada alasan bermakna dari evidence pertumbuhan untuk memberi saran khusus (20–35 kata).
+     * Jika tidak ada alasan bermakna dari evidence pertumbuhan untuk memberi saran khusus: WAJIB isi dengan string kosong ("").
+     * JANGAN memunculkan saran pola makan generik untuk semua siswa. Dilarang diet ketat/target angka berat badan.
 
-4. CATATAN GURU PROFESIONAL (BERBASIS BUKTI AUTENTIK YANG SUDAH ADA):
-   - Periksa apakah ada catatan guru pada:
-     * ReportContext.assessments[].items[].teacherNote
-     * ReportContext.assessments[].teacherNote
-     * ReportContext.observations[].text
-   - Jika ADA bukti catatan guru autentik tersebut:
-     * Sintesiskan menjadi "teacherNote" (Catatan Guru profesional) yang personal, hangat, dan konstruktif dari guru PJOK untuk siswa dan orang tua (sekitar 30–45 kata).
-   - Jika TIDAK ADA catatan guru autentik sama sekali pada data yang dipilih:
-     * Isi "teacherNote" dengan string kosong ("").
+7. CATATAN GURU PROFESIONAL (DEDUPLIKASI & KOMPLEMENTER):
+   - "teacherNote" hanya berisi informasi tambahan yang berguna, personal, dan BELUM cukup terwakili oleh 5 bagian utama (strengths, developing, teacherAction, parentSupport, growth).
+   - Jika catatan guru yang ada hanya mengulang hal yang sudah jelas disampaikan di bagian utama: WAJIB isi dengan string kosong ("").
+   - Jika TIDAK ADA catatan guru autentik pada data yang dipilih: WAJIB isi dengan string kosong ("").
+   - JANGAN membuat catatan guru generik tanpa bukti autentik tambahan (0 atau 20–35 kata).
 
-5. SELEKSI SECTION:
+8. SELEKSI SECTION:
    - Jika selectedSections.learning === false:
      * "strengths": "", "developing": "", "teacherAction": "", "parentSupport": ""
    - Jika selectedSections.growth === false:
@@ -76,13 +113,13 @@ PRINSIP SINTESIS & ANALISIS BUKTI ASESMEN:
 
 STRUKTUR KELUARAN JSON (HARUS PERSIS FORMAT BERIKUT):
 {
-  "strengths": "Penjelasan apa yang sudah bisa dilakukan anak (50-70 kata)",
-  "developing": "Penjelasan apa yang masih berkembang dan prioritas belajar selanjutnya (40-60 kata)",
-  "teacherAction": "Tindakan bimbingan nyata yang akan dilakukan guru berikutnya di sekolah (35-50 kata)",
-  "parentSupport": "Dukungan dan aktivitas menyenangkan yang bisa dilakukan orang tua di rumah (40-55 kata)",
-  "growth": "Interpretasi objektif pertumbuhan fisik & rujukan WHO 2007 (40-60 kata, atau \\\"\\\" jika selectedSections.growth === false)",
-  "nutritionAdvice": "Saran pola makan dan kebiasaan sehat (30-45 kata, atau \\\"\\\" jika selectedSections.growth === false)",
-  "teacherNote": "Sintesis catatan guru profesional berbasis bukti autentik (30-45 kata, atau \\\"\\\" jika tidak ada catatan autentik)"
+  "strengths": "Penjelasan apa yang sudah bisa dilakukan anak (25-45 kata)",
+  "developing": "Penjelasan apa yang masih berkembang dan prioritas belajar selanjutnya (20-35 kata)",
+  "teacherAction": "Tindakan bimbingan nyata yang akan dilakukan guru berikutnya di sekolah (20-35 kata)",
+  "parentSupport": "Dukungan orang tua di rumah sesuai prioritas anak (20-35 kata)",
+  "growth": "Interpretasi objektif pertumbuhan fisik & rujukan WHO 2007 (35-55 kata, atau \\\"\\\" jika selectedSections.growth === false)",
+  "nutritionAdvice": "Saran gizi khusus jika ada alasan bermakna dari data pertumbuhan (20-35 kata), atau \\\"\\\" jika tidak ada kebutuhan khusus atau selectedSections.growth === false",
+  "teacherNote": "Informasi pelengkap autentik dari catatan guru yang belum terwakili (20-35 kata), atau \\\"\\\" jika sudah terwakili/tidak ada"
 }
 
 KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
@@ -245,9 +282,6 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
   if (isGrowthActive) {
     if (!growthText) {
       throw createInvalidAiResponseError("AI response missing growth section");
-    }
-    if (!nutritionAdviceText) {
-      throw createInvalidAiResponseError("AI response missing nutrition advice");
     }
   }
 

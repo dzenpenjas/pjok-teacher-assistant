@@ -70,21 +70,58 @@ function validateScoringConfig(config) {
 function isDraftUnsaved(currentDraft, savedDraft) {
   if (!currentDraft) return false;
   if (!savedDraft) return true;
-  const fields = ['summary', 'understanding', 'attitude', 'growth', 'homeActivity', 'nutritionAdvice', 'followUp'];
-  for (const f of fields) {
-    if ((currentDraft[f] || "").trim() !== (savedDraft[f] || "").trim()) {
+
+  // Primary authority: new schema fields
+  const newFields = [
+    'strengths',
+    'developing',
+    'teacherAction',
+    'parentSupport',
+    'growth',
+    'nutritionAdvice',
+    'teacherNote'
+  ];
+
+  for (const f of newFields) {
+    const currentVal = typeof currentDraft[f] === "string" ? currentDraft[f].trim() : "";
+    const savedVal = typeof savedDraft[f] === "string" ? savedDraft[f].trim() : "";
+    if (currentVal !== savedVal) {
       return true;
     }
   }
-  const currentLearning = currentDraft.learning || [];
-  const savedLearning = savedDraft.learning || [];
-  if (currentLearning.length !== savedLearning.length) return true;
-  for (let i = 0; i < currentLearning.length; i++) {
-    if (currentLearning[i].assessmentSessionId !== savedLearning[i].assessmentSessionId) return true;
-    if ((currentLearning[i].description || "").trim() !== (savedLearning[i].description || "").trim()) {
+
+  // Fallback: legacy fields for older saved reports
+  const legacyFields = [
+    'summary',
+    'understanding',
+    'followUp',
+    'homeActivity',
+    'attitude'
+  ];
+
+  for (const f of legacyFields) {
+    const currentVal = typeof currentDraft[f] === "string" ? currentDraft[f].trim() : "";
+    const savedVal = typeof savedDraft[f] === "string" ? savedDraft[f].trim() : "";
+    if (currentVal !== savedVal) {
       return true;
     }
   }
+
+  // Legacy learning[] comparison only when both drafts are legacy (having learning items)
+  const currentLearning = Array.isArray(currentDraft.learning) ? currentDraft.learning : [];
+  const savedLearning = Array.isArray(savedDraft.learning) ? savedDraft.learning : [];
+  if (currentLearning.length > 0 || savedLearning.length > 0) {
+    if (currentLearning.length !== savedLearning.length) return true;
+    for (let i = 0; i < currentLearning.length; i++) {
+      const cItem = currentLearning[i] || {};
+      const sItem = savedLearning[i] || {};
+      if (cItem.assessmentSessionId !== sItem.assessmentSessionId) return true;
+      if ((cItem.description || "").trim() !== (sItem.description || "").trim()) {
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 
