@@ -1,20 +1,40 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+let shouldFailWrites = false;
+let confirmChoice = true;
+
 const memoryStorage = new Map();
 globalThis.window = {
   localStorage: {
     getItem: (key) => memoryStorage.get(key) || null,
-    setItem: (key, val) => memoryStorage.set(key, String(val)),
+    setItem: (key, val) => {
+      if (shouldFailWrites) {
+        const err = new Error("QuotaExceededError: Local Storage kuota penuh");
+        err.name = "QuotaExceededError";
+        throw err;
+      }
+      memoryStorage.set(key, String(val));
+    },
     removeItem: (key) => memoryStorage.delete(key),
     clear: () => memoryStorage.clear()
   },
-  confirm: () => true
+  confirm: () => confirmChoice,
+  alert: () => {},
+  addEventListener: () => {},
+  removeEventListener: () => {}
 };
 globalThis.localStorage = globalThis.window.localStorage;
+if (!globalThis.document) {
+  globalThis.document = {
+    querySelector: () => null,
+    createElement: () => ({ append: () => {}, className: "", textContent: "" })
+  };
+}
 
 import { createClassRoom, createClass } from "../src/data/models.js";
 import { createRepositoryContext } from "../src/repositories/repository-context.js";
+import { actions } from "../src/app.js";
 
 test("C1: createClassRoom and createClass alias support grade (1-6), gradeLevel, homeroomTeacher, academicYear, status", () => {
   const c1 = createClassRoom({
@@ -207,4 +227,297 @@ test("C3: ClassRepository deleteCascade thoroughly cleans up class-exclusive dat
   // Non-existent class returns failure contract
   const nonExistentRes = repos.classes.deleteCascade("non-existent-id");
   assert.equal(nonExistentRes.success, false);
+});
+
+test("R1: Tambah kelas berhasil dan gagal disimpan", () => {
+  const repos = createRepositoryContext();
+  shouldFailWrites = false;
+
+  // Berhasil
+  const createRes = actions.createClass({
+    name: "Kelas 1A Baru",
+    grade: "1",
+    homeroomTeacher: "Pak Rahman",
+    academicYear: "2026/2027"
+  });
+  assert.equal(createRes.success, true);
+  assert.equal(createRes.error, null);
+  assert.ok(createRes.data);
+  const classId = createRes.data.id || (Array.isArray(createRes.data) ? createRes.data.at(-1).id : null);
+  assert.ok(classId);
+  const found = repos.classes.findById(classId);
+  assert.ok(found);
+  assert.equal(found.name, "Kelas 1A Baru");
+  assert.equal(found.grade, "1");
+
+  // Gagal disimpan (simulasi storage error)
+  shouldFailWrites = true;
+  const failRes = actions.createClass({
+    name: "Kelas 1B Gagal",
+    grade: "1"
+  });
+  assert.equal(failRes.success, false);
+  assert.equal(failRes.data, null);
+  assert.ok(failRes.error);
+
+  // Pastikan data tidak tersimpan
+  shouldFailWrites = false;
+  const classesAfterFail = repos.classes.findAll();
+  assert.ok(!classesAfterFail.some((c) => c.name === "Kelas 1B Gagal"));
+});
+
+test("R2: Edit kelas berhasil dan gagal disimpan", () => {
+  const repos = createRepositoryContext();
+  shouldFailWrites = false;
+
+  const initial = actions.createClass({ name: "Kelas 2A Awal", grade: "2", homeroomTeacher: "Bu Susi" }).data;
+  const classId = initial.id || (Array.isArray(initial) ? initial.at(-1).id : null);
+
+  // Edit berhasil
+  const updateRes = actions.updateClass(classId, {
+    name: "Kelas 2A Unggulan",
+    grade: "2",
+    homeroomTeacher: "Bu Susi Updated",
+    academicYear: "2026/2027"
+  });
+  assert.equal(updateRes.success, true);
+  assert.equal(updateRes.error, null);
+  const updatedInDb = repos.classes.findById(classId);
+  assert.equal(updatedInDb.name, "Kelas 2A Unggulan");
+  assert.equal(updatedInDb.homeroomTeacher, "Bu Susi Updated");
+  assert.equal(updatedInDb.id, classId); // ID kelas tetap sama
+
+  // Edit gagal disimpan
+  shouldFailWrites = true;
+  const failUpdateRes = actions.updateClass(classId, {
+    name: "Kelas Rusak",
+    grade: "2"
+  });
+  assert.equal(failUpdateRes.success, false);
+  assert.equal(failUpdateRes.data, null);
+  assert.ok(failUpdateRes.error);
+
+  // Data tersimpan tidak berubah
+  shouldFailWrites = false;
+  const verifyDb = repos.classes.findById(classId);
+  assert.equal(verifyDb.name, "Kelas 2A Unggulan");
+});
+
+test("R3: Arsip kelas berhasil dan gagal disimpan", () => {
+  const repos = createRepositoryContext();
+  shouldFailWrites = false;
+
+  const created = actions.createClass({ name: "Kelas 3A Arsip", grade: "3" }).data;
+  const classId = created.id || (Array.isArray(created) ? created.at(-1).id : null);
+
+  // Jadwal terkait
+  const state = repos.classes.loadState();
+  state.schedules = [{ id: "sch-3a-arsip", classId, active: true, dayOfWeek: 1 }];
+  repos.classes.saveState(state);
+
+  // Arsip berhasil
+  const archiveRes = actions.archiveClass(classId);
+  assert.equal(archiveRes.success, true);
+  assert.equal(archiveRes.error, null);
+  assert.equal(archiveRes.data.status, "archived");
+  assert.equal(archiveRes.data.id, classId);
+
+  // Jadwal dinonaktifkan
+  const stateAfter = repos.classes.loadState();
+  assert.equal(stateAfter.schedules.find((s) => s.id === "sch-3a-arsip").active, false);
+
+  // Arsip gagal disimpan
+  const another = actions.createClass({ name: "Kelas 3B Arsip", grade: "3" }).data;
+  const anotherId = another.id || (Array.isArray(another) ? another.at(-1).id : null);
+
+  shouldFailWrites = true;
+  const failArchive = actions.archiveClass(anotherId);
+  assert.equal(failArchive.success, false);
+  assert.equal(failArchive.data, null);
+  assert.ok(failArchive.error);
+
+  shouldFailWrites = false;
+  const anotherInDb = repos.classes.findById(anotherId);
+  assert.equal(anotherInDb.status, "active");
+});
+
+test("R4: Pulihkan kelas berhasil dan gagal disimpan", () => {
+  const repos = createRepositoryContext();
+  shouldFailWrites = false;
+
+  const created = actions.createClass({ name: "Kelas 4A Pulih", grade: "4" }).data;
+  const classId = created.id || (Array.isArray(created) ? created.at(-1).id : null);
+  actions.archiveClass(classId);
+  assert.equal(repos.classes.findById(classId).status, "archived");
+
+  // Pulihkan berhasil
+  const restoreRes = actions.restoreClass(classId);
+  assert.equal(restoreRes.success, true);
+  assert.equal(restoreRes.error, null);
+  assert.equal(restoreRes.data.status, "active");
+  assert.equal(repos.classes.findById(classId).status, "active");
+
+  // Pulihkan gagal disimpan
+  actions.archiveClass(classId);
+  shouldFailWrites = true;
+  const failRestore = actions.restoreClass(classId);
+  assert.equal(failRestore.success, false);
+  assert.equal(failRestore.data, null);
+  assert.ok(failRestore.error);
+
+  shouldFailWrites = false;
+  assert.equal(repos.classes.findById(classId).status, "archived");
+});
+
+test("R5: Hapus kelas berhasil dan gagal disimpan", () => {
+  const repos = createRepositoryContext();
+  shouldFailWrites = false;
+  confirmChoice = true;
+
+  const created = actions.createClass({ name: "Kelas 5A Hapus", grade: "5" }).data;
+  const classId = created.id || (Array.isArray(created) ? created.at(-1).id : null);
+  const student = repos.students.create({ name: "Siswa 5A", classId }).at(-1);
+
+  // Hapus berhasil
+  const deleteRes = actions.deleteClass(classId);
+  assert.equal(deleteRes.success, true);
+  assert.equal(deleteRes.cancelled, false);
+  assert.equal(deleteRes.error, null);
+  assert.equal(repos.classes.findById(classId), null);
+  assert.equal(repos.students.findById(student.id), null);
+
+  // Hapus gagal disimpan
+  const created2 = actions.createClass({ name: "Kelas 5B Hapus", grade: "5" }).data;
+  const classId2 = created2.id || (Array.isArray(created2) ? created2.at(-1).id : null);
+  const student2 = repos.students.create({ name: "Siswa 5B", classId: classId2 }).at(-1);
+
+  shouldFailWrites = true;
+  const failDelete = actions.deleteClass(classId2);
+  assert.equal(failDelete.success, false);
+  assert.equal(failDelete.cancelled, false);
+  assert.equal(failDelete.data, null);
+  assert.ok(failDelete.error);
+
+  shouldFailWrites = false;
+  assert.ok(repos.classes.findById(classId2));
+  assert.ok(repos.students.findById(student2.id));
+});
+
+test("R6: Pembatalan hapus tidak mengubah data", () => {
+  const repos = createRepositoryContext();
+  shouldFailWrites = false;
+
+  const created = actions.createClass({ name: "Kelas 6A Batal", grade: "6" }).data;
+  const classId = created.id || (Array.isArray(created) ? created.at(-1).id : null);
+  const student = repos.students.create({ name: "Siswa 6A", classId }).at(-1);
+
+  // Pengguna membatalkan konfirmasi
+  confirmChoice = false;
+  const cancelRes = actions.deleteClass(classId);
+  assert.equal(cancelRes.success, false);
+  assert.equal(cancelRes.cancelled, true);
+  assert.equal(cancelRes.data, null);
+  assert.equal(cancelRes.error, null);
+
+  // Data kelas dan siswa tetap utuh
+  assert.ok(repos.classes.findById(classId));
+  assert.ok(repos.students.findById(student.id));
+
+  confirmChoice = true;
+});
+
+test("R7: Kegagalan operasi tidak menghasilkan status sukses palsu", () => {
+  shouldFailWrites = false;
+
+  // Nama kelas kosong
+  const invalidName = actions.createClass({ name: "", grade: "3" });
+  assert.equal(invalidName.success, false);
+  assert.ok(invalidName.error);
+
+  // Grade tidak valid
+  const invalidGrade = actions.createClass({ name: "Kelas X", grade: "99" });
+  assert.equal(invalidGrade.success, false);
+  assert.ok(invalidGrade.error);
+
+  // Update kelas non-existent
+  const updateNonExist = actions.updateClass("non-existent-id", { name: "Test", grade: "1" });
+  assert.equal(updateNonExist.success, false);
+  assert.ok(updateNonExist.error);
+
+  // Arsip non-existent
+  const archiveNonExist = actions.archiveClass("non-existent-id");
+  assert.equal(archiveNonExist.success, false);
+  assert.ok(archiveNonExist.error);
+
+  // Pulihkan non-existent
+  const restoreNonExist = actions.restoreClass("non-existent-id");
+  assert.equal(restoreNonExist.success, false);
+  assert.ok(restoreNonExist.error);
+
+  // Hapus non-existent
+  const deleteNonExist = actions.deleteClass("non-existent-id");
+  assert.equal(deleteNonExist.success, false);
+  assert.ok(deleteNonExist.error);
+});
+
+test("R8: Data kelas lain tetap identik", () => {
+  const repos = createRepositoryContext();
+  shouldFailWrites = false;
+  confirmChoice = true;
+
+  const classA = actions.createClass({ name: "Kelas A Lain", grade: "3", homeroomTeacher: "Guru A" }).data;
+  const classB = actions.createClass({ name: "Kelas B Lain", grade: "3", homeroomTeacher: "Guru B" }).data;
+  const classAId = classA.id || (Array.isArray(classA) ? classA.at(-1).id : null);
+  const classBId = classB.id || (Array.isArray(classB) ? classB.at(-1).id : null);
+
+  const studentB = repos.students.create({ name: "Siswa B", classId: classBId }).at(-1);
+
+  const initialClassB = JSON.stringify(repos.classes.findById(classBId));
+  const initialStudentB = JSON.stringify(repos.students.findById(studentB.id));
+
+  // Edit Class A
+  actions.updateClass(classAId, { name: "Kelas A Edit", grade: "3" });
+  assert.equal(JSON.stringify(repos.classes.findById(classBId)), initialClassB);
+  assert.equal(JSON.stringify(repos.students.findById(studentB.id)), initialStudentB);
+
+  // Archive Class A
+  actions.archiveClass(classAId);
+  assert.equal(JSON.stringify(repos.classes.findById(classBId)), initialClassB);
+
+  // Restore Class A
+  actions.restoreClass(classAId);
+  assert.equal(JSON.stringify(repos.classes.findById(classBId)), initialClassB);
+
+  // Delete Class A
+  actions.deleteClass(classAId);
+  assert.equal(JSON.stringify(repos.classes.findById(classBId)), initialClassB);
+  assert.equal(JSON.stringify(repos.students.findById(studentB.id)), initialStudentB);
+});
+
+test("R9: Data existing tetap kompatibel", () => {
+  // Legacy model input dengan gradeLevel tanpa grade
+  const legacyClass = createClassRoom({
+    id: "class-legacy-1",
+    name: "Kelas 4 Lama",
+    gradeLevel: "4",
+    homeroomTeacher: "Pak Veteran",
+    customField: "preserved-val",
+    createdAt: "2025-01-01T00:00:00.000Z"
+  });
+
+  assert.equal(legacyClass.id, "class-legacy-1");
+  assert.equal(legacyClass.grade, "4");
+  assert.equal(legacyClass.gradeLevel, "4");
+  assert.equal(legacyClass.homeroomTeacher, "Pak Veteran");
+  assert.equal(legacyClass.customField, "preserved-val");
+  assert.equal(legacyClass.status, "active");
+
+  // Alias createClass
+  const legacyClass2 = createClass({
+    name: "Kelas 1 Lama",
+    gradeLevel: "1"
+  });
+  assert.equal(legacyClass2.grade, "1");
+  assert.equal(legacyClass2.gradeLevel, "1");
+  assert.equal(legacyClass2.status, "active");
 });

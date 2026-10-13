@@ -10,7 +10,7 @@ import { renderStudentDetailModal } from "./ui/student-detail-modal.js";
 import { createSeedData } from "./data/seed.js";
 import { confirmIfDirty } from "./ui/feedback.js";
 
-const appRoot = document.querySelector("#app");
+const appRoot = typeof document !== "undefined" && typeof document.querySelector === "function" ? document.querySelector("#app") : null;
 let appState = loadState();
 const repositories = createRepositoryContext();
 const sessionManager = new SessionManager(repositories.sessions);
@@ -352,13 +352,13 @@ function createCrudActions() {
       const name = String(input?.name || "").trim();
       if (!name) {
         const error = new Error("Nama kelas tidak boleh kosong.");
-        return { success: false, error };
+        return { success: false, data: null, error };
       }
       const rawGrade = String(input.grade ?? input.gradeLevel ?? "").trim();
       const gradeNum = parseInt(rawGrade, 10);
       if (isNaN(gradeNum) || gradeNum < 1 || gradeNum > 6) {
         const error = new Error("Tingkat kelas harus berada pada rentang 1–6.");
-        return { success: false, error };
+        return { success: false, data: null, error };
       }
       const payload = {
         ...input,
@@ -370,25 +370,37 @@ function createCrudActions() {
         status: input.status || "active"
       };
       const result = repositories.classes.create(payload);
+      const isSuccess = Boolean(result && (result.success !== false));
+      if (!isSuccess) {
+        return {
+          success: false,
+          data: null,
+          error: result?.error || new Error("Gagal menyimpan data kelas.")
+        };
+      }
       refreshState();
-      return { success: true, data: result };
+      return {
+        success: true,
+        data: result?.data || result,
+        error: null
+      };
     },
     updateClass: (id, input) => {
       const targetClass = repositories.classes.findById(id);
       if (!targetClass) {
         const error = new Error("Kelas tidak ditemukan.");
-        return { success: false, error };
+        return { success: false, data: null, error };
       }
       const name = String(input?.name || "").trim();
       if (!name) {
         const error = new Error("Nama kelas tidak boleh kosong.");
-        return { success: false, error };
+        return { success: false, data: null, error };
       }
       const rawGrade = String(input.grade ?? input.gradeLevel ?? "").trim();
       const gradeNum = parseInt(rawGrade, 10);
       if (isNaN(gradeNum) || gradeNum < 1 || gradeNum > 6) {
         const error = new Error("Tingkat kelas harus berada pada rentang 1–6.");
-        return { success: false, error };
+        return { success: false, data: null, error };
       }
       const payload = {
         ...input,
@@ -399,31 +411,67 @@ function createCrudActions() {
         academicYear: input.academicYear !== undefined ? String(input.academicYear).trim() : (targetClass.academicYear || "")
       };
       const result = repositories.classes.update(id, payload);
+      const isSuccess = Boolean(result && (result.success !== false));
+      if (!isSuccess) {
+        return {
+          success: false,
+          data: null,
+          error: result?.error || new Error("Gagal memperbarui data kelas.")
+        };
+      }
       refreshState();
-      return { success: true, data: result };
+      return {
+        success: true,
+        data: result?.data || result,
+        error: null
+      };
     },
     archiveClass: (id) => {
       const targetClass = repositories.classes.findById(id);
       if (!targetClass) {
-        return { success: false, error: new Error("Kelas tidak ditemukan.") };
+        return { success: false, data: null, error: new Error("Kelas tidak ditemukan.") };
       }
       const result = repositories.classes.archiveClass(id);
+      const isSuccess = Boolean(result && (result.success !== false));
+      if (!isSuccess) {
+        return {
+          success: false,
+          data: null,
+          error: result?.error || new Error("Gagal mengarsipkan kelas.")
+        };
+      }
       refreshState();
-      return result;
+      return {
+        success: true,
+        data: result.data,
+        error: null
+      };
     },
     restoreClass: (id) => {
       const targetClass = repositories.classes.findById(id);
       if (!targetClass) {
-        return { success: false, error: new Error("Kelas tidak ditemukan.") };
+        return { success: false, data: null, error: new Error("Kelas tidak ditemukan.") };
       }
       const result = repositories.classes.restoreClass(id);
+      const isSuccess = Boolean(result && (result.success !== false));
+      if (!isSuccess) {
+        return {
+          success: false,
+          data: null,
+          error: result?.error || new Error("Gagal memulihkan kelas.")
+        };
+      }
       refreshState();
-      return result;
+      return {
+        success: true,
+        data: result.data,
+        error: null
+      };
     },
     deleteClass: (id, skipConfirm = false) => {
       const targetClass = repositories.classes.findById(id);
       if (!targetClass) {
-        return { success: false, error: new Error("Kelas tidak ditemukan.") };
+        return { success: false, cancelled: false, data: null, error: new Error("Kelas tidak ditemukan.") };
       }
       const classStudents = repositories.students.findByClass(id);
       if (!skipConfirm) {
@@ -431,12 +479,26 @@ function createCrudActions() {
           `Terdapat ${classStudents.length} siswa di kelas ini.\n\n` +
           `PERINGATAN: Tindakan ini permanen dan tidak dapat dibatalkan. Seluruh data siswa, sesi, absensi, asesmen, riwayat pertumbuhan, observasi, dan laporan eksklusif milik kelas ini akan dihapus. Lanjutkan?`;
         if (!window.confirm(msg)) {
-          return { success: false, cancelled: true };
+          return { success: false, cancelled: true, data: null, error: null };
         }
       }
       const result = repositories.classes.deleteCascade(id);
+      const isSuccess = Boolean(result && (result.success !== false));
+      if (!isSuccess) {
+        return {
+          success: false,
+          cancelled: false,
+          data: null,
+          error: result?.error || new Error("Gagal menghapus kelas.")
+        };
+      }
       refreshState();
-      return result;
+      return {
+        success: true,
+        cancelled: false,
+        data: result.data || targetClass,
+        error: null
+      };
     },
     createTag: (input) => {
       repositories.tags.create(input);
@@ -1001,21 +1063,7 @@ function importData(fileOrText) {
 }
 
 function renderApp() {
-  appRoot.replaceChildren();
   const sessionContext = getSessionContext();
-
-  const header = document.createElement("header");
-  header.className = "app-header";
-
-  const title = document.createElement("span");
-  title.className = "app-name";
-  title.textContent = "PJOK Assistant";
-
-  const status = document.createElement("span");
-  status.className = "offline-status";
-  status.textContent = navigator.onLine ? "Siap" : "Offline";
-
-  header.append(title, status);
 
   const appActions = {
     navigate: setScreen,
@@ -1032,6 +1080,25 @@ function renderApp() {
   if (typeof globalThis !== "undefined") {
     globalThis.actions = appActions;
   }
+
+  if (!appRoot) {
+    return;
+  }
+
+  appRoot.replaceChildren();
+
+  const header = document.createElement("header");
+  header.className = "app-header";
+
+  const title = document.createElement("span");
+  title.className = "app-name";
+  title.textContent = "PJOK Assistant";
+
+  const status = document.createElement("span");
+  status.className = "offline-status";
+  status.textContent = (typeof navigator !== "undefined" && navigator.onLine) ? "Siap" : "Offline";
+
+  header.append(title, status);
 
   const sessionNotice = sessionContext.resumeAvailable && appState.currentScreen !== SCREENS.session
     ? createResumeBanner(sessionContext.session)

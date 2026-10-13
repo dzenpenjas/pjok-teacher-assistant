@@ -19,6 +19,69 @@ export class ClassRepository extends BaseRepository {
     return this.list().filter((c) => c.status === "archived");
   }
 
+  create(input) {
+    const state = this.loadState();
+    const entity = this.createEntity(input);
+    const classes = [...(state.classes || []), entity];
+    const result = this.saveState({
+      ...state,
+      classes
+    });
+    const saveSuccess = Boolean(result && (result.success !== false));
+    if (!saveSuccess) {
+      return Object.assign([...(state.classes || [])], {
+        success: false,
+        data: null,
+        error: result?.error || new Error("Gagal menyimpan data kelas.")
+      });
+    }
+    return Object.assign([...classes], {
+      success: true,
+      data: entity,
+      error: null
+    });
+  }
+
+  update(id, input) {
+    const state = this.loadState();
+    const target = (state.classes || []).find((c) => c.id === id);
+    if (!target) {
+      return Object.assign([...(state.classes || [])], {
+        success: false,
+        data: null,
+        error: new Error("Kelas tidak ditemukan.")
+      });
+    }
+    let updatedEntity = null;
+    const classes = (state.classes || []).map((c) => {
+      if (c.id !== id) return c;
+      updatedEntity = this.createEntity({
+        ...c,
+        ...input,
+        id: c.id,
+        createdAt: c.createdAt
+      });
+      return updatedEntity;
+    });
+    const result = this.saveState({
+      ...state,
+      classes
+    });
+    const saveSuccess = Boolean(result && (result.success !== false));
+    if (!saveSuccess) {
+      return Object.assign([...(state.classes || [])], {
+        success: false,
+        data: null,
+        error: result?.error || new Error("Gagal memperbarui data kelas.")
+      });
+    }
+    return Object.assign([...classes], {
+      success: true,
+      data: updatedEntity,
+      error: null
+    });
+  }
+
   archiveClass(classId) {
     const state = this.loadState();
     const targetClass = (state.classes || []).find((c) => c.id === classId);
@@ -38,12 +101,12 @@ export class ClassRepository extends BaseRepository {
       schedules
     };
     const result = this.saveState(nextState);
-    const saveSuccess = result && result.success !== undefined ? result.success : true;
+    const saveSuccess = Boolean(result && (result.success !== false));
     const updatedClass = classes.find((c) => c.id === classId) || null;
     return {
       success: saveSuccess,
-      data: updatedClass,
-      error: result?.error
+      data: saveSuccess ? updatedClass : null,
+      error: saveSuccess ? null : (result?.error || new Error("Gagal mengarsipkan kelas."))
     };
   }
 
@@ -62,12 +125,12 @@ export class ClassRepository extends BaseRepository {
       classes
     };
     const result = this.saveState(nextState);
-    const saveSuccess = result && result.success !== undefined ? result.success : true;
+    const saveSuccess = Boolean(result && (result.success !== false));
     const updatedClass = classes.find((c) => c.id === classId) || null;
     return {
       success: saveSuccess,
-      data: updatedClass,
-      error: result?.error
+      data: saveSuccess ? updatedClass : null,
+      error: saveSuccess ? null : (result?.error || new Error("Gagal memulihkan kelas."))
     };
   }
 
@@ -144,13 +207,13 @@ export class ClassRepository extends BaseRepository {
       assessmentSessions
     };
     const result = this.saveState(nextState);
-    const saveSuccess = result && result.success !== undefined ? result.success : true;
+    const saveSuccess = Boolean(result && (result.success !== false));
 
     return {
       success: saveSuccess,
       data: saveSuccess ? targetClass : null,
-      classes,
-      error: result?.error
+      classes: saveSuccess ? classes : (state.classes || []),
+      error: saveSuccess ? null : (result?.error || new Error("Gagal menghapus kelas."))
     };
   }
 }

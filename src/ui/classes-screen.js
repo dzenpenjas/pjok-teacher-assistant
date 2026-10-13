@@ -543,7 +543,10 @@ export function renderClassesScreen(state, actions) {
         restoreBtn.addEventListener("click", (e) => {
           e.stopPropagation();
           if (actions?.restoreClass) {
-            actions.restoreClass(c.id);
+            const res = actions.restoreClass(c.id);
+            if (!res || res.success === false) {
+              return;
+            }
           }
           render();
         });
@@ -3488,8 +3491,8 @@ export function renderClassesScreen(state, actions) {
 
       if (actions?.createClass) {
         const result = actions.createClass(createPayload);
-        if (result && result.success === false) {
-          showError(result.error?.message || "Gagal menyimpan kelas.");
+        if (!result || result.success === false) {
+          showError(result?.error?.message || "Gagal menyimpan kelas.");
           return;
         }
       }
@@ -3621,13 +3624,12 @@ export function renderClassesScreen(state, actions) {
 
       if (actions?.updateClass) {
         const result = actions.updateClass(classRoom.id, updateData);
-        if (result && result.success === false) {
-          showError(result.error?.message || "Gagal menyimpan perubahan kelas.");
+        if (!result || result.success === false) {
+          showError(result?.error?.message || "Gagal menyimpan perubahan kelas.");
           return;
         }
       }
 
-      Object.assign(classRoom, updateData);
       showClassSettingsModal = false;
       render();
     });
@@ -3658,9 +3660,12 @@ export function renderClassesScreen(state, actions) {
     statusActionBtn.addEventListener("click", () => {
       if (isArchived) {
         if (actions?.restoreClass) {
-          actions.restoreClass(classRoom.id);
+          const res = actions.restoreClass(classRoom.id);
+          if (!res || res.success === false) {
+            showError(res?.error?.message || "Gagal memulihkan kelas.");
+            return;
+          }
         }
-        classRoom.status = "active";
         showClassSettingsModal = false;
         render();
       } else {
@@ -3671,9 +3676,12 @@ export function renderClassesScreen(state, actions) {
         );
         if (confirmArchive) {
           if (actions?.archiveClass) {
-            actions.archiveClass(classRoom.id);
+            const res = actions.archiveClass(classRoom.id);
+            if (!res || res.success === false) {
+              showError(res?.error?.message || "Gagal mengarsipkan kelas.");
+              return;
+            }
           }
-          classRoom.status = "archived";
           showClassSettingsModal = false;
           render();
         }
@@ -3703,8 +3711,11 @@ export function renderClassesScreen(state, actions) {
       if (confirmDelete) {
         if (actions?.deleteClass) {
           const res = actions.deleteClass(classRoom.id, true);
-          if (res && res.success === false && !res.cancelled) {
-            showError(res.error?.message || "Gagal menghapus kelas.");
+          if (res?.cancelled) {
+            return;
+          }
+          if (!res || res.success === false) {
+            showError(res?.error?.message || "Gagal menghapus kelas.");
             return;
           }
         }
