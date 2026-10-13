@@ -16,11 +16,13 @@ import { exportReportScoresToExcel } from "../services/report-score-xlsx-adapter
 import { getGeminiApiKey } from "../services/gemini-api-key-storage.js";
 import {
   showToast,
+  showConfirmModal,
   registerDirtyGuard,
   unregisterDirtyGuard,
   isFormDirty,
   confirmIfDirty
 } from "./feedback.js";
+import { loadState } from "../storage/storage.js";
 import {
   BATCH_STAGES,
   getDiagnosticStageLabel,
@@ -267,6 +269,10 @@ export function renderClassesScreen(state, actions) {
   screen.append(container);
 
   function render() {
+    const freshState = loadState();
+    if (freshState) {
+      Object.assign(state, freshState);
+    }
     currentRenderCallback = render;
     container.replaceChildren();
 
@@ -3702,29 +3708,32 @@ export function renderClassesScreen(state, actions) {
     );
     const deleteBtn = createElement("button", "btn-tool text-red-600 dark:text-red-400 compact-action", "🗑️ Hapus Kelas Permanen");
     deleteBtn.type = "button";
-    deleteBtn.addEventListener("click", () => {
-      const confirmDelete = window.confirm(
-        `Hapus kelas "${classRoom.name}" permanen?\n\n` +
-        `Terdapat ${classStudents.length} siswa di kelas ini.\n\n` +
-        `PERINGATAN: Tindakan ini permanen dan tidak dapat dibatalkan. Seluruh data siswa, sesi mengajar, absensi, hasil asesmen, riwayat pertumbuhan, observasi, jadwal, dan laporan eksklusif milik kelas ini akan dihapus.`
-      );
-      if (confirmDelete) {
-        if (actions?.deleteClass) {
-          const res = actions.deleteClass(classRoom.id, true);
-          if (res?.cancelled) {
-            return;
-          }
-          if (!res || res.success === false) {
-            showError(res?.error?.message || "Gagal menghapus kelas.");
-            return;
-          }
-        }
-        showClassSettingsModal = false;
-        classUi.selectedClassId = null;
-        classUi.mode = "list";
-        classUi.activeAssessmentSessionId = null;
-        render();
+    deleteBtn.addEventListener("click", async () => {
+      const confirmDelete = await showConfirmModal({
+        title: "Hapus Kelas Permanen",
+        message: `Hapus kelas "${classRoom.name}" permanen?\n\nTerdapat ${classStudents.length} siswa di kelas ini.\n\nPERINGATAN: Tindakan ini permanen dan tidak dapat dibatalkan. Seluruh data siswa, sesi mengajar, absensi, hasil asesmen, riwayat pertumbuhan, observasi, jadwal, dan laporan eksklusif milik kelas ini akan dihapus.`,
+        confirmText: "Hapus Permanen",
+        cancelText: "Batal",
+        danger: true
+      });
+      if (!confirmDelete) {
+        return;
       }
+      if (actions?.deleteClass) {
+        const res = actions.deleteClass(classRoom.id, true);
+        if (res?.cancelled) {
+          return;
+        }
+        if (!res || res.success === false) {
+          showError(res?.error?.message || "Gagal menghapus kelas.");
+          return;
+        }
+      }
+      showClassSettingsModal = false;
+      classUi.selectedClassId = null;
+      classUi.mode = "list";
+      classUi.activeAssessmentSessionId = null;
+      render();
     });
 
     dangerBox.append(dangerTitle, dangerDesc, deleteBtn);

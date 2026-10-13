@@ -2,6 +2,7 @@ import { createField, createSelectField, createTextAreaField, formToObject } fro
 import { createPhotoPickerField } from "./student-photo-field.js";
 import { createStudentAvatar } from "./student-avatar.js";
 import { ICONS } from "./icons.js";
+import { showConfirmModal } from "./feedback.js";
 
 const SECTIONS = [
   { id: "schools", label: "Sekolah" },
@@ -72,7 +73,18 @@ function renderList(items, describe, onDelete, onEdit, extraActions) {
     }
     rowActions.append(
       createRowButton("Edit", () => onEdit(item), ""),
-      createRowButton("Hapus", () => onDelete(item.id), "danger-button")
+      createRowButton("Hapus", async () => {
+        const confirmDelete = await showConfirmModal({
+          title: "Hapus Item",
+          message: `Hapus "${item.name || item.text || "item ini"}" secara permanen?`,
+          confirmText: "Hapus Permanen",
+          cancelText: "Batal",
+          danger: true
+        });
+        if (confirmDelete && typeof onDelete === "function") {
+          onDelete(item.id);
+        }
+      }, "danger-button")
     );
     row.append(content, rowActions);
     list.append(row);
@@ -413,7 +425,18 @@ function renderStudentList(students, data, actions) {
       createRowButton("Edit", () => {
         openEditStudentModal(student, data, actions);
       }, "text-button"),
-      createRowButton("Hapus", () => actions.deleteStudent(student.id), "danger-button")
+      createRowButton("Hapus", async () => {
+        const confirmDelete = await showConfirmModal({
+          title: "Hapus Siswa Permanen",
+          message: `Hapus siswa "${student.name || "ini"}" permanen?\n\nSeluruh riwayat absensi, hasil tes penilaian fisik, grafik pertumbuhan, draf laporan, dan observasi siswa ini akan dihapus secara permanen.`,
+          confirmText: "Hapus Permanen",
+          cancelText: "Batal",
+          danger: true
+        });
+        if (confirmDelete && actions?.deleteStudent) {
+          actions.deleteStudent(student.id, true);
+        }
+      }, "danger-button")
     );
 
     row.append(left, rowActions);

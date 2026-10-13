@@ -3,7 +3,7 @@ import { createStudentAvatar } from "./student-avatar.js";
 import { openCameraModal } from "./camera-modal.js";
 import { ICONS } from "./icons.js";
 import { createField, createSelectField, formToObject } from "./form-controls.js";
-import { showToast } from "./feedback.js";
+import { showToast, showConfirmModal } from "./feedback.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -94,14 +94,26 @@ export function renderStudentDetailModal(studentId, context, onClose) {
 
   const deleteBtn = createElement("button", "btn-tool text-red-600 dark:text-red-400 text-xs py-1 px-2");
   deleteBtn.textContent = "🗑️ Hapus Siswa";
-  deleteBtn.addEventListener("click", () => {
+  deleteBtn.addEventListener("click", async () => {
+    const confirmDelete = await showConfirmModal({
+      title: "Hapus Siswa Permanen",
+      message: `Hapus siswa "${student.name || "ini"}" permanen?\n\nSeluruh riwayat absensi, hasil tes penilaian fisik, grafik pertumbuhan, draf laporan, dan observasi siswa ini akan dihapus secara permanen.`,
+      confirmText: "Hapus Permanen",
+      cancelText: "Batal",
+      danger: true
+    });
+    if (!confirmDelete) {
+      return;
+    }
     if (context.actions?.deleteStudent) {
-      const result = context.actions.deleteStudent(student.id);
+      const result = context.actions.deleteStudent(student.id, true);
       if (result && result.success) {
-        onClose();
+        if (typeof onClose === "function") {
+          onClose();
+        }
         showToast("Siswa berhasil dihapus");
       } else if (result && !result.cancelled) {
-        showToast("Penghapusan gagal: data tidak dapat dihapus ke penyimpanan perangkat.");
+        showToast(result?.error?.message || "Penghapusan gagal: data tidak dapat dihapus ke penyimpanan perangkat.");
       }
     }
   });

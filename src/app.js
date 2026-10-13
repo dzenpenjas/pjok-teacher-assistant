@@ -655,29 +655,44 @@ function createCrudActions() {
         error: null
       };
     },
-    deleteStudent: (id) => {
+    deleteStudent: (id, skipConfirm = false) => {
       const student = repositories.students.findById(id);
       if (!student) {
-        return { success: false, error: new Error("Siswa tidak ditemukan.") };
+        return { success: false, cancelled: false, data: null, error: new Error("Siswa tidak ditemukan.") };
       }
-      
-      const studentName = student?.name ? `"${student.name}"` : "siswa ini";
-      const msg = `Hapus ${studentName}?\n\n` +
-        `Seluruh riwayat absensi, hasil tes penilaian fisik, grafik pertumbuhan, draf laporan, dan observasi siswa ini akan dihapus secara permanen. Lanjutkan?`;
-      
-      if (window.confirm(msg)) {
-        const result = repositories.students.deleteCascade(id);
-        if (result.success) {
-          refreshState();
-          return result;
-        } else {
-          // If persistence failed, we refresh state from storage to ensure UI is in sync with valid data
-          appState = loadState();
-          renderApp();
-          return result;
+
+      if (!skipConfirm) {
+        const studentName = student?.name ? `"${student.name}"` : "siswa ini";
+        const msg = `Hapus ${studentName}?\n\n` +
+          `Seluruh riwayat absensi, hasil tes penilaian fisik, grafik pertumbuhan, draf laporan, dan observasi siswa ini akan dihapus secara permanen. Lanjutkan?`;
+        if (typeof window !== "undefined" && typeof window.confirm === "function") {
+          if (!window.confirm(msg)) {
+            return { success: false, cancelled: true, data: null, error: null };
+          }
         }
       }
-      return { success: false, cancelled: true };
+
+      if (activeModalStudentId === id) {
+        activeModalStudentId = null;
+      }
+
+      const result = repositories.students.deleteCascade(id);
+      const isSuccess = Boolean(result && (result.success !== false));
+      if (!isSuccess) {
+        return {
+          success: false,
+          cancelled: false,
+          data: null,
+          error: result?.error || new Error("Gagal menghapus siswa.")
+        };
+      }
+      refreshState();
+      return {
+        success: true,
+        cancelled: false,
+        data: result.data || student,
+        error: null
+      };
     },
 
     // ATTENDANCE ACTIONS

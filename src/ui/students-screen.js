@@ -2,7 +2,8 @@ import { createField, createSelectField, formToObject } from "./form-controls.js
 import { createPhotoPickerField } from "./student-photo-field.js";
 import { createStudentAvatar } from "./student-avatar.js";
 import { ICONS } from "./icons.js";
-import { showToast } from "./feedback.js";
+import { showToast, showConfirmModal } from "./feedback.js";
+import { loadState } from "../storage/storage.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -27,6 +28,10 @@ export function renderStudentsScreen(state, actions) {
   screen.append(container);
 
   function render() {
+    const freshState = loadState();
+    if (freshState) {
+      Object.assign(state, freshState);
+    }
     container.replaceChildren();
 
     // 1. Header
@@ -213,7 +218,28 @@ export function renderStudentsScreen(state, actions) {
 
         const delBtn = createElement("button", "btn-tool danger-button", "Hapus");
         delBtn.type = "button";
-        delBtn.addEventListener("click", () => actions.deleteStudent(student.id));
+        delBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const confirmDelete = await showConfirmModal({
+            title: "Hapus Siswa Permanen",
+            message: `Hapus siswa "${student.name || "ini"}" permanen?\n\nSeluruh riwayat absensi, hasil tes penilaian fisik, grafik pertumbuhan, draf laporan, dan observasi siswa ini akan dihapus secara permanen.`,
+            confirmText: "Hapus Permanen",
+            cancelText: "Batal",
+            danger: true
+          });
+          if (!confirmDelete) {
+            return;
+          }
+          if (actions?.deleteStudent) {
+            const result = actions.deleteStudent(student.id, true);
+            if (result && result.success) {
+              showToast("Siswa berhasil dihapus");
+              render();
+            } else if (result && !result.cancelled) {
+              showToast(result?.error?.message || "Gagal menghapus siswa.");
+            }
+          }
+        });
 
         footer.append(profileBtn, delBtn);
         card.append(footer);
