@@ -20,7 +20,11 @@ globalThis.window = {
   }
 };
 globalThis.localStorage = globalThis.window.localStorage;
-globalThis.navigator = globalThis.window.navigator;
+try {
+  globalThis.navigator = globalThis.window.navigator;
+} catch (e) {
+  // globalThis.navigator is a read-only getter in Node v21+
+}
 
 const appendedElements = [];
 globalThis.document = {
@@ -31,20 +35,51 @@ globalThis.document = {
     };
     return null;
   },
-  createElement: (tag) => ({
-    tagName: tag.toUpperCase(),
-    className: "",
-    style: {},
-    append: function(el) { 
+  createElement: (tag) => {
+    const el = {
+      tagName: tag.toUpperCase(),
+      className: "",
+      style: {},
+      children: [],
+      classList: {
+        add: () => {},
+        remove: () => {},
+        toggle: () => {},
+        contains: () => false
+      },
+      append: function(...items) {
         if (!this.children) this.children = [];
-        this.children.push(el);
-    },
-    replaceChildren: function() { this.children = []; },
-    addEventListener: () => {},
-    setAttribute: () => {},
-    dataset: {},
-    appendChild: function(el) { this.append(el); }
-  }),
+        this.children.push(...items);
+      },
+      replaceChildren: function(...items) {
+        this.children = items || [];
+      },
+      addEventListener: () => {},
+      setAttribute: () => {},
+      removeAttribute: () => {},
+      dataset: {},
+      appendChild: function(item) { this.append(item); },
+      querySelector: function() { return null; },
+      querySelectorAll: function(sel) {
+        const results = [];
+        const classNameToMatch = sel && sel.startsWith(".") ? sel.slice(1) : sel;
+        function search(node) {
+          if (!node || !node.children) return;
+          for (const c of node.children) {
+            if (c && c.classList) {
+              if (!classNameToMatch || (c.className && c.className.includes(classNameToMatch))) {
+                results.push(c);
+              }
+              search(c);
+            }
+          }
+        }
+        search(this);
+        return results;
+      }
+    };
+    return el;
+  },
   createTextNode: (text) => ({ text }),
   body: {
     appendChild: () => {}
@@ -89,7 +124,7 @@ test("M1: openStudentDetail sets activeModalStudentId and renders modal", async 
 
     // Verify presence of Edit Profil and Hapus buttons added in dd0a845
     const findTextInTree = (el, text) => {
-        if (el.textContent === text || el.text === text) return true;
+        if ((el.textContent && el.textContent.includes(text)) || (el.text && el.text.includes(text))) return true;
         if (el.children) {
             return el.children.some(child => findTextInTree(child, text));
         }

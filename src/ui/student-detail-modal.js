@@ -146,7 +146,7 @@ export function renderStudentDetailModal(studentId, context, onClose) {
   if (studentNotes.length > 0) {
     profileMetaBar.append(createElement("span", "profile-meta-chip profile-note-chip", `Catatan: ${studentNotes[0].text}`));
   }
-  if (profileMetaBar.children.length > 0) {
+  if ((profileMetaBar.children?.length || 0) > 0) {
     modal.append(profileMetaBar);
   }
 

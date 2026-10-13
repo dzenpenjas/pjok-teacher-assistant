@@ -349,23 +349,94 @@ function createCrudActions() {
       }
     },
     createClass: (input) => {
-      repositories.classes.create(input);
+      const name = String(input?.name || "").trim();
+      if (!name) {
+        const error = new Error("Nama kelas tidak boleh kosong.");
+        return { success: false, error };
+      }
+      const rawGrade = String(input.grade ?? input.gradeLevel ?? "").trim();
+      const gradeNum = parseInt(rawGrade, 10);
+      if (isNaN(gradeNum) || gradeNum < 1 || gradeNum > 6) {
+        const error = new Error("Tingkat kelas harus berada pada rentang 1–6.");
+        return { success: false, error };
+      }
+      const payload = {
+        ...input,
+        name,
+        grade: String(gradeNum),
+        gradeLevel: String(gradeNum),
+        homeroomTeacher: String(input.homeroomTeacher || "").trim(),
+        academicYear: String(input.academicYear || "").trim(),
+        status: input.status || "active"
+      };
+      const result = repositories.classes.create(payload);
       refreshState();
+      return { success: true, data: result };
     },
     updateClass: (id, input) => {
-      repositories.classes.update(id, input);
-      refreshState();
-    },
-    deleteClass: (id) => {
-      const classStudents = repositories.students.findByClass(id);
-      const classSessions = repositories.sessions.findByClass(id);
-      const msg = `Hapus kelas ini?\n` +
-        `Terdapat ${classStudents.length} siswa dan ${classSessions.length} sesi mengajar yang akan dihapus.\n` +
-        `Semua data absensi dan penilaian terkait kelas ini akan dibersihkan. Lanjutkan?`;
-      if (window.confirm(msg)) {
-        repositories.classes.deleteCascade(id);
-        refreshState();
+      const targetClass = repositories.classes.findById(id);
+      if (!targetClass) {
+        const error = new Error("Kelas tidak ditemukan.");
+        return { success: false, error };
       }
+      const name = String(input?.name || "").trim();
+      if (!name) {
+        const error = new Error("Nama kelas tidak boleh kosong.");
+        return { success: false, error };
+      }
+      const rawGrade = String(input.grade ?? input.gradeLevel ?? "").trim();
+      const gradeNum = parseInt(rawGrade, 10);
+      if (isNaN(gradeNum) || gradeNum < 1 || gradeNum > 6) {
+        const error = new Error("Tingkat kelas harus berada pada rentang 1–6.");
+        return { success: false, error };
+      }
+      const payload = {
+        ...input,
+        name,
+        grade: String(gradeNum),
+        gradeLevel: String(gradeNum),
+        homeroomTeacher: input.homeroomTeacher !== undefined ? String(input.homeroomTeacher).trim() : (targetClass.homeroomTeacher || ""),
+        academicYear: input.academicYear !== undefined ? String(input.academicYear).trim() : (targetClass.academicYear || "")
+      };
+      const result = repositories.classes.update(id, payload);
+      refreshState();
+      return { success: true, data: result };
+    },
+    archiveClass: (id) => {
+      const targetClass = repositories.classes.findById(id);
+      if (!targetClass) {
+        return { success: false, error: new Error("Kelas tidak ditemukan.") };
+      }
+      const result = repositories.classes.archiveClass(id);
+      refreshState();
+      return result;
+    },
+    restoreClass: (id) => {
+      const targetClass = repositories.classes.findById(id);
+      if (!targetClass) {
+        return { success: false, error: new Error("Kelas tidak ditemukan.") };
+      }
+      const result = repositories.classes.restoreClass(id);
+      refreshState();
+      return result;
+    },
+    deleteClass: (id, skipConfirm = false) => {
+      const targetClass = repositories.classes.findById(id);
+      if (!targetClass) {
+        return { success: false, error: new Error("Kelas tidak ditemukan.") };
+      }
+      const classStudents = repositories.students.findByClass(id);
+      if (!skipConfirm) {
+        const msg = `Hapus kelas "${targetClass.name}" permanen?\n\n` +
+          `Terdapat ${classStudents.length} siswa di kelas ini.\n\n` +
+          `PERINGATAN: Tindakan ini permanen dan tidak dapat dibatalkan. Seluruh data siswa, sesi, absensi, asesmen, riwayat pertumbuhan, observasi, dan laporan eksklusif milik kelas ini akan dihapus. Lanjutkan?`;
+        if (!window.confirm(msg)) {
+          return { success: false, cancelled: true };
+        }
+      }
+      const result = repositories.classes.deleteCascade(id);
+      refreshState();
+      return result;
     },
     createTag: (input) => {
       repositories.tags.create(input);

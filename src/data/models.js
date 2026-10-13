@@ -54,15 +54,26 @@ export function createTeacher(input = {}) {
 }
 
 export function createClassRoom(input = {}) {
+  const grade = String(input.grade ?? input.gradeLevel ?? "").trim();
+  const gradeLevel = input.gradeLevel !== undefined && input.gradeLevel !== null && input.gradeLevel !== ""
+    ? String(input.gradeLevel).trim()
+    : grade;
+
   return {
+    ...input,
     ...withMeta(input, "class"),
     name: input.name || "",
-    grade: input.grade || "",
+    grade,
+    gradeLevel,
+    homeroomTeacher: input.homeroomTeacher || "",
+    academicYear: input.academicYear || "",
     academicYearId: input.academicYearId || "",
     teacherId: input.teacherId || "",
     status: input.status || "active" // active | archived
   };
 }
+
+export const createClass = createClassRoom;
 
 export function createStudent(input = {}) {
   return {

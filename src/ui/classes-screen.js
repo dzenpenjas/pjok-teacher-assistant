@@ -251,9 +251,13 @@ export function renderClassesScreen(state, actions) {
   if (!Array.isArray(classUi.reportSelection.observationIds)) {
     classUi.reportSelection.observationIds = [];
   }
+  if (!classUi.classStatusFilter) {
+    classUi.classStatusFilter = "active";
+  }
 
   let showAddClassModal = false;
   let showAddStudentModal = false;
+  let showClassSettingsModal = false;
 
   currentClassUi = classUi;
   currentAppScreen = state?.currentScreen || "classes";
@@ -418,12 +422,52 @@ export function renderClassesScreen(state, actions) {
     container.append(header);
 
     const classes = state.classes || [];
-    if (classes.length === 0) {
+    const activeClasses = classes.filter((c) => c.status !== "archived");
+    const archivedClasses = classes.filter((c) => c.status === "archived");
+
+    const currentFilter = classUi.classStatusFilter === "archived" ? "archived" : "active";
+    const filteredClasses = currentFilter === "archived" ? archivedClasses : activeClasses;
+
+    // Filter subnav tabs: Aktif / Diarsipkan
+    const filterRow = createElement("div", "subnav-tabs-row class-list-filter-row");
+    const activeFilterBtn = createElement(
+      "button",
+      `subnav-tab ${currentFilter === "active" ? "is-active" : ""}`,
+      `Kelas Aktif (${activeClasses.length})`
+    );
+    activeFilterBtn.type = "button";
+    activeFilterBtn.addEventListener("click", () => {
+      classUi.classStatusFilter = "active";
+      render();
+    });
+
+    const archivedFilterBtn = createElement(
+      "button",
+      `subnav-tab ${currentFilter === "archived" ? "is-active" : ""}`,
+      `Diarsipkan (${archivedClasses.length})`
+    );
+    archivedFilterBtn.type = "button";
+    archivedFilterBtn.addEventListener("click", () => {
+      classUi.classStatusFilter = "archived";
+      render();
+    });
+
+    filterRow.append(activeFilterBtn, archivedFilterBtn);
+    container.append(filterRow);
+
+    if (filteredClasses.length === 0) {
       const emptyCard = createElement("div", "empty-state-card");
-      emptyCard.append(
-        createElement("p", "empty-copy", "Belum ada kelas yang terdaftar."),
-        createElement("p", "screen-copy", "Klik tombol 'Tambah Kelas' di atas untuk memulai.")
-      );
+      if (currentFilter === "archived") {
+        emptyCard.append(
+          createElement("p", "empty-copy", "Tidak ada kelas yang diarsipkan."),
+          createElement("p", "screen-copy", "Kelas yang diarsipkan akan muncul di sini dan dapat dipulihkan kapan saja.")
+        );
+      } else {
+        emptyCard.append(
+          createElement("p", "empty-copy", "Belum ada kelas aktif yang terdaftar."),
+          createElement("p", "screen-copy", "Klik tombol 'Tambah Kelas' di atas untuk memulai.")
+        );
+      }
       container.append(emptyCard);
 
       if (showAddClassModal) {
@@ -444,28 +488,32 @@ export function renderClassesScreen(state, actions) {
 
     const grid = createElement("div", "class-cards-grid");
 
-    classes.forEach((c) => {
+    filteredClasses.forEach((c) => {
       const classStudents = (state.students || []).filter((s) => s.classId === c.id);
-      const classSessions = (state.sessions || []).filter((sess) => sess.classId === c.id);
       const activeSession = (state.sessions || []).find((sess) => sess.classId === c.id && (sess.status === "active" || sess.status === "paused"));
-      
+      const isArchived = c.status === "archived";
+
       const attentionCount = classStudents.filter((st) => {
         return (Array.isArray(st.tagIds) && st.tagIds.some((id) => healthTagIds.has(id))) || (st.noteIds && st.noteIds.length > 0);
       }).length;
 
-      const card = createElement("article", "class-summary-card");
+      const card = createElement("article", `class-summary-card ${isArchived ? "class-card-archived opacity-90" : ""}`);
       card.addEventListener("click", () => {
         openClassDetail(c.id);
       });
 
       const topRow = createElement("div", "class-card-top");
       const titleWrap = createElement("div");
+      const gradeText = c.grade || c.gradeLevel || "-";
       titleWrap.append(
         createElement("h2", "class-card-name", c.name),
-        createElement("p", "class-card-meta", `${classStudents.length} Siswa ${c.homeroomTeacher ? `• Wali: ${c.homeroomTeacher}` : ""}`)
+        createElement("p", "class-card-meta", `Tingkat ${gradeText} • ${classStudents.length} Siswa ${c.homeroomTeacher ? `• Wali: ${c.homeroomTeacher}` : ""}`)
       );
 
-      if (activeSession) {
+      if (isArchived) {
+        const badge = createElement("span", "session-status-badge status-archived", "📦 Diarsipkan");
+        topRow.append(titleWrap, badge);
+      } else if (activeSession) {
         const badge = createElement("span", "session-status-badge status-active", "● Sesi Berjalan");
         topRow.append(titleWrap, badge);
       } else {
@@ -473,33 +521,55 @@ export function renderClassesScreen(state, actions) {
       }
       card.append(topRow);
 
-      if (attentionCount > 0) {
+      if (attentionCount > 0 && !isArchived) {
         const warnBadge = createElement("div", "class-attention-row", `⚠️ ${attentionCount} siswa memiliki catatan kesehatan khusus`);
         card.append(warnBadge);
       }
 
       // Action Buttons
       const actionsRow = createElement("div", "class-card-actions");
-      
-      const startBtn = createElement("button", "primary-action btn-start-session-card");
-      startBtn.type = "button";
-      startBtn.append(ICONS.play(18), document.createTextNode(activeSession ? " Lanjutkan Sesi" : " Mulai Sesi"));
-      startBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (actions?.quickStartClassSession) {
-          actions.quickStartClassSession(c.id);
-        }
-      });
+      if (isArchived) {
+        const openBtn = createElement("button", "btn-tool btn-open-class-card");
+        openBtn.type = "button";
+        openBtn.append(ICONS.users(16), document.createTextNode(" Buka Kelas"));
+        openBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openClassDetail(c.id);
+        });
 
-      const openBtn = createElement("button", "btn-tool btn-open-class-card");
-      openBtn.type = "button";
-      openBtn.append(ICONS.users(16), document.createTextNode(" Buka Kelas"));
-      openBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        openClassDetail(c.id);
-      });
+        const restoreBtn = createElement("button", "primary-action");
+        restoreBtn.type = "button";
+        restoreBtn.append(document.createTextNode("♻️ Pulihkan"));
+        restoreBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (actions?.restoreClass) {
+            actions.restoreClass(c.id);
+          }
+          render();
+        });
 
-      actionsRow.append(startBtn, openBtn);
+        actionsRow.append(openBtn, restoreBtn);
+      } else {
+        const startBtn = createElement("button", "primary-action btn-start-session-card");
+        startBtn.type = "button";
+        startBtn.append(ICONS.play(18), document.createTextNode(activeSession ? " Lanjutkan Sesi" : " Mulai Sesi"));
+        startBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (actions?.quickStartClassSession) {
+            actions.quickStartClassSession(c.id);
+          }
+        });
+
+        const openBtn = createElement("button", "btn-tool btn-open-class-card");
+        openBtn.type = "button";
+        openBtn.append(ICONS.users(16), document.createTextNode(" Buka Kelas"));
+        openBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openClassDetail(c.id);
+        });
+
+        actionsRow.append(startBtn, openBtn);
+      }
       card.append(actionsRow);
 
       grid.append(card);
@@ -534,12 +604,32 @@ export function renderClassesScreen(state, actions) {
     });
     container.append(backBtn);
 
+    const isArchived = classRoom.status === "archived";
     const header = createElement("header", "class-detail-header");
     const titleGroup = createElement("div");
+    const gradeText = classRoom.grade || classRoom.gradeLevel || "-";
+    const titleRow = createElement("div", "class-detail-title-row flex items-center gap-2 flex-wrap");
+    titleRow.append(createElement("h1", "screen-title", classRoom.name));
+    if (isArchived) {
+      titleRow.append(createElement("span", "session-status-badge status-archived", "📦 Diarsipkan"));
+    }
     titleGroup.append(
-      createElement("h1", "screen-title", classRoom.name),
-      createElement("p", "screen-copy", `Tingkat ${classRoom.gradeLevel || "-"} • Total ${classStudents.length} Siswa • ${classSessions.length} Sesi Terlaksana`)
+      titleRow,
+      createElement(
+        "p",
+        "screen-copy",
+        `Tingkat ${gradeText} • Total ${classStudents.length} Siswa • ${classSessions.length} Sesi Terlaksana${classRoom.homeroomTeacher ? ` • Wali: ${classRoom.homeroomTeacher}` : ""}${classRoom.academicYear ? ` • TA: ${classRoom.academicYear}` : ""}`
+      )
     );
+
+    if (isArchived) {
+      const archiveBanner = createElement(
+        "div",
+        "class-attention-row",
+        "📦 Kelas ini berstatus Diarsipkan. Jadwal dinonaktifkan. Data siswa, asesmen, dan laporan tetap tersimpan aman. Gunakan 'Pengaturan Kelas' untuk memulihkan kelas."
+      );
+      titleGroup.append(archiveBanner);
+    }
 
     // Big Primary Start Session CTA
     const mainStartBtn = createElement("button", "primary-action btn-detail-start-session");
@@ -575,31 +665,15 @@ export function renderClassesScreen(state, actions) {
       render();
     });
 
-    const editClassBtn = createElement("button", "btn-tool");
-    editClassBtn.type = "button";
-    editClassBtn.append(ICONS.settings(15), document.createTextNode(" Edit Nama"));
-    editClassBtn.addEventListener("click", () => {
-      const newName = window.prompt("Nama Kelas:", classRoom.name);
-      if (newName && newName.trim()) {
-        actions.updateClass(classRoom.id, { ...classRoom, name: newName.trim() });
-        render();
-      }
+    const settingsClassBtn = createElement("button", "btn-tool");
+    settingsClassBtn.type = "button";
+    settingsClassBtn.append(ICONS.settings(15), document.createTextNode(" Pengaturan Kelas"));
+    settingsClassBtn.addEventListener("click", () => {
+      showClassSettingsModal = true;
+      render();
     });
 
-    const deleteClassBtn = createElement("button", "btn-tool text-subtle");
-    deleteClassBtn.type = "button";
-    deleteClassBtn.append(ICONS.trash(15), document.createTextNode(" Hapus Kelas"));
-    deleteClassBtn.addEventListener("click", () => {
-      if (window.confirm(`Hapus Kelas "${classRoom.name}" beserta seluruh data siswa dan riwayat sesinya?\nTindakan ini tidak dapat dibatalkan.`)) {
-        actions.deleteClass(classRoom.id);
-        classUi.selectedClassId = null;
-        classUi.mode = "list";
-        classUi.activeAssessmentSessionId = null;
-        render();
-      }
-    });
-
-    adminCluster.append(createAssessBtn, growthScreeningBtn, addStudentBtn, editClassBtn, deleteClassBtn);
+    adminCluster.append(createAssessBtn, growthScreeningBtn, addStudentBtn, settingsClassBtn);
     header.append(titleGroup, mainStartBtn, adminCluster);
     container.append(header);
 
@@ -666,6 +740,9 @@ export function renderClassesScreen(state, actions) {
 
     if (showAddStudentModal) {
       container.append(renderAddStudentModal(classRoom));
+    }
+    if (showClassSettingsModal) {
+      container.append(renderClassSettingsModal(classRoom));
     }
   }
 
@@ -3308,11 +3385,12 @@ export function renderClassesScreen(state, actions) {
 
   function renderAddClassModal() {
     const backdrop = createElement("div", "modal-backdrop");
-    const modal = createElement("div", "modal-card");
+    const modal = createElement("div", "modal-card class-settings-modal");
 
     const header = createElement("div", "modal-header-row");
     header.append(createElement("h2", "modal-title", "Tambah Kelas Baru"));
     const closeBtn = createElement("button", "modal-close-btn", "✕");
+    closeBtn.type = "button";
     closeBtn.addEventListener("click", () => {
       showAddClassModal = false;
       render();
@@ -3320,40 +3398,327 @@ export function renderClassesScreen(state, actions) {
     header.append(closeBtn);
     modal.append(header);
 
+    const errorBanner = createElement("div", "form-error-banner hidden");
+    modal.append(errorBanner);
+
+    function showError(msg) {
+      errorBanner.textContent = `⚠️ ${msg}`;
+      errorBanner.classList.remove("hidden");
+    }
+
     const form = createElement("form", "master-form");
+
+    const gradeOptions = [
+      { value: "1", label: "Tingkat 1 (Kelas 1)" },
+      { value: "2", label: "Tingkat 2 (Kelas 2)" },
+      { value: "3", label: "Tingkat 3 (Kelas 3)" },
+      { value: "4", label: "Tingkat 4 (Kelas 4)" },
+      { value: "5", label: "Tingkat 5 (Kelas 5)" },
+      { value: "6", label: "Tingkat 6 (Kelas 6)" }
+    ];
+
+    const academicYears = state.academicYears || [];
+    const activeYear = academicYears.find((y) => y.isActive) || academicYears[0];
+    const defaultAcademicYearName = activeYear ? activeYear.name : "2026/2027";
+
     form.append(
       createField({ label: "Nama Kelas (misal: Kelas 5A)", name: "name", required: true }),
-      createField({ label: "Tingkat Kelas (1-6)", name: "gradeLevel", type: "number", required: true }),
-      createField({ label: "Nama Wali Kelas", name: "homeroomTeacher" }),
       createSelectField({
-        label: "Tahun Ajaran",
-        name: "academicYearId",
-        options: (state.academicYears || []).map((y) => ({ value: y.id, label: y.name }))
+        label: "Tingkat Kelas (1–6)",
+        name: "grade",
+        value: "1",
+        options: gradeOptions
       }),
-      createSelectField({
-        label: "Semester",
-        name: "semesterId",
-        options: (state.semesters || []).map((s) => ({ value: s.id, label: s.name }))
-      })
+      createField({ label: "Nama Wali Kelas", name: "homeroomTeacher" }),
+      academicYears.length > 0
+        ? createSelectField({
+            label: "Tahun Ajaran",
+            name: "academicYearId",
+            value: activeYear?.id || "",
+            options: academicYears.map((y) => ({ value: y.id, label: y.name }))
+          })
+        : createField({
+            label: "Tahun Ajaran",
+            name: "academicYear",
+            value: defaultAcademicYearName
+          })
     );
 
     const btnRow = createElement("div", "modal-btn-row");
+    const cancelBtn = createElement("button", "btn-tool", "Batal");
+    cancelBtn.type = "button";
+    cancelBtn.addEventListener("click", () => {
+      showAddClassModal = false;
+      render();
+    });
+
     const submitBtn = createElement("button", "primary-action", "Simpan Kelas");
     submitBtn.type = "submit";
-    btnRow.append(submitBtn);
+    btnRow.append(cancelBtn, submitBtn);
     form.append(btnRow);
 
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const payload = formToObject(form);
+      const name = String(payload.name || "").trim();
+      const gradeStr = String(payload.grade || payload.gradeLevel || "").trim();
+      const gradeNum = parseInt(gradeStr, 10);
+
+      if (!name) {
+        showError("Nama kelas tidak boleh kosong.");
+        return;
+      }
+      if (isNaN(gradeNum) || gradeNum < 1 || gradeNum > 6) {
+        showError("Tingkat kelas harus berada pada rentang 1–6.");
+        return;
+      }
+
+      const selectedYear = academicYears.find((y) => y.id === payload.academicYearId);
+      const academicYearName = selectedYear ? selectedYear.name : (payload.academicYear || defaultAcademicYearName);
+
+      const createPayload = {
+        name,
+        grade: String(gradeNum),
+        gradeLevel: String(gradeNum),
+        homeroomTeacher: String(payload.homeroomTeacher || "").trim(),
+        academicYear: academicYearName,
+        academicYearId: payload.academicYearId || (activeYear?.id || ""),
+        status: "active"
+      };
+
       if (actions?.createClass) {
-        actions.createClass(payload);
+        const result = actions.createClass(createPayload);
+        if (result && result.success === false) {
+          showError(result.error?.message || "Gagal menyimpan kelas.");
+          return;
+        }
       }
       showAddClassModal = false;
       render();
     });
 
     modal.append(form);
+    backdrop.append(modal);
+    return backdrop;
+  }
+
+  function renderClassSettingsModal(classRoom) {
+    const backdrop = createElement("div", "modal-backdrop");
+    const modal = createElement("div", "modal-card class-settings-modal");
+
+    const header = createElement("div", "modal-header-row");
+    header.append(createElement("h2", "modal-title", "Pengaturan Kelas"));
+    const closeBtn = createElement("button", "modal-close-btn", "✕");
+    closeBtn.type = "button";
+    closeBtn.addEventListener("click", () => {
+      showClassSettingsModal = false;
+      render();
+    });
+    header.append(closeBtn);
+    modal.append(header);
+
+    const errorBanner = createElement("div", "form-error-banner hidden");
+    modal.append(errorBanner);
+
+    function showError(msg) {
+      errorBanner.textContent = `⚠️ ${msg}`;
+      errorBanner.classList.remove("hidden");
+    }
+
+    const form = createElement("form", "master-form class-settings-form");
+
+    const gradeOptions = [
+      { value: "1", label: "Tingkat 1 (Kelas 1)" },
+      { value: "2", label: "Tingkat 2 (Kelas 2)" },
+      { value: "3", label: "Tingkat 3 (Kelas 3)" },
+      { value: "4", label: "Tingkat 4 (Kelas 4)" },
+      { value: "5", label: "Tingkat 5 (Kelas 5)" },
+      { value: "6", label: "Tingkat 6 (Kelas 6)" }
+    ];
+
+    const currentGrade = String(classRoom.grade || classRoom.gradeLevel || "1").trim();
+    const academicYears = state.academicYears || [];
+    const activeYear = academicYears.find((y) => y.isActive) || academicYears[0];
+    const currentAcademicYear =
+      classRoom.academicYear ||
+      (academicYears.find((y) => y.id === classRoom.academicYearId)?.name) ||
+      activeYear?.name ||
+      "";
+
+    form.append(
+      createField({
+        label: "Nama Kelas",
+        name: "name",
+        value: classRoom.name || "",
+        required: true
+      }),
+      createSelectField({
+        label: "Tingkat Kelas (1–6)",
+        name: "grade",
+        value: currentGrade,
+        options: gradeOptions
+      }),
+      createField({
+        label: "Nama Wali Kelas",
+        name: "homeroomTeacher",
+        value: classRoom.homeroomTeacher || ""
+      }),
+      academicYears.length > 0
+        ? createSelectField({
+            label: "Tahun Ajaran",
+            name: "academicYearId",
+            value: classRoom.academicYearId || activeYear?.id || "",
+            options: academicYears.map((y) => ({ value: y.id, label: y.name }))
+          })
+        : createField({
+            label: "Tahun Ajaran",
+            name: "academicYear",
+            value: currentAcademicYear
+          })
+    );
+
+    const btnRow = createElement("div", "modal-btn-row");
+    const cancelBtn = createElement("button", "btn-tool", "Batal");
+    cancelBtn.type = "button";
+    cancelBtn.addEventListener("click", () => {
+      showClassSettingsModal = false;
+      render();
+    });
+
+    const submitBtn = createElement("button", "primary-action", "Simpan Perubahan");
+    submitBtn.type = "submit";
+    btnRow.append(cancelBtn, submitBtn);
+    form.append(btnRow);
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const payload = formToObject(form);
+      const name = String(payload.name || "").trim();
+      const gradeStr = String(payload.grade || payload.gradeLevel || "").trim();
+      const gradeNum = parseInt(gradeStr, 10);
+
+      if (!name) {
+        showError("Nama kelas tidak boleh kosong.");
+        return;
+      }
+      if (isNaN(gradeNum) || gradeNum < 1 || gradeNum > 6) {
+        showError("Tingkat kelas harus berada pada rentang 1–6.");
+        return;
+      }
+
+      const selectedYear = academicYears.find((y) => y.id === payload.academicYearId);
+      const academicYearName = selectedYear ? selectedYear.name : (payload.academicYear || currentAcademicYear);
+
+      const updateData = {
+        ...classRoom,
+        name,
+        grade: String(gradeNum),
+        gradeLevel: String(gradeNum),
+        homeroomTeacher: String(payload.homeroomTeacher || "").trim(),
+        academicYear: academicYearName,
+        academicYearId: payload.academicYearId || (classRoom.academicYearId || "")
+      };
+
+      if (actions?.updateClass) {
+        const result = actions.updateClass(classRoom.id, updateData);
+        if (result && result.success === false) {
+          showError(result.error?.message || "Gagal menyimpan perubahan kelas.");
+          return;
+        }
+      }
+
+      Object.assign(classRoom, updateData);
+      showClassSettingsModal = false;
+      render();
+    });
+
+    modal.append(form);
+
+    // Divider
+    modal.append(createElement("hr", "class-settings-divider"));
+
+    // Status Section (Arsipkan / Pulihkan)
+    const isArchived = classRoom.status === "archived";
+    const statusBox = createElement("div", "class-settings-action-block status-block");
+    const statusTitle = createElement("strong", "", isArchived ? "Status: Diarsipkan" : "Status: Kelas Aktif");
+    const statusDesc = createElement(
+      "p",
+      "text-subtle text-xs",
+      isArchived
+        ? "Kelas ini saat ini berstatus Diarsipkan. Jadwal dinonaktifkan. Data siswa, asesmen, dan laporan tetap tersimpan aman. Pulihkan untuk memunculkannya kembali pada daftar kelas aktif."
+        : "Arsipkan kelas ini untuk memindahkannya dari daftar utama ke tab Arsip. Seluruh data siswa, asesmen, nilai, riwayat pertumbuhan, observasi, dan laporan tetap tersimpan aman. Jadwal terkait kelas ini akan dinonaktifkan."
+    );
+
+    const statusActionBtn = createElement(
+      "button",
+      isArchived ? "primary-action compact-action" : "btn-tool compact-action",
+      isArchived ? "♻️ Pulihkan Kelas" : "📦 Arsipkan Kelas"
+    );
+    statusActionBtn.type = "button";
+    statusActionBtn.addEventListener("click", () => {
+      if (isArchived) {
+        if (actions?.restoreClass) {
+          actions.restoreClass(classRoom.id);
+        }
+        classRoom.status = "active";
+        showClassSettingsModal = false;
+        render();
+      } else {
+        const confirmArchive = window.confirm(
+          `Arsipkan Kelas "${classRoom.name}"?\n\n` +
+          `Kelas akan dipindahkan ke tab Arsip. Jadwal terkait akan dinonaktifkan.\n` +
+          `Data siswa, nilai, pertumbuhan, dan laporan tetap tersimpan aman.`
+        );
+        if (confirmArchive) {
+          if (actions?.archiveClass) {
+            actions.archiveClass(classRoom.id);
+          }
+          classRoom.status = "archived";
+          showClassSettingsModal = false;
+          render();
+        }
+      }
+    });
+
+    statusBox.append(statusTitle, statusDesc, statusActionBtn);
+    modal.append(statusBox);
+
+    // Danger Zone (Hapus Kelas)
+    const classStudents = (state.students || []).filter((s) => s.classId === classRoom.id);
+    const dangerBox = createElement("div", "class-settings-action-block danger-block");
+    const dangerTitle = createElement("strong", "text-red-700 dark:text-red-400", "Zona Bahaya");
+    const dangerDesc = createElement(
+      "p",
+      "text-subtle text-xs",
+      `Hapus kelas "${classRoom.name}" permanen beserta ${classStudents.length} siswa dan seluruh riwayat asesmen serta laporannya. Tindakan ini tidak dapat dibatalkan.`
+    );
+    const deleteBtn = createElement("button", "btn-tool text-red-600 dark:text-red-400 compact-action", "🗑️ Hapus Kelas Permanen");
+    deleteBtn.type = "button";
+    deleteBtn.addEventListener("click", () => {
+      const confirmDelete = window.confirm(
+        `Hapus kelas "${classRoom.name}" permanen?\n\n` +
+        `Terdapat ${classStudents.length} siswa di kelas ini.\n\n` +
+        `PERINGATAN: Tindakan ini permanen dan tidak dapat dibatalkan. Seluruh data siswa, sesi mengajar, absensi, hasil asesmen, riwayat pertumbuhan, observasi, jadwal, dan laporan eksklusif milik kelas ini akan dihapus.`
+      );
+      if (confirmDelete) {
+        if (actions?.deleteClass) {
+          const res = actions.deleteClass(classRoom.id, true);
+          if (res && res.success === false && !res.cancelled) {
+            showError(res.error?.message || "Gagal menghapus kelas.");
+            return;
+          }
+        }
+        showClassSettingsModal = false;
+        classUi.selectedClassId = null;
+        classUi.mode = "list";
+        classUi.activeAssessmentSessionId = null;
+        render();
+      }
+    });
+
+    dangerBox.append(dangerTitle, dangerDesc, deleteBtn);
+    modal.append(dangerBox);
+
     backdrop.append(modal);
     return backdrop;
   }

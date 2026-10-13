@@ -659,6 +659,65 @@ textarea {
   border: 1px solid #bee3f8;
 }
 
+.status-archived {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.class-settings-modal {
+  max-width: 520px;
+  width: 95%;
+}
+
+.class-settings-divider {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: 16px 0 12px;
+}
+
+.class-settings-action-block {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.class-settings-action-block.status-block {
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+}
+
+.class-settings-action-block.danger-block {
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
+}
+
+.dark .class-settings-action-block.danger-block {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.form-error-banner {
+  background: #fff5f5;
+  color: #c53030;
+  border: 1px solid #feb2b2;
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.dark .form-error-banner {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+
 /* SESSION CONTROLS TOOLBAR */
 .session-control-toolbar {
   display: flex;
