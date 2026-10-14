@@ -884,19 +884,31 @@ function createCrudActions() {
       refreshState();
     },
     saveAssessmentResult: (input) => {
-      if (input.sessionId) {
-        const session = repositories.sessions.findById(input.sessionId);
-        if (session && sessionManager.isReadOnly(session)) return;
-      }
-
-      if (input.assessmentSessionId) {
+      // 1. Identify parent teaching session
+      let parentSessionId = input.sessionId;
+      
+      // If assessmentSessionId provided, attempt to resolve parent teaching session from it
+      if (!parentSessionId && input.assessmentSessionId) {
         const assessment = repositories.assessmentSessions.findById(input.assessmentSessionId);
         if (assessment && assessment.sessionId) {
-          const session = repositories.sessions.findById(assessment.sessionId);
-          if (session && sessionManager.isReadOnly(session)) return;
+          parentSessionId = assessment.sessionId;
         }
       }
 
+      // 2. Validate session status if linked to a teaching session
+      if (parentSessionId) {
+        const session = repositories.sessions.findById(parentSessionId);
+        if (!session) {
+          // If explicitly linked to a non-existent session, refuse
+          return;
+        }
+        if (sessionManager.isReadOnly(session)) {
+          // Reject if session is completed or cancelled
+          return;
+        }
+      }
+
+      // 3. Find existing result
       const allResults = repositories.assessmentResults.findAll();
       let existing = null;
 
@@ -904,23 +916,33 @@ function createCrudActions() {
         existing = allResults.find(
           (r) => r.studentId === input.studentId && r.assessmentSessionId === input.assessmentSessionId
         );
-      } else if (input.definitionId && input.sessionId) {
+      } else if (input.definitionId && parentSessionId) {
         existing = allResults.find(
-          (r) => r.studentId === input.studentId && r.sessionId === input.sessionId && r.definitionId === input.definitionId
+          (r) => r.studentId === input.studentId && r.sessionId === parentSessionId && r.definitionId === input.definitionId
         );
-      } else if (input.sessionId) {
+      } else if (parentSessionId) {
         existing = allResults.find(
-          (r) => r.studentId === input.studentId && r.sessionId === input.sessionId
+          (r) => r.studentId === input.studentId && r.sessionId === parentSessionId
         );
       }
 
+      // 4. Perform update/create with protection
       if (existing) {
-        repositories.assessmentResults.update(existing.id, {
-          ...existing,
-          ...input
-        });
+        // Protect existing relational fields from being altered via input
+        const protectedUpdate = {
+          ...input,
+          id: existing.id,
+          studentId: existing.studentId,
+          // Maintain original session references
+          sessionId: existing.sessionId,
+          assessmentSessionId: existing.assessmentSessionId
+        };
+        repositories.assessmentResults.update(existing.id, protectedUpdate);
       } else {
-        repositories.assessmentResults.create(input);
+        repositories.assessmentResults.create({
+          ...input,
+          sessionId: parentSessionId // Ensure correct binding
+        });
       }
       refreshState();
     },
