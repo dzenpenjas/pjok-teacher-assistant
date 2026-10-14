@@ -884,13 +884,17 @@ function createCrudActions() {
       refreshState();
     },
     saveAssessmentResult: (input) => {
-      // 1. Identify parent teaching session
+      // 1. Resolve parent teaching session and validate input consistency
       let parentSessionId = input.sessionId;
       
-      // If assessmentSessionId provided, attempt to resolve parent teaching session from it
-      if (!parentSessionId && input.assessmentSessionId) {
+      if (input.assessmentSessionId) {
         const assessment = repositories.assessmentSessions.findById(input.assessmentSessionId);
         if (assessment && assessment.sessionId) {
+          if (parentSessionId && parentSessionId !== assessment.sessionId) {
+            // Conflict between provided sessionId and parent of assessmentSessionId
+            console.warn("Konflik: sessionId input berbeda dengan sesi induk asesmen.");
+            return;
+          }
           parentSessionId = assessment.sessionId;
         }
       }
@@ -899,7 +903,8 @@ function createCrudActions() {
       if (parentSessionId) {
         const session = repositories.sessions.findById(parentSessionId);
         if (!session) {
-          // If explicitly linked to a non-existent session, refuse
+          // Linked to non-existent session
+          console.warn("Gagal: Sesi induk tidak ditemukan.");
           return;
         }
         if (sessionManager.isReadOnly(session)) {
@@ -908,7 +913,7 @@ function createCrudActions() {
         }
       }
 
-      // 3. Find existing result
+      // 3. Find existing result and validate consistency
       const allResults = repositories.assessmentResults.findAll();
       let existing = null;
 
@@ -924,6 +929,18 @@ function createCrudActions() {
         existing = allResults.find(
           (r) => r.studentId === input.studentId && r.sessionId === parentSessionId
         );
+      }
+
+      // If existing exists and was linked to a teaching session, re-verify status
+      if (existing) {
+        const existingParentSessionId = existing.sessionId;
+        if (existingParentSessionId) {
+          const session = repositories.sessions.findById(existingParentSessionId);
+          if (!session || sessionManager.isReadOnly(session)) {
+            console.warn("Gagal: Sesi induk hasil existing tidak valid atau sudah diarsipkan.");
+            return;
+          }
+        }
       }
 
       // 4. Perform update/create with protection
