@@ -1381,6 +1381,30 @@ export function renderClassesScreen(state, actions) {
         progressBox.append(progressBarWrap);
       const timerEl = createElement("p", "text-xs font-medium mt-2");
       timerEl.id = "batch-student-timer";
+
+      const diag = classUi.batchState.diagnostic;
+      if (diag?.stage === BATCH_STAGES.API_WAITING && diag.requestStartedAt) {
+        const elapsed = Math.max(
+          0,
+          Math.floor((Date.now() - new Date(diag.requestStartedAt).getTime()) / 1000)
+        );
+
+        const status = elapsed < 20
+          ? "Menunggu respons AI"
+          : elapsed < 40
+            ? "Respons mulai lambat"
+            : "Mendekati batas waktu";
+
+        const color = elapsed < 20
+          ? "text-slate-500 dark:text-slate-400"
+          : elapsed < 40
+            ? "text-yellow-600 dark:text-yellow-400"
+            : "text-orange-600 dark:text-orange-400";
+
+        timerEl.textContent = `${status} • ${elapsed} detik`;
+        timerEl.className = `text-xs font-medium mt-2 ${color}`;
+      }
+
       progressBox.append(timerEl);
       } else if (classUi.batchState.statusSummary) {
         const summaryP = createElement("p", "font-semibold", classUi.batchState.statusSummary);
@@ -1550,7 +1574,6 @@ export function renderClassesScreen(state, actions) {
       };
 
       let batchTimerInterval = null;
-      let studentStartTime = null;
 
       function updateAiWaitingIndicator() {
         const timerEl = document.getElementById("batch-student-timer");
@@ -1562,7 +1585,10 @@ export function renderClassesScreen(state, actions) {
           return;
         }
 
-        const elapsed = Math.floor((Date.now() - diag.requestStartedAt) / 1000);
+        const elapsed = Math.max(
+          0,
+          Math.floor((Date.now() - new Date(diag.requestStartedAt).getTime()) / 1000)
+        );
         
         let statusText = "";
         let statusClass = "text-slate-500 dark:text-slate-400";
