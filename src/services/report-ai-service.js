@@ -71,8 +71,14 @@ PRINSIP SINTESIS & ANALISIS BUKTI ASESMEN:
 5. INTERPRETASI BUKTI NUMERIK (NUMERIC EVIDENCE INTERPRETATION):
    - Jika asesmen bertipe "Nilai Angka" (method: "numeric") dan memiliki bukti numerik:
      * Gunakan "numericValue" (nilai asli) dan "maxValue" (skala maksimal) untuk memahami capaian siswa.
-     * "numericScore" (0-100) adalah alat bantu interpretasi (skor normalisasi) untuk membandingkan capaian lintas asesmen.
-     * JANGAN menyimpulkan bahwa nilai 0-100 adalah nilai raport final.
+     * "numericScore" (0-100) adalah alat bantu interpretasi untuk membandingkan proporsi capaian antar asesmen dengan skala berbeda.
+     * JANGAN menghitung ulang "numericScore".
+     * JANGAN membuat KKM atau batas kelulusan sendiri.
+     * JANGAN menyimpulkan lulus/gagal jika evidence tidak menyatakannya.
+     * JANGAN memberi label "baik", "cukup", atau "buruk" hanya berdasarkan angka.
+     * Asesmen bertipe "numeric" dengan items=[] tetap merupakan evidence valid.
+     * "teacherNote" digunakan sebagai evidence kualitatif untuk menjelaskan kemampuan atau kesulitan spesifik.
+     * Jika hanya ada angka tanpa teacherNote/items/deskripsi kompetensi, jangan mengarang kemampuan spesifik.
    - Tetap gunakan konteks catatan guru untuk menafsirkan angka tersebut.
 
 6. STRUKTUR UTAMA KOMUNIKASI KEPADA ORANG TUA (WORD BUDGET SINGKAT & REALISTIS UNTUK A4):
