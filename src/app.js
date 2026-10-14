@@ -808,7 +808,10 @@ function createCrudActions() {
         const session = repositories.sessions.findById(activity.sessionId);
         if (session && sessionManager.isReadOnly(session)) return;
       }
-      repositories.sessionActivities.update(id, input);
+      // Ensure sessionId is not modified for archived or existing sessions
+      const protectedInput = { ...input };
+      delete protectedInput.sessionId;
+      repositories.sessionActivities.update(id, protectedInput);
       refreshState();
     },
     deleteSessionActivity: (id) => {
