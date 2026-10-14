@@ -262,10 +262,18 @@ export function renderAssessmentPanel(context) {
           const val = valInput.value.trim();
           if (!val) return;
           const num = parseFloat(val);
+          const numericValue = isNaN(num) ? null : num;
+          let normalizedValue = null;
+          if (activeDefinition.method === 'numeric' && activeDefinition.maxValue && numericValue !== null) {
+            normalizedValue = Math.min(100, Math.max(0, (numericValue / activeDefinition.maxValue) * 100));
+          }
+          
           saveResult({
             studentId: student.id,
             value: val,
-            numericValue: isNaN(num) ? null : num,
+            numericValue: numericValue,
+            normalizedValue: normalizedValue,
+            maxValue: activeDefinition.maxValue,
             formattedValue: `${val} ${activeDefinition.unit || ""}`.trim(),
             note: noteInput.value.trim()
           });

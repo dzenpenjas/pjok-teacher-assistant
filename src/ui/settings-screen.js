@@ -445,6 +445,7 @@ export function renderSettingsScreen(state, actions, options = {}) {
         ]
       }),
       methodField,
+      createField({ label: "Nilai Maksimal (untuk Nilai Angka)", name: "maxValue", type: "number" }),
       scaleField,
       rubricEditorContainer
     );
@@ -601,6 +602,8 @@ export function renderSettingsScreen(state, actions, options = {}) {
 
     function syncVisibility() {
       const isRubric = methodSelect.value === "rubric";
+      const isNumeric = methodSelect.value === "numeric";
+      
       if (isRubric) {
         scaleField.style.display = "";
         rubricEditorContainer.style.display = "";
@@ -608,6 +611,12 @@ export function renderSettingsScreen(state, actions, options = {}) {
       } else {
         scaleField.style.display = "none";
         rubricEditorContainer.style.display = "none";
+      }
+
+      // Show/hide maxValue for numeric
+      const maxValField = form.querySelector('input[name="maxValue"]').closest('.field');
+      if (maxValField) {
+        maxValField.style.display = isNumeric ? "" : "none";
       }
     }
 

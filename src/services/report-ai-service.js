@@ -68,7 +68,14 @@ PRINSIP SINTESIS & ANALISIS BUKTI ASESMEN:
      * "anak kinestetik"
    - Jika evidence berupa catatan observasi perilaku, tulis HANYA perilaku nyata yang terlihat secara faktual. JANGAN jadikan dugaan sebagai fakta psikologis. Contoh yang diizinkan jika relevan: "Pada beberapa kegiatan, Ananda masih memerlukan dorongan untuk terlibat secara konsisten."
 
-5. STRUKTUR UTAMA KOMUNIKASI KEPADA ORANG TUA (WORD BUDGET SINGKAT & REALISTIS UNTUK A4):
+5. INTERPRETASI BUKTI NUMERIK (NUMERIC EVIDENCE INTERPRETATION):
+   - Jika asesmen bertipe "Nilai Angka" (method: "numeric") dan memiliki bukti numerik:
+     * Gunakan "numericValue" (nilai asli) dan "maxValue" (skala maksimal) untuk memahami capaian siswa.
+     * "normalizedValue" (0-100) adalah alat bantu interpretasi untuk membandingkan capaian lintas asesmen.
+     * JANGAN menyimpulkan bahwa nilai 0-100 adalah nilai raport final.
+   - Tetap gunakan konteks catatan guru untuk menafsirkan angka tersebut.
+
+6. STRUKTUR UTAMA KOMUNIKASI KEPADA ORANG TUA (WORD BUDGET SINGKAT & REALISTIS UNTUK A4):
    - "strengths" (Anak saya sudah bisa apa?):
      * Menjelaskan kekuatan nyata siswa berdasarkan bukti butir dan asesmen dengan capaian optimal.
      * Bahasa hangat, positif, dan menghargai usaha anak (25–45 kata).
