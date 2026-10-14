@@ -248,14 +248,33 @@ export function calculateReportScoring({ assessmentSelections = [], scoringConfi
     const itemResults = Array.isArray(result?.itemResults) ? result.itemResults : [];
 
     if (method === "numeric") {
+      if (rawScore === null || !Number.isFinite(rawScore)) {
+        sessions[sessionId] = {
+          assessmentSessionId: sessionId,
+          rawScore: null,
+          convertedScore: null,
+          canConvert: false,
+          reason: "NILAI_NUMERIK_TIDAK_VALID"
+        };
+        allConverted = false;
+        if (!firstFailureReason) {
+          firstFailureReason = "INCOMPLETE_CONVERSION";
+        }
+        continue;
+      }
+
+      const convertedFloat = minimum + ((rawScore / 100) * (maximum - minimum));
+      const convertedScore = Math.round(convertedFloat);
+
       sessions[sessionId] = {
         assessmentSessionId: sessionId,
-        rawScore: rawScore,
-        convertedScore: rawScore,
+        rawScore,
+        convertedScore,
         canConvert: true,
         reason: null
       };
-      convertedScoresList.push(rawScore);
+
+      convertedScoresList.push(convertedScore);
       continue;
     }
 

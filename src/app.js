@@ -195,14 +195,24 @@ function createCrudActions() {
     },
 
     startSessionForClass: (classId, overrides = {}) => {
-      // 1. If this class already has an active or paused session, resume it directly
-      const existingActiveForClass = repositories.sessions.findByClass(classId).find((s) => s.status === "active" || s.status === "paused");
-      if (existingActiveForClass) {
-        explicitSessionId = existingActiveForClass.id;
+      const existingForClass = repositories.sessions.findByClass(classId);
+      const activeForClass = existingForClass.find((s) => s.status === "active");
+      if (activeForClass) {
+        explicitSessionId = activeForClass.id;
         refreshState();
         setScreen(SCREENS.session);
         return;
       }
+      
+      const pausedForClass = existingForClass.find((s) => s.status === "paused");
+      if (pausedForClass) {
+        sessionManager.resumeSession(pausedForClass.id);
+        explicitSessionId = pausedForClass.id;
+        refreshState();
+        setScreen(SCREENS.session);
+        return;
+      }
+
 
       // 2. If another class has an active session, prompt teacher before auto-pausing
       const currentActive = sessionManager.getResumeCandidate();
@@ -928,7 +938,7 @@ function createCrudActions() {
 
     // TEACHING SESSION LIFECYCLE
     createSession: (input) => {
-      const created = sessionManager.createSession(input);
+      const created = sessionManager.createSession(input, { startImmediately: true });
       const newSession = Array.isArray(created) ? created.at(-1) : created;
       if (newSession) {
         explicitSessionId = newSession.id;

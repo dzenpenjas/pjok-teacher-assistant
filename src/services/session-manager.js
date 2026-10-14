@@ -138,8 +138,8 @@ export class SessionManager {
     if (!session) {
       return null;
     }
-    if (this.isReadOnly(session)) {
-      return session; // Immutable
+    if (this.isReadOnly(session) || session.status !== SESSION_STATUS.active) {
+      return session; // Immutable or not active
     }
 
     const finishedAt = new Date().toISOString();
