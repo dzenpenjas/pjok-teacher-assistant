@@ -1106,24 +1106,32 @@ export function renderClassesScreen(state, actions) {
     batchActionRow.append(runBatchBtn);
     
     if (classUi.batchState.isBatchGenerating) {
-      const diag = classUi.batchState.diagnostic;
+      const diag = classUi.batchState.diagnostic || {};
       const progressBox = createElement("div", "mt-4 p-4 bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-800 rounded-lg text-xs");
       const stageLabel = getDiagnosticStageLabel(diag.stage);
       
+      const completed = (classUi.batchState.successCount || 0) + (classUi.batchState.failedCount || 0) + (classUi.batchState.skippedCount || 0);
+      const total = classUi.batchState.totalStudents || 0;
+      
       const statusRow = createElement("div", "flex justify-between items-center mb-2");
       statusRow.append(
-        createElement("span", "font-semibold text-slate-800 dark:text-slate-200", `Progres: Siswa ${classUi.batchState.currentStudentIndex} dari ${classUi.batchState.totalStudents}`),
+        createElement("span", "font-semibold text-slate-800 dark:text-slate-200", `Progres: ${completed} / ${total} siswa selesai (${total - completed} tersisa)`),
         createElement("span", "text-sky-700 dark:text-sky-300 font-medium", stageLabel)
       );
 
-      const timerRow = createElement("div", "flex justify-between items-center text-sm font-medium");
-      timerRow.append(
-        createElement("span", "text-slate-600 dark:text-slate-400", `Sedang memproses: ${classUi.batchState.currentStudentName}`),
-        createElement("span", "text-slate-600 font-mono", "0 detik")
-      );
-      timerRow.lastElementChild.id = "batch-student-timer";
+      const statsSubRow = createElement("div", "text-slate-500 mb-3 text-[10px]");
+      statsSubRow.textContent = `${classUi.batchState.successCount} berhasil • ${classUi.batchState.failedCount} gagal • ${classUi.batchState.skippedCount} dilewati`;
 
-      progressBox.append(statusRow, timerRow);
+      const timerRow = createElement("div", "flex justify-between items-center text-sm font-medium");
+      const timerSpan = createElement("span", "text-slate-600 font-mono", "0 detik");
+      timerSpan.id = "batch-student-timer";
+      
+      timerRow.append(
+        createElement("span", "text-slate-600 dark:text-slate-400", `Sedang memproses: ${classUi.batchState.currentStudentName || "-"}`),
+        timerSpan
+      );
+
+      progressBox.append(statusRow, statsSubRow, timerRow);
       batchPanel.append(progressBox);
     }
 

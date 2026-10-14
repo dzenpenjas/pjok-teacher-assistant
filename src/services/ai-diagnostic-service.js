@@ -55,7 +55,12 @@ export function getDiagnosticStageLabel(stage) {
 /**
  * Categorizes AI diagnostic errors into teacher-friendly labels.
  */
-export function getFriendlyErrorMessage(errorCode, originalError) {
+export function getFriendlyErrorMessage(errorCode, originalError, httpStatus) {
+  if (httpStatus === 401 || httpStatus === 403) return "Izin akses AI tidak valid (Periksa API Key).";
+  if (httpStatus === 404) return "Model AI tidak tersedia.";
+  if (httpStatus === 429) return "Terlalu banyak permintaan (Rate limit). Tunggu sebentar.";
+  if (httpStatus >= 500) return "Kendala teknis pada server AI.";
+
   switch (errorCode) {
     case "AUTH_ERROR":
       return "Izin akses AI tidak valid (Periksa API Key).";
@@ -68,6 +73,9 @@ export function getFriendlyErrorMessage(errorCode, originalError) {
     case "AI_REQUEST_ERROR":
       return "Kendala teknis pada layanan AI.";
     default:
+      if (originalError && typeof originalError === 'string' && originalError.includes("Network")) {
+        return "Kendala jaringan. Pastikan koneksi internet stabil.";
+      }
       return originalError || "Kendala tidak dikenal.";
   }
 }

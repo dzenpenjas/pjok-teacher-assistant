@@ -1265,16 +1265,9 @@ function createGlobalAiBanner(batchState, actions) {
   if (isRunning) {
     const stageLabel = getDiagnosticStageLabel(batchState.diagnostic?.stage);
     const activeStudentSpan = document.createElement("span");
-    activeStudentSpan.textContent = `Sedang diproses: ${batchState.currentStudentName || "-"} (${stageLabel}) • Siswa ${batchState.currentStudentIndex || 0} dari ${totalStudents}`;
-
-    const statsSpan = document.createElement("span");
-    statsSpan.textContent = `${completedCount} selesai • ${batchState.failedCount || 0} gagal • ${batchState.skippedCount || 0} dilewati`;
-
-    const noteSpan = document.createElement("span");
-    noteSpan.className = "italic text-xs opacity-75";
-    noteSpan.textContent = "AI memproses laporan satu per satu.";
-
-    metaRow.append(activeStudentSpan, document.createElement("br"), statsSpan, document.createTextNode(" • "), noteSpan);
+    activeStudentSpan.textContent = `Sedang diproses: ${batchState.currentStudentName || "-"} (${stageLabel}) • ${ (batchState.successCount || 0) + (batchState.failedCount || 0) + (batchState.skippedCount || 0) } / ${totalStudents} selesai`;
+    
+    metaRow.append(activeStudentSpan);
   } else {
     const statsSpan = document.createElement("span");
     statsSpan.textContent = `${batchState.successCount || 0} berhasil • ${batchState.failedCount || 0} gagal • ${batchState.skippedCount || 0} dilewati`;
