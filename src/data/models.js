@@ -279,7 +279,7 @@ export function createAssessmentDefinition(input = {}) {
     purpose: input.purpose || "formative", // pretest, formative, posttest, midterm, final
     assessmentType: input.assessmentType || "unspecified", // written, oral, practice, observation, unspecified
     method,
-    maxValue: input.maxValue && Number(input.maxValue) > 0 ? Number(input.maxValue) : null,
+    maxValue: Number.isFinite(Number(input.maxValue)) && Number(input.maxValue) > 0 ? Number(input.maxValue) : null,
     unit: input.unit || "", // detik, cm, kali, poin
     direction: input.direction || "higher_better", // higher_better, lower_better
     rubricScale,

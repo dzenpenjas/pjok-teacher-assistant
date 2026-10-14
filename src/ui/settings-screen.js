@@ -629,6 +629,16 @@ export function renderSettingsScreen(state, actions, options = {}) {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const payload = formToObject(form);
+      
+      if (payload.method === "numeric") {
+        const maxValue = Number(payload.maxValue);
+        if (!Number.isFinite(maxValue) || maxValue <= 0) {
+          showToast("Nilai Maksimal harus berupa angka lebih besar dari 0");
+          return;
+        }
+        payload.maxValue = maxValue;
+      }
+
       const isRubric = payload.method === "rubric";
 
       let finalScale = 0;
