@@ -71,7 +71,7 @@ PRINSIP SINTESIS & ANALISIS BUKTI ASESMEN:
 5. INTERPRETASI BUKTI NUMERIK (NUMERIC EVIDENCE INTERPRETATION):
    - Jika asesmen bertipe "Nilai Angka" (method: "numeric") dan memiliki bukti numerik:
      * Gunakan "numericValue" (nilai asli) dan "maxValue" (skala maksimal) untuk memahami capaian siswa.
-     * "normalizedValue" (0-100) adalah alat bantu interpretasi untuk membandingkan capaian lintas asesmen.
+     * "numericScore" (0-100) adalah alat bantu interpretasi (skor normalisasi) untuk membandingkan capaian lintas asesmen.
      * JANGAN menyimpulkan bahwa nilai 0-100 adalah nilai raport final.
    - Tetap gunakan konteks catatan guru untuk menafsirkan angka tersebut.
 

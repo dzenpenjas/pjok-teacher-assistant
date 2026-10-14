@@ -261,20 +261,29 @@ export function renderAssessmentPanel(context) {
           if (isReadOnly) return;
           const val = valInput.value.trim();
           if (!val) return;
-          const num = parseFloat(val);
-          const numericValue = isNaN(num) ? null : num;
-          let normalizedValue = null;
-          if (activeDefinition.method === 'numeric' && activeDefinition.maxValue && numericValue !== null) {
-            normalizedValue = Math.min(100, Math.max(0, (numericValue / activeDefinition.maxValue) * 100));
+          const numericValue = Number(val);
+
+          if (
+            !Number.isFinite(numericValue) ||
+            numericValue < 0 ||
+            (activeDefinition.maxValue && numericValue > activeDefinition.maxValue)
+          ) {
+            return; // Jangan simpan
           }
-          
+
+          const numericScore = activeDefinition.maxValue 
+            ? Math.round((numericValue / activeDefinition.maxValue) * 100)
+            : null;
+
           saveResult({
             studentId: student.id,
-            value: val,
-            numericValue: numericValue,
-            normalizedValue: normalizedValue,
+            value: String(numericValue),
+            numericValue,
+            numericScore,
             maxValue: activeDefinition.maxValue,
-            formattedValue: `${val} ${activeDefinition.unit || ""}`.trim(),
+            formattedValue: activeDefinition.maxValue 
+              ? `${numericValue} / ${activeDefinition.maxValue}`
+              : String(numericValue),
             note: noteInput.value.trim()
           });
         });

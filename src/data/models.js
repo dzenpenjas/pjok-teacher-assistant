@@ -363,7 +363,7 @@ export function createAssessmentResult(input = {}) {
     studentId: input.studentId || "",
     value: input.value !== undefined ? input.value : "",
     numericValue: input.numericValue !== undefined && input.numericValue !== null ? Number(input.numericValue) : null,
-    normalizedValue: input.normalizedValue !== undefined && input.normalizedValue !== null ? Number(input.normalizedValue) : null,
+    maxValue: input.maxValue !== undefined && input.maxValue !== null ? Number(input.maxValue) : null,
     formattedValue: input.formattedValue || (input.value ? String(input.value) : "-"),
     rubricLevel: input.rubricLevel ? Number(input.rubricLevel) : null,
     itemResults: Array.isArray(input.itemResults)
