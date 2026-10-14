@@ -230,11 +230,14 @@ function createCrudActions() {
           if (!proceed) {
             return;
           }
-          sessionManager.pauseSession(currentActive.id);
         }
 
-        sessionManager.resumeSession(pausedForClass.id);
-        explicitSessionId = pausedForClass.id;
+        const resumed = sessionManager.resumeSession(pausedForClass.id);
+        if (!resumed || resumed.status !== "active") {
+          window.alert("Sesi gagal dilanjutkan. Silakan coba kembali.");
+          return;
+        }
+        explicitSessionId = resumed.id;
         refreshState();
         setScreen(SCREENS.session);
         return;
@@ -965,13 +968,21 @@ function createCrudActions() {
 
     // TEACHING SESSION LIFECYCLE
     createSession: (input) => {
+      const activeSession = sessionManager.getActiveSession();
+      if (activeSession && (activeSession.status === "active" || activeSession.status === "paused")) {
+        const proceed = window.confirm("Terdapat sesi aktif yang akan dijeda. Lanjutkan?");
+        if (!proceed) {
+          return;
+        }
+      }
+
       const created = sessionManager.createSession(input, { startImmediately: true });
       const newSession = Array.isArray(created) ? created.at(-1) : created;
-      if (newSession) {
+      if (newSession && newSession.status === "active") {
         explicitSessionId = newSession.id;
         loadDefaultActivitiesForSession(newSession.id);
+        refreshState();
       }
-      refreshState();
     },
     startSession: (id) => {
       sessionManager.startSession(id);
