@@ -86,6 +86,15 @@ function syncSessionPointer() {
 }
 
 function getSessionContext() {
+  if (explicitSessionId === "new-session") {
+    return {
+      session: null,
+      className: "",
+      statusLabel: "",
+      resumeAvailable: false
+    };
+  }
+
   let session = null;
   if (explicitSessionId) {
     session = repositories.sessions.findById(explicitSessionId);
@@ -190,7 +199,7 @@ function createCrudActions() {
 
     // SESSION SELECTION & LAUNCHER
     selectSession: (sessionId) => {
-      explicitSessionId = (sessionId === "new-session") ? null : sessionId;
+      explicitSessionId = sessionId;
       setScreen(SCREENS.session);
     },
 
@@ -206,6 +215,24 @@ function createCrudActions() {
       
       const pausedForClass = existingForClass.find((s) => s.status === "paused");
       if (pausedForClass) {
+        const currentActive = sessionManager.getActiveSession();
+        if (currentActive && currentActive.classId !== classId && (currentActive.status === "active" || currentActive.status === "paused")) {
+          const currentClassObj = (appState.classes || []).find((c) => c.id === currentActive.classId);
+          const targetClassObj = (appState.classes || []).find((c) => c.id === classId);
+          const currentName = currentClassObj ? currentClassObj.name : "sebelumnya";
+          const targetName = targetClassObj ? targetClassObj.name : "baru";
+
+          const proceed = window.confirm(
+            `Anda sedang memiliki sesi mengajar aktif untuk Kelas ${currentName}.\n\n` +
+            `Lanjutkan sesi untuk Kelas ${targetName}?\n` +
+            `Sesi Kelas ${currentName} akan otomatis dijeda (pause).`
+          );
+          if (!proceed) {
+            return;
+          }
+          sessionManager.pauseSession(currentActive.id);
+        }
+
         sessionManager.resumeSession(pausedForClass.id);
         explicitSessionId = pausedForClass.id;
         refreshState();
