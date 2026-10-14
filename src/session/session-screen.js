@@ -265,7 +265,7 @@ export function renderSessionScreen(session, context) {
   newSessBtn.append(ICONS.plus(16), document.createTextNode(" Sesi Baru"));
   newSessBtn.addEventListener("click", () => {
     if (context.actions.selectSession) {
-      context.actions.selectSession(null);
+      context.actions.selectSession("new-session");
     }
   });
   controlToolbar.append(newSessBtn);

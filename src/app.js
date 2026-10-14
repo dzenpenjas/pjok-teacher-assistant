@@ -190,7 +190,7 @@ function createCrudActions() {
 
     // SESSION SELECTION & LAUNCHER
     selectSession: (sessionId) => {
-      explicitSessionId = sessionId;
+      explicitSessionId = (sessionId === "new-session") ? null : sessionId;
       setScreen(SCREENS.session);
     },
 

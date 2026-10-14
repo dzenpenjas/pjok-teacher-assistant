@@ -150,7 +150,7 @@ export function renderSummaryPanel(context) {
     finalCard.append(
       createElement("p", "summary-done-copy", "✓ Sesi ini telah diselesaikan dan diarsipkan.")
     );
-  } else {
+  } else if (session.status === "active") {
     finalCard.append(
       createElement(
         "p",
@@ -191,6 +191,18 @@ export function renderSummaryPanel(context) {
 
     actionRow.append(finishBtn, pauseBtn);
     finalCard.append(actionRow);
+  } else if (session.status === "planned") {
+    finalCard.append(
+      createElement("p", "screen-copy", "Sesi ini berstatus Rencana. Gunakan tombol Mulai Mengajar pada toolbar di atas untuk memulai sesi.")
+    );
+  } else if (session.status === "paused") {
+    finalCard.append(
+      createElement("p", "screen-copy", "Sesi sedang dijeda. Gunakan tombol Lanjutkan Sesi di atas untuk meneruskan.")
+    );
+  } else if (session.status === "cancelled") {
+    finalCard.append(
+      createElement("p", "summary-done-copy", "Sesi ini telah dibatalkan.")
+    );
   }
 
   panel.append(finalCard);
