@@ -1105,35 +1105,7 @@ export function renderClassesScreen(state, actions) {
 
     batchActionRow.append(runBatchBtn);
     
-    if (classUi.batchState.isBatchGenerating) {
-      const diag = classUi.batchState.diagnostic || {};
-      const progressBox = createElement("div", "mt-4 p-4 bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-800 rounded-lg text-xs");
-      const stageLabel = getDiagnosticStageLabel(diag.stage);
-      
-      const completed = (classUi.batchState.successCount || 0) + (classUi.batchState.failedCount || 0) + (classUi.batchState.skippedCount || 0);
-      const total = classUi.batchState.totalStudents || 0;
-      
-      const statusRow = createElement("div", "flex justify-between items-center mb-2");
-      statusRow.append(
-        createElement("span", "font-semibold text-slate-800 dark:text-slate-200", `Progres: ${completed} / ${total} siswa selesai (${total - completed} tersisa)`),
-        createElement("span", "text-sky-700 dark:text-sky-300 font-medium", stageLabel)
-      );
 
-      const statsSubRow = createElement("div", "text-slate-500 mb-3 text-[10px]");
-      statsSubRow.textContent = `${classUi.batchState.successCount} berhasil • ${classUi.batchState.failedCount} gagal • ${classUi.batchState.skippedCount} dilewati`;
-
-      const timerRow = createElement("div", "flex justify-between items-center text-sm font-medium");
-      const timerSpan = createElement("span", "text-slate-600 font-mono", "0 detik");
-      timerSpan.id = "batch-student-timer";
-      
-      timerRow.append(
-        createElement("span", "text-slate-600 dark:text-slate-400", `Sedang memproses: ${classUi.batchState.currentStudentName || "-"}`),
-        timerSpan
-      );
-
-      progressBox.append(statusRow, statsSubRow, timerRow);
-      batchPanel.append(progressBox);
-    }
 
     if (classUi.batchState.failedStudentIds && classUi.batchState.failedStudentIds.length > 0 && !classUi.batchState.isBatchGenerating) {
       const retryBtn = createElement("button", "btn-tool btn-tool-primary text-xs", `🔄 Coba Lagi yang Gagal (${classUi.batchState.failedStudentIds.length})`);
@@ -1398,7 +1370,7 @@ export function renderClassesScreen(state, actions) {
 
         const progressBarWrap = createElement("div", "w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden mt-1");
         const pct = classUi.batchState.totalStudents > 0
-          ? Math.round((classUi.batchState.currentStudentIndex / classUi.batchState.totalStudents) * 100)
+          ? Math.round(((classUi.batchState.successCount + classUi.batchState.failedCount + classUi.batchState.skippedCount) / classUi.batchState.totalStudents) * 100)
           : 0;
         const progressBarFill = createElement("div", "bg-primary h-full transition-all duration-300");
         progressBarFill.style.width = `${pct}%`;

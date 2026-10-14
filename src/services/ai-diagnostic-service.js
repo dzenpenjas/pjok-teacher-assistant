@@ -106,7 +106,7 @@ export function formatAiDiagnosticText(diag) {
   const httpStatus = diag.httpStatus != null ? String(diag.httpStatus) : "-";
   const errorCode = diag.errorCode || "-";
   const error = diag.errorMessage || "-";
-  const friendlyError = getFriendlyErrorMessage(diag.errorCode, diag.errorMessage);
+  const friendlyError = getFriendlyErrorMessage(diag.errorCode, diag.errorMessage, diag.httpStatus);
 
   const lines = [
     "AI REPORT DIAGNOSTIC",
@@ -137,7 +137,7 @@ export function formatAiDiagnosticText(diag) {
       `HTTP status: ${lf.httpStatus != null ? String(lf.httpStatus) : "-"}`,
       `Waktu Tunggu: ${lfElapsed}`,
       `Kode Error: ${lf.errorCode || "-"}`,
-      `Deskripsi Error: ${getFriendlyErrorMessage(lf.errorCode, lf.errorMessage)}`
+      `Deskripsi Error: ${getFriendlyErrorMessage(lf.errorCode, lf.errorMessage, lf.httpStatus)}`
     );
   }
 
