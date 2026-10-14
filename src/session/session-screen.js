@@ -222,11 +222,16 @@ export function renderSessionScreen(session, context) {
     startBtn.addEventListener("click", () => context.actions.startSession(session.id));
     controlToolbar.append(startBtn);
   } else if (session.status === "active") {
+    const finishBtn = createElement("button", "btn-tool btn-tool-primary");
+    finishBtn.type = "button";
+    finishBtn.append(ICONS.check(16), document.createTextNode(" Selesaikan Sesi"));
+    finishBtn.addEventListener("click", () => context.actions.finishSession(session.id));
+    
     const pauseBtn = createElement("button", "btn-tool btn-tool-warning");
     pauseBtn.type = "button";
     pauseBtn.append(ICONS.pause(16), document.createTextNode(" Jeda Sesi"));
     pauseBtn.addEventListener("click", () => context.actions.pauseSession(session.id));
-    controlToolbar.append(pauseBtn);
+    controlToolbar.append(finishBtn, pauseBtn);
   } else if (session.status === "paused") {
     const resumeBtn = createElement("button", "btn-tool btn-tool-primary");
     resumeBtn.type = "button";
@@ -391,6 +396,8 @@ export function renderSessionScreen(session, context) {
           records: context.attendanceRecords || [],
           activities: context.sessionActivities || [],
           assessmentResults: context.assessmentResults || [],
+          assessmentSessions: context.assessmentSessions || [],
+          assessmentDefinitions: context.assessmentDefinitions || [],
           onUpdateSessionNotes: (sessionId, notes) => {
             context.actions.updateSessionNotes(sessionId, notes);
           },

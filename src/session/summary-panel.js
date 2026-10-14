@@ -63,8 +63,35 @@ export function renderSummaryPanel(context) {
   const actTotal = activities.length;
   const actCompleted = activities.filter((a) => a.status === "completed").length;
 
-  const currentResults = assessmentResults.filter((r) => r.sessionId === session.id);
-  const assessedCount = students.filter((s) => currentResults.some((r) => r.studentId === s.id && r.value)).length;
+  const assessmentSessionsMap = new Map((context.assessmentSessions || []).map(s => [s.id, s]));
+  const assessedStudentsSet = new Set();
+  
+  assessmentResults.forEach((r) => {
+    let parentSessionId = r.sessionId;
+    
+    // Resolve parent session from linked assessment session if needed
+    if (!parentSessionId && r.assessmentSessionId) {
+      const assessmentSession = assessmentSessionsMap.get(r.assessmentSessionId);
+      if (assessmentSession) {
+        parentSessionId = assessmentSession.sessionId;
+      }
+    }
+
+    // Only count if it belongs to current session and has a valid result
+    if (parentSessionId === session.id) {
+      const hasValue = r.value !== undefined && r.value !== null && r.value !== "" || 
+                       r.rubricLevel !== undefined || 
+                       r.numericScore !== undefined || 
+                       r.averageRubricScore !== undefined || 
+                       (Array.isArray(r.itemResults) && r.itemResults.length > 0);
+      
+      if (hasValue) {
+        assessedStudentsSet.add(r.studentId);
+      }
+    }
+  });
+
+  const assessedCount = assessedStudentsSet.size;
 
   const list = createElement("div", "summary-checklist");
 
