@@ -1104,6 +1104,28 @@ export function renderClassesScreen(state, actions) {
     });
 
     batchActionRow.append(runBatchBtn);
+    
+    if (classUi.batchState.isBatchGenerating) {
+      const diag = classUi.batchState.diagnostic;
+      const progressBox = createElement("div", "mt-4 p-4 bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-800 rounded-lg text-xs");
+      const stageLabel = getDiagnosticStageLabel(diag.stage);
+      
+      const statusRow = createElement("div", "flex justify-between items-center mb-2");
+      statusRow.append(
+        createElement("span", "font-semibold text-slate-800 dark:text-slate-200", `Progres: Siswa ${classUi.batchState.currentStudentIndex} dari ${classUi.batchState.totalStudents}`),
+        createElement("span", "text-sky-700 dark:text-sky-300 font-medium", stageLabel)
+      );
+
+      const timerRow = createElement("div", "flex justify-between items-center text-sm font-medium");
+      timerRow.append(
+        createElement("span", "text-slate-600 dark:text-slate-400", `Sedang memproses: ${classUi.batchState.currentStudentName}`),
+        createElement("span", "text-slate-600 font-mono", "0 detik")
+      );
+      timerRow.lastElementChild.id = "batch-student-timer";
+
+      progressBox.append(statusRow, timerRow);
+      batchPanel.append(progressBox);
+    }
 
     if (classUi.batchState.failedStudentIds && classUi.batchState.failedStudentIds.length > 0 && !classUi.batchState.isBatchGenerating) {
       const retryBtn = createElement("button", "btn-tool btn-tool-primary text-xs", `🔄 Coba Lagi yang Gagal (${classUi.batchState.failedStudentIds.length})`);
@@ -1544,6 +1566,16 @@ export function renderClassesScreen(state, actions) {
         lastFailure: null
       };
 
+      let batchTimerInterval = null;
+      let studentStartTime = null;
+
+      function clearBatchTimer() {
+        if (batchTimerInterval) {
+          clearInterval(batchTimerInterval);
+          batchTimerInterval = null;
+        }
+      }
+
       function updateDiag(newStage, updates = {}) {
         if (!classUi.batchState.diagnostic) return;
         const diag = classUi.batchState.diagnostic;
@@ -1552,6 +1584,23 @@ export function renderClassesScreen(state, actions) {
           diag.stage = newStage;
         }
         Object.assign(diag, updates);
+        
+        // Reset timer if starting API request
+        if (newStage === BATCH_STAGES.API_REQUEST_START) {
+          studentStartTime = Date.now();
+          clearBatchTimer();
+          batchTimerInterval = setInterval(() => {
+            const now = Date.now();
+            const elapsed = Math.floor((now - studentStartTime) / 1000);
+            const timerEl = document.getElementById("batch-student-timer");
+            if (timerEl) {
+              timerEl.textContent = `${elapsed} detik`;
+              timerEl.className = `text-xs font-mono ${elapsed < 20 ? "text-slate-600" : (elapsed < 40 ? "text-amber-600" : "text-red-600 font-bold")}`;
+            }
+          }, 1000);
+        } else if (newStage === BATCH_STAGES.API_RESPONSE_RECEIVED || newStage === BATCH_STAGES.ERROR || newStage === BATCH_STAGES.STUDENT_DONE) {
+          clearBatchTimer();
+        }
       }
 
       try {
@@ -1784,9 +1833,11 @@ export function renderClassesScreen(state, actions) {
         }
 
         updateDiag(BATCH_STAGES.BATCH_DONE);
+        clearBatchTimer();
         classUi.batchState.statusSummary = `Ringkasan: ${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati`;
       } catch (outerErr) {
         console.error("[BATCH REPORT OUTER ERROR]", outerErr);
+        clearBatchTimer();
         updateDiag(BATCH_STAGES.ERROR, {
           errorCode: outerErr?.code || "FATAL_BATCH_ERROR",
           errorMessage: outerErr?.message || String(outerErr)
@@ -1808,6 +1859,7 @@ export function renderClassesScreen(state, actions) {
         }
         classUi.batchState.statusSummary = `Terjadi kendala pada proses batch: ${outerErr?.message || "Gagal memproses batch"}`;
       } finally {
+        clearBatchTimer();
         classUi.batchState.isBatchGenerating = false;
         render();
         if (actions?.requestAppRender) {

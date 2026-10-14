@@ -53,6 +53,26 @@ export function getDiagnosticStageLabel(stage) {
 }
 
 /**
+ * Categorizes AI diagnostic errors into teacher-friendly labels.
+ */
+export function getFriendlyErrorMessage(errorCode, originalError) {
+  switch (errorCode) {
+    case "AUTH_ERROR":
+      return "Izin akses AI tidak valid (Periksa API Key).";
+    case "AI_REQUEST_TIMEOUT":
+      return "Permintaan AI terlalu lama (Timeout).";
+    case "INVALID_AI_RESPONSE":
+      return "Format jawaban AI tidak sesuai yang diharapkan.";
+    case "SAVE_ERROR":
+      return "Gagal menyimpan laporan ke penyimpanan.";
+    case "AI_REQUEST_ERROR":
+      return "Kendala teknis pada layanan AI.";
+    default:
+      return originalError || "Kendala tidak dikenal.";
+  }
+}
+
+/**
  * Formats diagnostic state into a clean, human-readable text block for clipboard.
  * Strictly excludes API keys, request headers, full prompt, and full report contents.
  */
@@ -60,14 +80,11 @@ export function formatAiDiagnosticText(diag) {
   if (!diag) return "AI REPORT DIAGNOSTIC\nNo diagnostic data available.";
 
   const runId = diag.runId || "-";
-  const stage = diag.stage || "-";
+  const stageLabel = getDiagnosticStageLabel(diag.stage) || "-";
   const studentName = diag.studentName || "-";
   const progress = (diag.totalStudents != null && diag.totalStudents > 0)
     ? `${diag.studentIndex || 0} / ${diag.totalStudents}`
     : "-";
-  const assessments = diag.assessmentCount != null ? diag.assessmentCount : "-";
-  const growth = diag.growthCount != null ? diag.growthCount : "-";
-  const observations = diag.observationCount != null ? diag.observationCount : "-";
   const requestStarted = diag.requestStartedAt || "-";
 
   let elapsed = "-";
@@ -79,25 +96,21 @@ export function formatAiDiagnosticText(diag) {
   }
 
   const httpStatus = diag.httpStatus != null ? String(diag.httpStatus) : "-";
-  const lastCompletedStage = diag.lastCompletedStage || "-";
   const errorCode = diag.errorCode || "-";
   const error = diag.errorMessage || "-";
+  const friendlyError = getFriendlyErrorMessage(diag.errorCode, diag.errorMessage);
 
   const lines = [
     "AI REPORT DIAGNOSTIC",
     `Run ID: ${runId}`,
-    `Stage: ${stage}`,
-    `Student: ${studentName}`,
-    `Progress: ${progress}`,
-    `Assessments: ${assessments}`,
-    `Growth: ${growth}`,
-    `Observations: ${observations}`,
-    `Request started: ${requestStarted}`,
-    `Elapsed: ${elapsed}`,
-    `HTTP status: ${httpStatus}`,
-    `Last completed stage: ${lastCompletedStage}`,
-    `Error code: ${errorCode}`,
-    `Error: ${error}`
+    `Tahap: ${stageLabel} (${diag.stage || "-"})`,
+    `Siswa: ${studentName}`,
+    `Progres: ${progress}`,
+    `Waktu Tunggu: ${elapsed}`,
+    `HTTP Status: ${httpStatus}`,
+    `Kode Error: ${errorCode}`,
+    `Deskripsi Error: ${friendlyError}`,
+    `Detail Error: ${error}`
   ];
 
   if (diag.lastFailure) {
@@ -110,14 +123,13 @@ export function formatAiDiagnosticText(diag) {
     lines.push(
       "",
       "LAST FAILURE",
-      `Student: ${lf.studentName || "-"}`,
-      `Progress: ${lfProgress}`,
-      `Stage: ${lf.stage || "-"}`,
-      `Last completed stage: ${lf.lastCompletedStage || "-"}`,
+      `Siswa: ${lf.studentName || "-"}`,
+      `Progres: ${lfProgress}`,
+      `Tahap: ${getDiagnosticStageLabel(lf.stage) || lf.stage || "-"}`,
       `HTTP status: ${lf.httpStatus != null ? String(lf.httpStatus) : "-"}`,
-      `Elapsed: ${lfElapsed}`,
-      `Error code: ${lf.errorCode || "-"}`,
-      `Error: ${lf.errorMessage || "-"}`
+      `Waktu Tunggu: ${lfElapsed}`,
+      `Kode Error: ${lf.errorCode || "-"}`,
+      `Deskripsi Error: ${getFriendlyErrorMessage(lf.errorCode, lf.errorMessage)}`
     );
   }
 

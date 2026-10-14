@@ -9,6 +9,7 @@ import { renderScreen } from "./ui/screens.js";
 import { renderStudentDetailModal } from "./ui/student-detail-modal.js";
 import { createSeedData } from "./data/seed.js";
 import { confirmIfDirty } from "./ui/feedback.js";
+import { BATCH_STAGES, getDiagnosticStageLabel } from "./services/ai-diagnostic-service.js";
 
 const appRoot = typeof document !== "undefined" && typeof document.querySelector === "function" ? document.querySelector("#app") : null;
 let appState = loadState();
@@ -1262,8 +1263,9 @@ function createGlobalAiBanner(batchState, actions) {
   metaRow.className = "global-ai-banner-meta";
 
   if (isRunning) {
+    const stageLabel = getDiagnosticStageLabel(batchState.diagnostic?.stage);
     const activeStudentSpan = document.createElement("span");
-    activeStudentSpan.textContent = `Sedang diproses: ${batchState.currentStudentName || "-"} • Siswa ${batchState.currentStudentIndex || 0} dari ${totalStudents}`;
+    activeStudentSpan.textContent = `Sedang diproses: ${batchState.currentStudentName || "-"} (${stageLabel}) • Siswa ${batchState.currentStudentIndex || 0} dari ${totalStudents}`;
 
     const statsSpan = document.createElement("span");
     statsSpan.textContent = `${completedCount} selesai • ${batchState.failedCount || 0} gagal • ${batchState.skippedCount || 0} dilewati`;
@@ -1272,7 +1274,7 @@ function createGlobalAiBanner(batchState, actions) {
     noteSpan.className = "italic text-xs opacity-75";
     noteSpan.textContent = "AI memproses laporan satu per satu.";
 
-    metaRow.append(activeStudentSpan, document.createTextNode(" • "), statsSpan, document.createTextNode(" • "), noteSpan);
+    metaRow.append(activeStudentSpan, document.createElement("br"), statsSpan, document.createTextNode(" • "), noteSpan);
   } else {
     const statsSpan = document.createElement("span");
     statsSpan.textContent = `${batchState.successCount || 0} berhasil • ${batchState.failedCount || 0} gagal • ${batchState.skippedCount || 0} dilewati`;
