@@ -2855,7 +2855,9 @@ export function renderClassesScreen(state, actions) {
         selectedAssessments.forEach(({ result, assessmentSession: sess, definition: def }) => {
           const li = createElement("li", "border-b border-slate-200 dark:border-slate-700 pb-1 last:border-b-0");
           const scoreStr = result.numericScore !== null && result.numericScore !== undefined
-            ? `Nilai ${result.numericScore} / 100`
+            ? (def?.method === 'numeric' && result.numericValue !== null && result.numericValue !== undefined && result.maxValue !== null && result.maxValue !== undefined
+                ? `Nilai ${result.numericValue} / ${result.maxValue} (Skor: ${result.numericScore})`
+                : `Nilai ${result.numericScore} / 100`)
             : "Progres belum lengkap";
           const purpose = PURPOSE_MAP[sess.purpose] || sess.purpose || "Asesmen";
           const mat = Array.isArray(sess.materials) ? sess.materials.join(", ") : (sess.materials || def?.materials || "-");
@@ -5856,6 +5858,10 @@ export function buildSelectedReportContext({
           purpose: sess?.purpose || "",
           materials: sess?.materials || def?.materials || [],
           assessmentType: def?.assessmentType || sess?.assessmentType || "",
+          method: def?.method || "rubric",
+          numericValue: result?.numericValue !== null && result?.numericValue !== undefined ? Number(result.numericValue) : null,
+          maxValue: result?.maxValue !== null && result?.maxValue !== undefined ? Number(result.maxValue) : null,
+          teacherNote: result?.note || "",
           numericScore: isComplete ? Number(result.numericScore) : null,
           averageRubricScore:
             result?.averageRubricScore !== null &&
