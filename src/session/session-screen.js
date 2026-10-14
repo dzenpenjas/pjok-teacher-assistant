@@ -228,7 +228,9 @@ export function renderSessionScreen(session, context) {
     finishBtn.addEventListener("click", () => {
       sessionUi.activeTab = "summary";
       renderTab();
-      document.querySelector(".final-action-card")?.scrollIntoView({ behavior: "smooth" });
+      const finalCard = tabContent.querySelector(".final-action-card");
+      finalCard?.scrollIntoView({ behavior: "smooth" });
+      finalCard?.querySelector(".primary-action")?.click();
     });
     
     const pauseBtn = createElement("button", "btn-tool btn-tool-warning");
