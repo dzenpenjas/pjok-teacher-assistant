@@ -1101,9 +1101,13 @@ function createCrudActions() {
     },
     finishSession: (id) => {
       const session = repositories.sessions.findById(id);
-      if (session && sessionManager.isReadOnly(session)) return;
-      sessionManager.finishSession(id);
+      if (!session || session.status !== "active") {
+        throw new Error("Sesi tidak aktif. Muat ulang tampilan sesi lalu coba kembali.");
+      }
+      const completed = sessionManager.finishSession(id);
+      explicitSessionId = id;
       refreshState();
+      return completed;
     },
     cancelSession: (id) => {
       if (window.confirm("Batalkan sesi ini?")) {

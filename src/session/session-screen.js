@@ -230,7 +230,6 @@ export function renderSessionScreen(session, context) {
       renderTab();
       const finalCard = tabContent.querySelector(".final-action-card");
       finalCard?.scrollIntoView({ behavior: "smooth" });
-      finalCard?.querySelector(".primary-action")?.click();
     });
     
     const pauseBtn = createElement("button", "btn-tool btn-tool-warning");
@@ -408,7 +407,7 @@ export function renderSessionScreen(session, context) {
             context.actions.updateSessionNotes(sessionId, notes);
           },
           onFinishSession: (sessionId) => {
-            context.actions.finishSession(sessionId);
+            return context.actions.finishSession(sessionId);
           },
           onPauseSession: (sessionId) => {
             context.actions.pauseSession(sessionId);

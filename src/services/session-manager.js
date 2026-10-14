@@ -152,7 +152,11 @@ export class SessionManager {
     );
 
     this.sessionRepository.update(session.id, updatedSession);
-    return this.sessionRepository.findById(session.id);
+    const persisted = this.sessionRepository.findById(session.id);
+    if (persisted?.status !== SESSION_STATUS.completed || persisted.endTime !== finishedAt) {
+      throw new Error("Status sesi gagal disimpan. Periksa ruang penyimpanan browser lalu coba kembali.");
+    }
+    return persisted;
   }
 
   cancelSession(sessionId) {

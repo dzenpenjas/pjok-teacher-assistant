@@ -1,4 +1,5 @@
 import { ICONS } from "../ui/icons.js";
+import { showConfirmModal } from "../ui/feedback.js";
 
 function createElement(tagName, className, textContent) {
   const element = document.createElement(tagName);
@@ -209,28 +210,42 @@ export function renderSummaryPanel(context) {
     const finishBtn = createElement("button", "primary-action");
     finishBtn.type = "button";
     finishBtn.append(ICONS.check(18), document.createTextNode(" Selesaikan & Simpan Pembelajaran"));
-    finishBtn.addEventListener("click", () => {
-      const warnings = [];
-      if (unmarkedCount > 0) warnings.push(`${unmarkedCount} siswa belum diabsen`);
-      if (actTotal === 0) {
-        warnings.push("Belum ada aktivitas yang dicatat");
-      } else if (actTotal - actCompleted > 0) {
-        warnings.push(`${actTotal - actCompleted} aktivitas belum selesai`);
-      }
-      if (students.length - assessedCount > 0) warnings.push(`${students.length - assessedCount} siswa belum dinilai`);
-
-      if (warnings.length > 0) {
-        if (!window.confirm(`Peringatan: ${warnings.join(", ")}. Tetap selesaikan sesi ini?`)) {
-          return;
+    const finishError = createElement("p", "screen-copy");
+    finishError.setAttribute("role", "alert");
+    let finishing = false;
+    finishBtn.addEventListener("click", async () => {
+      if (finishing) return;
+      finishing = true;
+      finishBtn.disabled = true;
+      finishError.textContent = "";
+      try {
+        const warnings = [];
+        if (unmarkedCount > 0) warnings.push(`${unmarkedCount} siswa belum diabsen`);
+        if (actTotal === 0) {
+          warnings.push("Belum ada aktivitas yang dicatat");
+        } else if (actTotal - actCompleted > 0) {
+          warnings.push(`${actTotal - actCompleted} aktivitas belum selesai`);
         }
-      } else {
-        if (!window.confirm("Selesaikan sesi pembelajaran ini sekarang?")) {
-          return;
-        }
-      }
+        if (students.length - assessedCount > 0) warnings.push(`${students.length - assessedCount} siswa belum dinilai`);
 
-      if (context.onFinishSession) {
-        context.onFinishSession(session.id);
+        const confirmed = await showConfirmModal({
+          title: "Selesaikan Pembelajaran",
+          message: warnings.length > 0
+            ? `Peringatan: ${warnings.join(", ")}. Tetap selesaikan sesi ini?`
+            : "Selesaikan sesi pembelajaran ini sekarang?",
+          confirmText: "Ya, Selesaikan & Simpan",
+          danger: false
+        });
+        if (!confirmed) return;
+        if (typeof context.onFinishSession !== "function") {
+          throw new Error("Tindakan penyelesaian sesi tidak tersedia.");
+        }
+        await context.onFinishSession(session.id);
+      } catch (error) {
+        finishError.textContent = `Sesi belum diselesaikan: ${error.message || "Gagal menyimpan pembelajaran. Silakan coba kembali."}`;
+      } finally {
+        finishing = false;
+        finishBtn.disabled = false;
       }
     });
 
@@ -244,7 +259,7 @@ export function renderSummaryPanel(context) {
     });
 
     actionRow.append(finishBtn, pauseBtn);
-    finalCard.append(actionRow);
+    finalCard.append(actionRow, finishError);
   } else if (session.status === "planned") {
     finalCard.append(
       createElement("p", "screen-copy", "Sesi ini berstatus Rencana. Gunakan tombol Mulai Mengajar pada toolbar di atas untuk memulai sesi.")
