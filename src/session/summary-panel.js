@@ -110,7 +110,7 @@ export function renderSummaryPanel(context) {
   // 3. Teacher Reflection & Notes
   const notesCard = createElement("div", "summary-card");
   const notesTitle = createElement("h3", "summary-card-title");
-  notesTitle.append(ICONS.file(18), document.createTextNode(" Catatan & Refleksi Guru"));
+  notesTitle.append(ICONS.book(18), document.createTextNode(" Catatan & Refleksi Guru"));
   notesCard.append(notesTitle);
 
   const isReadOnly = session.status === "completed" || session.status === "cancelled";

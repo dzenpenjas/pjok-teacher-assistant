@@ -126,7 +126,7 @@ export function renderActivityPanel(context) {
   // COUNTDOWN TIMER WIDGET
   const timerCard = createElement("div", "tool-box timer-box");
   const tmTitle = createElement("div", "tool-title");
-  tmTitle.append(ICONS.clock(16), document.createTextNode(" Countdown Timer"));
+  tmTitle.append(ICONS.timer(16), document.createTextNode(" Countdown Timer"));
   timerCard.append(tmTitle);
   const tmDisplay = createElement("div", "tool-display", "05:00");
 
