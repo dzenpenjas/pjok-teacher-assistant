@@ -225,7 +225,11 @@ export function renderSessionScreen(session, context) {
     const finishBtn = createElement("button", "btn-tool btn-tool-primary");
     finishBtn.type = "button";
     finishBtn.append(ICONS.check(16), document.createTextNode(" Selesaikan Sesi"));
-    finishBtn.addEventListener("click", () => context.actions.finishSession(session.id));
+    finishBtn.addEventListener("click", () => {
+      sessionUi.activeTab = "summary";
+      renderTab();
+      document.querySelector(".final-action-card")?.scrollIntoView({ behavior: "smooth" });
+    });
     
     const pauseBtn = createElement("button", "btn-tool btn-tool-warning");
     pauseBtn.type = "button";
