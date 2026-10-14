@@ -86,12 +86,16 @@ export function renderSummaryPanel(context) {
       
       // Strict validation for itemResults: must be array and contain at least one valid numeric rubricLevel
       const hasValidItemResult = Array.isArray(r.itemResults) && 
-                                 r.itemResults.some(ir => 
-                                   ir.rubricLevel !== undefined && 
-                                   ir.rubricLevel !== null && 
-                                   ir.rubricLevel !== "" && 
-                                   isNumeric(Number(ir.rubricLevel))
-                                 );
+                                 r.itemResults.some(ir => {
+                                   const val = ir.rubricLevel;
+                                   const isStringValid = typeof val === 'string' && val.trim() !== '';
+                                   const isNumberValid = typeof val === 'number';
+                                   
+                                   if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) return false;
+                                   
+                                   const num = Number(val);
+                                   return Number.isFinite(num);
+                                 });
       
       const hasValue = (r.value !== undefined && r.value !== null && r.value !== "") ||
                        isNumeric(r.rubricLevel) ||
@@ -208,7 +212,11 @@ export function renderSummaryPanel(context) {
     finishBtn.addEventListener("click", () => {
       const warnings = [];
       if (unmarkedCount > 0) warnings.push(`${unmarkedCount} siswa belum diabsen`);
-      if (actTotal - actCompleted > 0) warnings.push(`${actTotal - actCompleted} aktivitas belum selesai`);
+      if (actTotal === 0) {
+        warnings.push("Belum ada aktivitas yang dicatat");
+      } else if (actTotal - actCompleted > 0) {
+        warnings.push(`${actTotal - actCompleted} aktivitas belum selesai`);
+      }
       if (students.length - assessedCount > 0) warnings.push(`${students.length - assessedCount} siswa belum dinilai`);
 
       if (warnings.length > 0) {
