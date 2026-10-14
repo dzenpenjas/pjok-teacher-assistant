@@ -67,6 +67,9 @@ export function renderSummaryPanel(context) {
   const assessedStudentsSet = new Set();
   
   assessmentResults.forEach((r) => {
+    // Only count if it belongs to this class/students list
+    if (!students.some(s => s.id === r.studentId)) return;
+
     let parentSessionId = r.sessionId;
     
     // Resolve parent session from linked assessment session if needed
@@ -80,7 +83,15 @@ export function renderSummaryPanel(context) {
     // Only count if it belongs to current session and has a valid result
     if (parentSessionId === session.id) {
       const isNumeric = (val) => typeof val === 'number' && !isNaN(val);
-      const hasValidItemResult = Array.isArray(r.itemResults) && r.itemResults.some(ir => ir.rubricLevel !== undefined && ir.rubricLevel !== null && ir.rubricLevel !== "");
+      
+      // Strict validation for itemResults: must be array and contain at least one valid numeric rubricLevel
+      const hasValidItemResult = Array.isArray(r.itemResults) && 
+                                 r.itemResults.some(ir => 
+                                   ir.rubricLevel !== undefined && 
+                                   ir.rubricLevel !== null && 
+                                   ir.rubricLevel !== "" && 
+                                   isNumeric(Number(ir.rubricLevel))
+                                 );
       
       const hasValue = (r.value !== undefined && r.value !== null && r.value !== "") ||
                        isNumeric(r.rubricLevel) ||
@@ -195,8 +206,13 @@ export function renderSummaryPanel(context) {
     finishBtn.type = "button";
     finishBtn.append(ICONS.check(18), document.createTextNode(" Selesaikan & Simpan Pembelajaran"));
     finishBtn.addEventListener("click", () => {
-      if (unmarkedCount > 0) {
-        if (!window.confirm(`Masih ada ${unmarkedCount} siswa yang belum diabsen. Tetap selesaikan sesi ini?`)) {
+      const warnings = [];
+      if (unmarkedCount > 0) warnings.push(`${unmarkedCount} siswa belum diabsen`);
+      if (actTotal - actCompleted > 0) warnings.push(`${actTotal - actCompleted} aktivitas belum selesai`);
+      if (students.length - assessedCount > 0) warnings.push(`${students.length - assessedCount} siswa belum dinilai`);
+
+      if (warnings.length > 0) {
+        if (!window.confirm(`Peringatan: ${warnings.join(", ")}. Tetap selesaikan sesi ini?`)) {
           return;
         }
       } else {
