@@ -127,9 +127,11 @@ export function buildReportScoreRows(studentReports = []) {
       const sessionId = as.assessmentSessionId || as.sessionId || as.id || "";
       const title = as.title || "Asesmen PJOK";
 
-      const rawScore = (as.numericScore !== null && as.numericScore !== undefined && as.numericScore !== "" && Number.isFinite(Number(as.numericScore)))
-        ? Number(as.numericScore)
-        : "";
+      const rawScore = (as.numericValue !== null && as.numericValue !== undefined && as.numericValue !== "" && Number.isFinite(Number(as.numericValue)))
+        ? Number(as.numericValue)
+        : ((as.numericScore !== null && as.numericScore !== undefined && as.numericScore !== "" && Number.isFinite(Number(as.numericScore)))
+          ? Number(as.numericScore)
+          : "");
 
       let convertedScore = "";
       if (isConversionEnabled && reportScoring?.sessions && sessionId) {

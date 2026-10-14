@@ -227,6 +227,8 @@ export function calculateReportScoring({ assessmentSelections = [], scoringConfi
 
   for (const item of assessmentSelections) {
     const sess = item.assessmentSession;
+    const def = sess?.definition || item?.definition;
+    const method = def?.method || "";
     const result = item.result;
     const sessionId = sess?.id || result?.assessmentSessionId || "";
     if (!sessionId) {
@@ -244,6 +246,18 @@ export function calculateReportScoring({ assessmentSelections = [], scoringConfi
       : (Array.isArray(sess?.items) ? sess.items : []);
 
     const itemResults = Array.isArray(result?.itemResults) ? result.itemResults : [];
+
+    if (method === "numeric") {
+      sessions[sessionId] = {
+        assessmentSessionId: sessionId,
+        rawScore: rawScore,
+        convertedScore: rawScore,
+        canConvert: true,
+        reason: null
+      };
+      convertedScoresList.push(rawScore);
+      continue;
+    }
 
     if (!Array.isArray(rawItems) || rawItems.length === 0) {
       sessions[sessionId] = {
