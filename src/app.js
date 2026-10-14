@@ -789,6 +789,8 @@ function createCrudActions() {
 
     // ACTIVITY & TIMER ACTIONS
     loadDefaultActivities: (sessionId) => {
+      const session = repositories.sessions.findById(sessionId);
+      if (!session || sessionManager.isReadOnly(session)) return;
       loadDefaultActivitiesForSession(sessionId);
       refreshState();
     },
@@ -836,6 +838,11 @@ function createCrudActions() {
       }
     },
     createAssessmentSession: (input) => {
+      if (input.sessionId) {
+        const session = repositories.sessions.findById(input.sessionId);
+        if (!session || sessionManager.isReadOnly(session)) return;
+      }
+      
       let rubricSnapshot = input && input.rubricSnapshot && input.rubricSnapshot.levels && input.rubricSnapshot.levels.length > 0
         ? input.rubricSnapshot
         : { scale: 0, levels: [] };
@@ -876,8 +883,14 @@ function createCrudActions() {
     saveAssessmentResult: (input) => {
       if (input.sessionId) {
         const session = repositories.sessions.findById(input.sessionId);
-        if (session && sessionManager.isReadOnly(session)) {
-          return;
+        if (session && sessionManager.isReadOnly(session)) return;
+      }
+
+      if (input.assessmentSessionId) {
+        const assessment = repositories.assessmentSessions.findById(input.assessmentSessionId);
+        if (assessment && assessment.sessionId) {
+          const session = repositories.sessions.findById(assessment.sessionId);
+          if (session && sessionManager.isReadOnly(session)) return;
         }
       }
 
