@@ -360,7 +360,20 @@ export function renderScreen(screenIdOrState, stateOrActions, maybeActions) {
       assessmentDefinitions: state.assessmentDefinitions || [],
       assessmentSessions: state.assessmentSessions || [],
       assessmentResults: currentSession
-        ? (state.assessmentResults || []).filter((r) => r.sessionId === currentSession.id)
+        ? (state.assessmentResults || []).filter((r) => {
+            if (r.sessionId === currentSession.id) {
+              if (r.assessmentSessionId) {
+                const assessmentSession = (state.assessmentSessions || []).find(s => s.id === r.assessmentSessionId);
+                if (assessmentSession && assessmentSession.sessionId && assessmentSession.sessionId !== currentSession.id) return false;
+              }
+              return true;
+            }
+            if (r.assessmentSessionId) {
+              const assessmentSession = (state.assessmentSessions || []).find(s => s.id === r.assessmentSessionId);
+              if (assessmentSession && assessmentSession.sessionId === currentSession.id) return true;
+            }
+            return false;
+          })
         : [],
       growthRecords: state.growthRecords || [],
       observations: state.studentObservations || [],

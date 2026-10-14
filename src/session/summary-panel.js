@@ -79,11 +79,14 @@ export function renderSummaryPanel(context) {
 
     // Only count if it belongs to current session and has a valid result
     if (parentSessionId === session.id) {
-      const hasValue = r.value !== undefined && r.value !== null && r.value !== "" || 
-                       r.rubricLevel !== undefined || 
-                       r.numericScore !== undefined || 
-                       r.averageRubricScore !== undefined || 
-                       (Array.isArray(r.itemResults) && r.itemResults.length > 0);
+      const isNumeric = (val) => typeof val === 'number' && !isNaN(val);
+      const hasValidItemResult = Array.isArray(r.itemResults) && r.itemResults.some(ir => ir.rubricLevel !== undefined && ir.rubricLevel !== null && ir.rubricLevel !== "");
+      
+      const hasValue = (r.value !== undefined && r.value !== null && r.value !== "") ||
+                       isNumeric(r.rubricLevel) ||
+                       isNumeric(r.numericScore) ||
+                       isNumeric(r.averageRubricScore) ||
+                       hasValidItemResult;
       
       if (hasValue) {
         assessedStudentsSet.add(r.studentId);
