@@ -889,7 +889,11 @@ function createCrudActions() {
       
       if (input.assessmentSessionId) {
         const assessment = repositories.assessmentSessions.findById(input.assessmentSessionId);
-        if (assessment && assessment.sessionId) {
+        if (!assessment) {
+          console.warn("Gagal: Assessment session tidak ditemukan.");
+          return;
+        }
+        if (assessment.sessionId) {
           if (parentSessionId && parentSessionId !== assessment.sessionId) {
             // Conflict between provided sessionId and parent of assessmentSessionId
             console.warn("Konflik: sessionId input berbeda dengan sesi induk asesmen.");
@@ -931,15 +935,33 @@ function createCrudActions() {
         );
       }
 
-      // If existing exists and was linked to a teaching session, re-verify status
+      // If existing exists, re-verify status and consistency
       if (existing) {
         const existingParentSessionId = existing.sessionId;
-        if (existingParentSessionId) {
-          const session = repositories.sessions.findById(existingParentSessionId);
+        const existingAssessment = existing.assessmentSessionId ? repositories.assessmentSessions.findById(existing.assessmentSessionId) : null;
+        const existingAssessmentParentId = existingAssessment ? existingAssessment.sessionId : null;
+
+        // Ensure both refs (if exist) point to same parent session
+        if (existingParentSessionId && existingAssessmentParentId && existingParentSessionId !== existingAssessmentParentId) {
+          console.warn("Gagal: Inkonsistensi sesi induk pada hasil existing.");
+          return;
+        }
+        
+        const finalParentId = existingParentSessionId || existingAssessmentParentId;
+        
+        if (finalParentId) {
+          const session = repositories.sessions.findById(finalParentId);
           if (!session || sessionManager.isReadOnly(session)) {
             console.warn("Gagal: Sesi induk hasil existing tidak valid atau sudah diarsipkan.");
             return;
           }
+        }
+        
+        // Ensure not updating an assessment linked to a teaching session if assessmentSessionId was provided, 
+        // but assessment session itself missing
+        if (existing.assessmentSessionId && !existingAssessment) {
+          console.warn("Gagal: Assessment session tidak ditemukan.");
+          return;
         }
       }
 
