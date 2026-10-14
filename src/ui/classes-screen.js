@@ -1379,6 +1379,9 @@ export function renderClassesScreen(state, actions) {
         progressBox.append(progressP, currentStudentP);
         if (stageP) progressBox.append(stageP);
         progressBox.append(progressBarWrap);
+      const timerEl = createElement("p", "text-xs font-medium mt-2");
+      timerEl.id = "batch-student-timer";
+      progressBox.append(timerEl);
       } else if (classUi.batchState.statusSummary) {
         const summaryP = createElement("p", "font-semibold", classUi.batchState.statusSummary);
         progressBox.append(summaryP);
