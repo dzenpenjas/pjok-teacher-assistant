@@ -1552,6 +1552,35 @@ export function renderClassesScreen(state, actions) {
       let batchTimerInterval = null;
       let studentStartTime = null;
 
+      function updateAiWaitingIndicator() {
+        const timerEl = document.getElementById("batch-student-timer");
+        if (!timerEl) return;
+
+        const diag = classUi.batchState.diagnostic;
+        if (!diag || diag.stage !== BATCH_STAGES.API_WAITING || !diag.requestStartedAt) {
+          timerEl.textContent = "";
+          return;
+        }
+
+        const elapsed = Math.floor((Date.now() - diag.requestStartedAt) / 1000);
+        
+        let statusText = "";
+        let statusClass = "text-slate-500 dark:text-slate-400";
+
+        if (elapsed < 20) {
+          statusText = `Menunggu respons AI • ${elapsed} detik`;
+        } else if (elapsed < 40) {
+          statusText = `Respons mulai lambat • ${elapsed} detik`;
+          statusClass = "text-yellow-600 dark:text-yellow-400";
+        } else {
+          statusText = `Mendekati batas waktu • ${elapsed} detik`;
+          statusClass = "text-orange-600 dark:text-orange-400";
+        }
+
+        timerEl.textContent = statusText;
+        timerEl.className = `text-xs font-medium mt-2 ${statusClass}`;
+      }
+
       function clearBatchTimer() {
         if (batchTimerInterval) {
           clearInterval(batchTimerInterval);
@@ -1569,20 +1598,15 @@ export function renderClassesScreen(state, actions) {
         Object.assign(diag, updates);
         
         // Reset timer if starting API request
-        if (newStage === BATCH_STAGES.API_REQUEST_START) {
-          studentStartTime = Date.now();
+        if (newStage === BATCH_STAGES.API_WAITING) {
           clearBatchTimer();
+          updateAiWaitingIndicator();
           batchTimerInterval = setInterval(() => {
-            const now = Date.now();
-            const elapsed = Math.floor((now - studentStartTime) / 1000);
-            const timerEl = document.getElementById("batch-student-timer");
-            if (timerEl) {
-              timerEl.textContent = `${elapsed} detik`;
-              timerEl.className = `text-xs font-mono ${elapsed < 20 ? "text-slate-600" : (elapsed < 40 ? "text-amber-600" : "text-red-600 font-bold")}`;
-            }
+            updateAiWaitingIndicator();
           }, 1000);
-        } else if (newStage === BATCH_STAGES.API_RESPONSE_RECEIVED || newStage === BATCH_STAGES.ERROR || newStage === BATCH_STAGES.STUDENT_DONE) {
+        } else {
           clearBatchTimer();
+          updateAiWaitingIndicator();
         }
       }
 
