@@ -949,6 +949,12 @@ function createCrudActions() {
         
         const finalParentId = existingParentSessionId || existingAssessmentParentId;
         
+        // Cegah pembaruan nilai dari sesi induk yang berbeda
+        if (finalParentId && parentSessionId && finalParentId !== parentSessionId) {
+          console.warn("Gagal: Sesi induk input berbeda dari hasil existing.");
+          return;
+        }
+
         if (finalParentId) {
           const session = repositories.sessions.findById(finalParentId);
           if (!session || sessionManager.isReadOnly(session)) {
