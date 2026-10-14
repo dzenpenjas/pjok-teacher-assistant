@@ -241,6 +241,12 @@ export function renderAssessmentPanel(context) {
         valInput.type = "number";
         valInput.step = activeDefinition.method === "stopwatch" ? "0.01" : "1";
         valInput.className = "assess-num-input";
+
+        if (activeDefinition.method === "numeric" && Number.isFinite(Number(activeDefinition.maxValue)) && Number(activeDefinition.maxValue) > 0) {
+            valInput.min = "0";
+            valInput.max = String(activeDefinition.maxValue);
+        }
+
         valInput.placeholder = `Nilai (${activeDefinition.unit || ""})`;
         if (isReadOnly) {
           valInput.disabled = true;
@@ -250,6 +256,11 @@ export function renderAssessmentPanel(context) {
         }
 
         const unitLabel = createElement("span", "assess-unit-tag", activeDefinition.unit || "");
+        
+        let maxLabel = null;
+        if (activeDefinition.method === "numeric" && Number.isFinite(Number(activeDefinition.maxValue)) && Number(activeDefinition.maxValue) > 0) {
+            maxLabel = createElement("span", "assess-unit-tag", `/ ${activeDefinition.maxValue}`);
+        }
 
         // Quick Save Button
         const saveBtn = createElement("button", "btn-tool btn-tool-primary", "Simpan");
@@ -263,16 +274,18 @@ export function renderAssessmentPanel(context) {
           if (!val) return;
           const numericValue = Number(val);
 
+          const maxValue = Number(activeDefinition.maxValue);
           if (
             !Number.isFinite(numericValue) ||
             numericValue < 0 ||
-            (activeDefinition.maxValue && numericValue > activeDefinition.maxValue)
+            (Number.isFinite(maxValue) && maxValue > 0 && numericValue > maxValue)
           ) {
+            alert(`Nilai harus berada antara 0 dan ${maxValue || 'inf'}.`);
             return; // Jangan simpan
           }
 
-          const numericScore = activeDefinition.maxValue 
-            ? Math.round((numericValue / activeDefinition.maxValue) * 100)
+          const numericScore = (Number.isFinite(maxValue) && maxValue > 0) 
+            ? Math.round((numericValue / maxValue) * 100)
             : null;
 
           saveResult({
@@ -280,15 +293,17 @@ export function renderAssessmentPanel(context) {
             value: String(numericValue),
             numericValue,
             numericScore,
-            maxValue: activeDefinition.maxValue,
-            formattedValue: activeDefinition.maxValue 
-              ? `${numericValue} / ${activeDefinition.maxValue}`
+            maxValue: (Number.isFinite(maxValue) && maxValue > 0) ? maxValue : null,
+            formattedValue: (Number.isFinite(maxValue) && maxValue > 0)
+              ? `${numericValue} / ${maxValue}`
               : String(numericValue),
             note: noteInput.value.trim()
           });
         });
 
-        numRow.append(valInput, unitLabel, saveBtn);
+        numRow.append(valInput);
+        if (maxLabel) numRow.append(maxLabel);
+        numRow.append(unitLabel, saveBtn);
 
         // If context has last captured stopwatch time, offer quick button
         if (!isReadOnly && context.lastCapturedStopwatch && activeDefinition.method === "stopwatch") {
@@ -345,7 +360,11 @@ export function renderAssessmentPanel(context) {
         definitionId: activeDefinition.id,
         classId: session.classId,
         date: session.date,
-        title: `Penilaian ${activeDefinition.name}`
+        title: `Penilaian ${activeDefinition.name}`,
+        purpose: activeDefinition.purpose,
+        materials: activeDefinition.materials,
+        questions: activeDefinition.questions,
+        instructions: activeDefinition.instructions
       });
       activeAssessSess = targetAssessSess;
     }
