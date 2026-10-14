@@ -740,7 +740,7 @@ function createCrudActions() {
     setAttendanceStatus: (studentId, status) => {
       const sessionContext = getSessionContext();
       const session = sessionContext.session;
-      if (!session) return;
+      if (!session || sessionManager.isReadOnly(session)) return;
 
       const existing = repositories.attendanceRecords.findBySessionAndStudent(session.id, studentId);
       const payload = {
@@ -761,7 +761,7 @@ function createCrudActions() {
 
     markAllPresent: (sessionId) => {
       const session = repositories.sessions.findById(sessionId) || getSessionContext().session;
-      if (!session) return;
+      if (!session || sessionManager.isReadOnly(session)) return;
 
       const classStudents = repositories.students.findByClass(session.classId);
       const now = new Date().toISOString();
@@ -793,14 +793,28 @@ function createCrudActions() {
       refreshState();
     },
     createSessionActivity: (input) => {
+      if (input.sessionId) {
+        const session = repositories.sessions.findById(input.sessionId);
+        if (session && sessionManager.isReadOnly(session)) return;
+      }
       repositories.sessionActivities.create(input);
       refreshState();
     },
     updateSessionActivity: (id, input) => {
+      const activity = repositories.sessionActivities.findById(id);
+      if (activity && activity.sessionId) {
+        const session = repositories.sessions.findById(activity.sessionId);
+        if (session && sessionManager.isReadOnly(session)) return;
+      }
       repositories.sessionActivities.update(id, input);
       refreshState();
     },
     deleteSessionActivity: (id) => {
+      const activity = repositories.sessionActivities.findById(id);
+      if (activity && activity.sessionId) {
+        const session = repositories.sessions.findById(activity.sessionId);
+        if (session && sessionManager.isReadOnly(session)) return;
+      }
       repositories.sessionActivities.delete(id);
       refreshState();
     },
@@ -997,10 +1011,14 @@ function createCrudActions() {
       refreshState();
     },
     updateSessionNotes: (id, notes) => {
+      const session = repositories.sessions.findById(id);
+      if (session && sessionManager.isReadOnly(session)) return;
       repositories.sessions.update(id, { notes });
       refreshState();
     },
     finishSession: (id) => {
+      const session = repositories.sessions.findById(id);
+      if (session && sessionManager.isReadOnly(session)) return;
       sessionManager.finishSession(id);
       refreshState();
     },
