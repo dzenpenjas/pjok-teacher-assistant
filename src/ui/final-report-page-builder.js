@@ -630,7 +630,7 @@ export function createFinalReportPage({
       if (whoRef.bmiForAge && whoRef.bmiForAge.available && whoRef.bmiForAge.interpretationCode) {
         const label = codeMap[whoRef.bmiForAge.interpretationCode];
         if (label) {
-          whoItems.push(`BMI menurut usia: ${label}`);
+          whoItems.push(`Berat dan tinggi menurut usia: ${label}`);
         }
       }
       if (whoRef.weightForAge && whoRef.weightForAge.available && whoRef.weightForAge.interpretationCode) {
@@ -671,7 +671,7 @@ export function createFinalReportPage({
       const p = document.createElement("p");
       p.className = "a4-body-text mb-1";
       const strong = document.createElement("strong");
-      strong.textContent = "Saran Pola Makan & Kebiasaan Sehat: ";
+      strong.textContent = "Kebiasaan Sehat yang Bisa Dibangun: ";
       p.append(strong, document.createTextNode(nutritionAdviceText));
       growthSection.append(p);
     }

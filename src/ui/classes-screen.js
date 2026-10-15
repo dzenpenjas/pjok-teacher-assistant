@@ -3139,12 +3139,12 @@ export function renderClassesScreen(state, actions) {
           persistCurrentDraft();
         });
 
-        const nutritionLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200 mt-2", "Saran Pola Makan & Kebiasaan Sehat");
+        const nutritionLabel = createElement("label", "block font-semibold text-xs text-slate-800 dark:text-slate-200 mt-2", "Kebiasaan Sehat yang Bisa Dibangun");
         const nutritionTextarea = document.createElement("textarea");
         nutritionTextarea.className = "input-text text-xs w-full";
         nutritionTextarea.rows = 2;
         nutritionTextarea.value = reportAiDraft.nutritionAdvice || "";
-        nutritionTextarea.placeholder = "Saran makanan sehat dan kebiasaan gizi seimbang...";
+        nutritionTextarea.placeholder = "Aktivitas rutin, pola makan, atau kebiasaan sehat yang realistis untuk keluarga...";
         nutritionTextarea.addEventListener("input", (e) => {
           reportAiDraft.nutritionAdvice = e.target.value;
           persistCurrentDraft();
