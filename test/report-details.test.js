@@ -14,18 +14,24 @@ function report(details, scoring) {
 test('detail nilai default tersembunyi untuk laporan lama', () => {
   assert.doesNotMatch(report(), /Detail Nilai Asesmen|Asesmen 1/);
 });
-test('detail menampilkan nilai dan deskripsi sesuai evidence', () => {
+test('detail menampilkan tabel nilai dan deskripsi sesuai evidence', () => {
   const output = report({ enabled: true });
-  assert.match(output, /Asesmen 1 — 78\/100/);
+  assert.match(output, /Detail Nilai Asesmen/);
+  assert.match(output, /Asesmen/);
+  assert.match(output, /Nilai/);
+  assert.match(output, /Capaian/);
+  assert.match(output, /Asesmen 1/);
+  assert.match(output, /78/);
   assert.match(output, /Gerakan sudah konsisten/);
   assert.match(output, /Latih keseimbangan/);
 });
 test('deskripsi dapat disembunyikan tanpa menghilangkan nilai', () => {
   const output = report({ enabled: true, descriptions: false });
-  assert.match(output, /Asesmen 1 — 78\/100/);
+  assert.match(output, /Asesmen 1/);
+  assert.match(output, /78/);
   assert.doesNotMatch(output, /Gerakan sudah konsisten|Latih keseimbangan/);
 });
 test('detail menggunakan nilai konversi dan tidak mengganti nilai kosong dengan nilai asli', () => {
-  assert.match(report({ enabled: true }, { enabled: true, sessions: { a1: { convertedScore: 85 } } }), /Asesmen 1 — 85\/100/);
-  assert.match(report({ enabled: true }, { enabled: true, sessions: {} }), /Asesmen 1 — Nilai belum tersedia/);
+  assert.match(report({ enabled: true }, { enabled: true, sessions: { a1: { convertedScore: 85 } } }), /85/);
+  assert.match(report({ enabled: true }, { enabled: true, sessions: {} }), /Nilai belum tersedia/);
 });

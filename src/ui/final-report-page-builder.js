@@ -281,37 +281,104 @@ export function createFinalReportPage({
   }
 
   if (isLearningActive && currentContext.reportDetails?.enabled === true) {
-    const section = document.createElement("section");
-    section.className = "a4-section";
-    const heading = document.createElement("h2");
-    heading.className = "a4-section-title";
-    heading.textContent = "Detail Nilai Asesmen";
-    section.append(heading);
-    for (const assessment of currentContext.assessments || []) {
-      const row = document.createElement("div");
-      row.className = "mb-2";
-      const score = reportScoring?.enabled
-        ? reportScoring.sessions?.[assessment.assessmentSessionId]?.convertedScore
-        : assessment.numericScore;
-      const title = document.createElement("p");
-      title.className = "a4-body-text font-semibold";
-      title.textContent = (assessment.title || "Asesmen PJOK") + " — " +
-        (score !== null && score !== undefined && Number.isFinite(Number(score)) ? score + "/100" : "Nilai belum tersedia");
-      row.append(title);
-      if (currentContext.reportDetails.descriptions !== false) {
-        const descriptions = (assessment.items || [])
-          .filter((item) => item.rubricLevel !== null && item.rubricLevel !== undefined)
-          .map((item) => item.rubricDescription ? ((item.prompt ? item.prompt + ": " : "") + item.rubricDescription) : "")
-          .filter(Boolean);
-        if (assessment.teacherNote?.trim()) descriptions.push(assessment.teacherNote.trim());
-        const description = document.createElement("p");
-        description.className = "a4-body-text";
-        description.textContent = descriptions.join(" ") || "Deskripsi capaian belum tersedia.";
-        row.append(description);
+    const assessmentsList = currentContext.assessments || [];
+    if (assessmentsList.length) {
+      const section = document.createElement("section");
+      section.className = "a4-section";
+
+      const heading = document.createElement("h2");
+      heading.className = "a4-section-title";
+      heading.textContent = "Detail Nilai Asesmen";
+      section.append(heading);
+
+      const showDescriptions = currentContext.reportDetails.descriptions !== false;
+
+      const table = document.createElement("table");
+      table.className = "a4-table";
+
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+
+      const thMat = document.createElement("th");
+      thMat.className = "a4-td-mat";
+      thMat.textContent = "Asesmen";
+
+      const thScore = document.createElement("th");
+      thScore.className = "a4-td-score";
+      thScore.textContent = "Nilai";
+
+      headerRow.append(thMat, thScore);
+
+      if (showDescriptions) {
+        const thDesc = document.createElement("th");
+        thDesc.className = "a4-td-desc";
+        thDesc.textContent = "Capaian";
+        headerRow.append(thDesc);
       }
-      section.append(row);
+      thead.append(headerRow);
+      table.append(thead);
+
+      const tbody = document.createElement("tbody");
+
+      for (const assessment of assessmentsList) {
+        const row = document.createElement("tr");
+
+        const tdMat = document.createElement("td");
+        tdMat.className = "a4-td-mat";
+        tdMat.textContent = assessment.title || "Asesmen PJOK";
+        row.append(tdMat);
+
+        const tdScore = document.createElement("td");
+        tdScore.className = "a4-td-score";
+
+        const score = reportScoring?.enabled
+          ? reportScoring.sessions?.[assessment.assessmentSessionId]?.convertedScore
+          : assessment.numericScore;
+        const hasScore = score !== null && score !== undefined && Number.isFinite(Number(score));
+
+        if (hasScore) {
+          const scoreBox = document.createElement("div");
+          scoreBox.className = "a4-cell-score-box";
+
+          const scoreNum = document.createElement("span");
+          scoreNum.className = "a4-cell-score-num";
+          scoreNum.textContent = String(score);
+
+          const scoreDenom = document.createElement("span");
+          scoreDenom.className = "a4-cell-score-denom";
+          scoreDenom.textContent = "/100";
+
+          scoreBox.append(scoreNum, scoreDenom);
+          tdScore.append(scoreBox);
+        } else {
+          const noScore = document.createElement("span");
+          noScore.className = "text-xs text-subtle";
+          noScore.textContent = "Nilai belum tersedia";
+          tdScore.append(noScore);
+        }
+        row.append(tdScore);
+
+        if (showDescriptions) {
+          const tdDesc = document.createElement("td");
+          tdDesc.className = "a4-td-desc";
+
+          const descriptions = (assessment.items || [])
+            .filter((item) => item.rubricLevel !== null && item.rubricLevel !== undefined)
+            .map((item) => item.rubricDescription?.trim() || item.prompt?.trim() || "")
+            .filter(Boolean);
+          if (assessment.teacherNote?.trim()) descriptions.push(assessment.teacherNote.trim());
+
+          tdDesc.textContent = descriptions.join(" ") || "Deskripsi capaian belum tersedia.";
+          row.append(tdDesc);
+        }
+
+        tbody.append(row);
+      }
+
+      table.append(tbody);
+      section.append(table);
+      a4Paper.append(section);
     }
-    if ((currentContext.assessments || []).length) a4Paper.append(section);
   }
 
   // 1. ANAK SAYA SUDAH BISA APA? (KEKUATAN)
