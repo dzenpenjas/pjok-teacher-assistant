@@ -1,3 +1,4 @@
+import { createReportDetailControls } from "./report-detail-controls.js";
 import { createField, createSelectField, formToObject } from "./form-controls.js";
 import { createPhotoPickerField } from "./student-photo-field.js";
 import { createStudentAvatar } from "./student-avatar.js";
@@ -1003,6 +1004,9 @@ export function renderClassesScreen(state, actions) {
 
     extraOptionsWrap.append(growthLbl, obsLbl);
     sourceConfigBox.append(extraOptionsWrap);
+    sourceConfigBox.append(createReportDetailControls(classUi.batchReportDetails, (options) => {
+      classUi.batchReportDetails = options;
+    }, classUi.batchState.isBatchGenerating));
 
     // Scoring Conversion Configuration Controls
     const scoringConfigBox = createElement("div", "pt-2 border-t border-slate-200/60 dark:border-slate-700/60 mt-2 space-y-2");
@@ -1533,6 +1537,7 @@ export function renderClassesScreen(state, actions) {
           frozenScoringConfig = { enabled: true, minScore: minNum, maxScore: maxNum };
         }
         classUi.batchState.frozenScoringConfig = frozenScoringConfig;
+        classUi.batchState.frozenReportDetails = { ...classUi.batchReportDetails };
       }
 
       const runId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -1715,6 +1720,7 @@ export function renderClassesScreen(state, actions) {
             growthSelections: selectedGrowth,
             observationSelections: selectedObs,
             allGrowthRecords: state.growthRecords || [],
+            reportDetails: classUi.batchState.frozenReportDetails,
             scoringConfig: classUi.batchState.frozenScoringConfig || frozenScoringConfig
           });
 
@@ -2134,6 +2140,16 @@ export function renderClassesScreen(state, actions) {
     let reportAiDraft = deepClone(pendingReport 
       ? pendingReport.draft 
       : (savedReport ? savedReport.draft : null));
+
+    let reportDetails = { ...activeReportContext?.reportDetails };
+    container.append(createReportDetailControls(reportDetails, (options) => {
+      reportDetails = options;
+      if (activeReportContext) activeReportContext.reportDetails = { ...options };
+      if (reportAiDraft && activeReportContext) {
+        pendingReports.set(pendingKey, { draft: deepClone(reportAiDraft), reportContext: deepClone(activeReportContext) });
+        persistCurrentDraft();
+      }
+    }));
 
     let isAiDraftLoading = false;
     let isSaving = false;
@@ -2925,6 +2941,7 @@ export function renderClassesScreen(state, actions) {
           growthSelections: selectedGrowth,
           observationSelections: selectedObs,
           allGrowthRecords: state.growthRecords || [],
+          reportDetails,
           scoringConfig: classUi.singleScoringConfig || null
         });
       } catch (err) {
@@ -3026,7 +3043,8 @@ export function renderClassesScreen(state, actions) {
             growthSelections: currentSelectedGrowth,
             observationSelections: currentSelectedObs,
             allGrowthRecords: state.growthRecords || [],
-            scoringConfig: classUi.singleScoringConfig || null
+            reportDetails,
+          scoringConfig: classUi.singleScoringConfig || null
           });
         } catch (err) {
           console.error("Error building reportContext inside renderAiDraftContent:", err);
@@ -3194,7 +3212,8 @@ export function renderClassesScreen(state, actions) {
         growthSelections: currentSelectedGrowth,
         observationSelections: currentSelectedObs,
         allGrowthRecords: state.growthRecords || [],
-        scoringConfig: classUi.singleScoringConfig || null
+        reportDetails,
+          scoringConfig: classUi.singleScoringConfig || null
       });
 
       const a4Paper = createFinalReportPage({
@@ -3412,6 +3431,7 @@ export function renderClassesScreen(state, actions) {
         growthSelections: selectedGrowth,
         observationSelections: selectedObs,
         allGrowthRecords: state.growthRecords || [],
+        reportDetails,
         scoringConfig: frozenScoringConfig
       });
 
@@ -5766,7 +5786,8 @@ export function buildSelectedReportContext({
   growthSelections = [],
   observationSelections = [],
   allGrowthRecords = [],
-  scoringConfig = null
+  scoringConfig = null,
+  reportDetails = null
 }) {
   const rawGrade = classRoom?.grade;
   const gradeNumber =
@@ -5912,6 +5933,7 @@ export function buildSelectedReportContext({
 
   return {
     student: studentData,
+    reportDetails: { ...reportDetails },
     selectedSections,
     assessments,
     growth,

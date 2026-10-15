@@ -280,6 +280,40 @@ export function createFinalReportPage({
     a4Paper.append(scoreHero);
   }
 
+  if (isLearningActive && currentContext.reportDetails?.enabled === true) {
+    const section = document.createElement("section");
+    section.className = "a4-section";
+    const heading = document.createElement("h2");
+    heading.className = "a4-section-title";
+    heading.textContent = "Detail Nilai Asesmen";
+    section.append(heading);
+    for (const assessment of currentContext.assessments || []) {
+      const row = document.createElement("div");
+      row.className = "mb-2";
+      const score = reportScoring?.enabled
+        ? reportScoring.sessions?.[assessment.assessmentSessionId]?.convertedScore
+        : assessment.numericScore;
+      const title = document.createElement("p");
+      title.className = "a4-body-text font-semibold";
+      title.textContent = (assessment.title || "Asesmen PJOK") + " — " +
+        (score !== null && score !== undefined && Number.isFinite(Number(score)) ? score + "/100" : "Nilai belum tersedia");
+      row.append(title);
+      if (currentContext.reportDetails.descriptions !== false) {
+        const descriptions = (assessment.items || [])
+          .filter((item) => item.rubricLevel !== null && item.rubricLevel !== undefined)
+          .map((item) => item.rubricDescription ? ((item.prompt ? item.prompt + ": " : "") + item.rubricDescription) : "")
+          .filter(Boolean);
+        if (assessment.teacherNote?.trim()) descriptions.push(assessment.teacherNote.trim());
+        const description = document.createElement("p");
+        description.className = "a4-body-text";
+        description.textContent = descriptions.join(" ") || "Deskripsi capaian belum tersedia.";
+        row.append(description);
+      }
+      section.append(row);
+    }
+    if ((currentContext.assessments || []).length) a4Paper.append(section);
+  }
+
   // 1. ANAK SAYA SUDAH BISA APA? (KEKUATAN)
   if (isLearningActive && resolvedStrengths) {
     const strengthsSection = document.createElement("section");
