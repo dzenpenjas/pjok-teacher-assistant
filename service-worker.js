@@ -1,4 +1,4 @@
-const CACHE_NAME = "pjok-teacher-assistant-v44";
+const CACHE_NAME = "pjok-teacher-assistant-v45";
 
 const APP_ASSETS = [
   "./",
@@ -45,6 +45,8 @@ const APP_ASSETS = [
   "./src/ui/feedback.js",
   "./src/ui/first-run-setup.js",
   "./src/ui/classes-screen.js",
+  "./src/ui/report-detail-controls.js",
+  "./src/ui/final-report-page-builder.js",
   "./src/ui/students-screen.js",
   "./src/ui/settings-screen.js",
   "./src/ui/master-data-screen.js",
