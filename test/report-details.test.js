@@ -33,5 +33,7 @@ test('deskripsi dapat disembunyikan tanpa menghilangkan nilai', () => {
 });
 test('detail menggunakan nilai konversi dan tidak mengganti nilai kosong dengan nilai asli', () => {
   assert.match(report({ enabled: true }, { enabled: true, sessions: { a1: { convertedScore: 85 } } }), /85/);
-  assert.match(report({ enabled: true }, { enabled: true, sessions: {} }), /Nilai belum tersedia/);
+  const unavailable = report({ enabled: true }, { enabled: true, sessions: {} });
+  assert.match(unavailable, /Asesmen 1\s+-/);
+  assert.doesNotMatch(unavailable, /\b78\b/);
 });

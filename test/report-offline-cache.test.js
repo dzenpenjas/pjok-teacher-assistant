@@ -15,7 +15,7 @@ test('service worker precaches report detail controls and final report builder',
   handlers.install({ waitUntil(promise) { installation = promise; } });
   await installation;
   assert.notEqual(cacheName, 'pjok-teacher-assistant-v44');
-  for (const asset of ['./src/ui/classes-screen.js', './src/ui/report-detail-controls.js', './src/ui/final-report-page-builder.js']) {
+  for (const asset of ['./src/ui/classes-screen.js', './src/ui/report-detail-controls.js', './src/ui/final-report-page-builder.js', './src/ui/report-pdf-layout.js', './src/services/batch-report-selection.js']) {
     assert.ok(installedAssets.includes(asset), asset);
     assert.ok(existsSync(new URL('../' + asset, import.meta.url)), asset);
   }

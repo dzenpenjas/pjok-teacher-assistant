@@ -1,3 +1,5 @@
+import { snapshotBatchReportSelection } from "../services/batch-report-selection.js";
+import { ensureReportFitsA4, ensureSinglePdfPage, reportExceedsA4 } from "./report-pdf-layout.js";
 import { createReportDetailControls } from "./report-detail-controls.js";
 import { createField, createSelectField, formToObject } from "./form-controls.js";
 import { createPhotoPickerField } from "./student-photo-field.js";
@@ -1245,19 +1247,7 @@ export function renderClassesScreen(state, actions) {
           // 1. Append page to staging DOM
           stagingContainer.replaceChildren(pageEl);
 
-          // 2. Remove a4-compact
-          pageEl.classList.remove("a4-compact");
-
-          // 3. Allow layout
-          await new Promise((resolve) => requestAnimationFrame(resolve));
-
-          // 4. Measure: scrollHeight vs clientHeight
-          if (pageEl.scrollHeight > pageEl.clientHeight) {
-            // 5. If overflowing: add a4-compact
-            pageEl.classList.add("a4-compact");
-            // 6. Allow layout again
-            await new Promise((resolve) => requestAnimationFrame(resolve));
-          }
+          await ensureReportFitsA4(pageEl);
 
           // Validation before capture
           const textContent = (pageEl.textContent || "").trim();
@@ -1271,10 +1261,7 @@ export function renderClassesScreen(state, actions) {
             const worker = window.html2pdf().set(opt).from(pageEl);
             pdfDoc = await worker.toPdf().get("pdf");
 
-            // Guarantee single page for first student if html2pdf split due to minor rounding
-            while (pdfDoc.internal.getNumberOfPages() > 1) {
-              pdfDoc.deletePage(pdfDoc.internal.getNumberOfPages());
-            }
+            ensureSinglePdfPage(pdfDoc);
           } else {
             // Subsequent students: render only this pageEl to canvas, add A4 page to the SAME jsPDF document
             const worker = window.html2pdf().set(opt).from(pageEl);
@@ -1487,11 +1474,14 @@ export function renderClassesScreen(state, actions) {
         classUi.batchReportSelection.assessmentSessionIds = [];
       }
 
-      // 2. Preflight source validation: Check if there is at least one usable source across target students
-      const selectedAssessmentSessionIds = classUi.batchReportSelection?.assessmentSessionIds || [];
-      const effectiveSessionIdSet = selectedAssessmentSessionIds.length > 0
-        ? new Set(selectedAssessmentSessionIds)
-        : validClassSessionIds;
+      if (isRetry && (classUi.batchState.classId !== classRoom.id || !classUi.batchState.frozenSourceSelection)) {
+        window.alert("Snapshot sumber batch awal tidak tersedia atau milik kelas lain. Tidak dapat melakukan retry.");
+        return;
+      }
+      const sourceSelection = isRetry
+        ? classUi.batchState.frozenSourceSelection
+        : snapshotBatchReportSelection(classUi.batchReportSelection, validClassSessionIds);
+      const effectiveSessionIdSet = new Set(sourceSelection.assessmentSessionIds);
 
       const targetStudentIdSet = new Set(targetStudents.map((s) => s.id));
 
@@ -1499,10 +1489,10 @@ export function renderClassesScreen(state, actions) {
         (r) => targetStudentIdSet.has(r.studentId) && effectiveSessionIdSet.has(r.assessmentSessionId)
       );
 
-      const hasGrowthData = Boolean(classUi.batchReportSelection?.includeGrowth) &&
+      const hasGrowthData = sourceSelection.includeGrowth &&
         (state.growthRecords || []).some((g) => targetStudentIdSet.has(g.studentId));
 
-      const hasObservationData = Boolean(classUi.batchReportSelection?.includeObservations) &&
+      const hasObservationData = sourceSelection.includeObservations &&
         (state.studentObservations || []).some((o) => targetStudentIdSet.has(o.studentId));
 
       const hasAnyDataSource = hasAssessmentData || hasGrowthData || hasObservationData;
@@ -1536,6 +1526,7 @@ export function renderClassesScreen(state, actions) {
           }
           frozenScoringConfig = { enabled: true, minScore: minNum, maxScore: maxNum };
         }
+        classUi.batchState.frozenSourceSelection = sourceSelection;
         classUi.batchState.frozenScoringConfig = frozenScoringConfig;
         classUi.batchState.frozenReportDetails = { ...classUi.batchReportDetails };
       }
@@ -1681,8 +1672,7 @@ export function renderClassesScreen(state, actions) {
               if (r.studentId !== student.id) return null;
               const sess = (state.assessmentSessions || []).find((as) => as.id === r.assessmentSessionId);
               if (!sess || sess.classId !== classRoom.id) return null;
-              const batchAssessmentIds = classUi.batchReportSelection?.assessmentSessionIds || [];
-              if (batchAssessmentIds.length > 0 && !batchAssessmentIds.includes(sess.id)) {
+              if (!effectiveSessionIdSet.has(sess.id)) {
                 return null;
               }
               const def = (state.assessmentDefinitions || []).find((d) => d.id === (sess.definitionId || r.definitionId));
@@ -1690,11 +1680,11 @@ export function renderClassesScreen(state, actions) {
             })
             .filter(Boolean);
 
-          const selectedGrowth = classUi.batchReportSelection?.includeGrowth
+          const selectedGrowth = sourceSelection.includeGrowth
             ? (state.growthRecords || []).filter((g) => g.studentId === student.id)
             : [];
 
-          const selectedObs = classUi.batchReportSelection?.includeObservations
+          const selectedObs = sourceSelection.includeObservations
             ? (state.studentObservations || []).filter((o) => o.studentId === student.id)
             : [];
 
@@ -3285,16 +3275,8 @@ export function renderClassesScreen(state, actions) {
 
       // Verify whether content exceeds the actual A4 element height and apply compact mode if needed
       requestAnimationFrame(() => {
-        // 1. remove a4-compact first
         a4Paper.classList.remove("a4-compact");
-
-        // 2. measure content against actual A4 element height
-        if (a4Paper.scrollHeight > a4Paper.clientHeight) {
-          // 3. if content exceeds the A4 element height, add a4-compact
-          a4Paper.classList.add("a4-compact");
-          // 4. measure again
-          void a4Paper.scrollHeight;
-        }
+        if (reportExceedsA4(a4Paper)) a4Paper.classList.add("a4-compact");
 
         // 5. scale visually for mobile viewport
         updatePreviewScale();
@@ -3318,7 +3300,7 @@ export function renderClassesScreen(state, actions) {
       });
 
       // Download PDF Handler
-      downloadPdfBtn.addEventListener("click", () => {
+      downloadPdfBtn.addEventListener("click", async () => {
         const cleanStudentName = (student?.name || "Siswa").replace(/[^a-zA-Z0-9]/g, "_");
         const formattedDateKey = new Date().toISOString().slice(0, 10);
         const pdfFilename = `Laporan_PJOK_${cleanStudentName}_${formattedDateKey}.pdf`;
@@ -3366,21 +3348,25 @@ export function renderClassesScreen(state, actions) {
           }
         };
 
-        window.html2pdf().set(opt).from(a4Paper).save().then(() => {
-          downloadPdfBtn.disabled = false;
-          downloadPdfBtn.textContent = "📥 Unduh PDF";
-        }).catch((pdfErr) => {
+        try {
+          await ensureReportFitsA4(a4Paper);
+          const worker = window.html2pdf().set(opt).from(a4Paper);
+          const pdf = await worker.toPdf().get("pdf");
+          ensureSinglePdfPage(pdf);
+          await worker.save();
+        } catch (pdfErr) {
           console.error("[PDF GENERATION ERROR]", pdfErr);
+          window.alert("PDF gagal dibuat: " + (pdfErr?.message || "Silakan coba kembali."));
+        } finally {
           downloadPdfBtn.disabled = false;
           downloadPdfBtn.textContent = "📥 Unduh PDF";
-          window.alert("PDF gagal dibuat. Silakan coba kembali.");
-        }).finally(() => {
           isExportingPdf = false;
           previewScaler.style.transform = prevTransform;
           previewScaler.style.width = prevScalerWidth;
           previewScaler.style.height = prevScalerHeight;
           previewViewport.style.height = prevViewportHeight;
-        });
+          updatePreviewScale();
+        }
       });
     }
 

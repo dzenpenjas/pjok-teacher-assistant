@@ -1,3 +1,28 @@
+function parseReportDate(value) {
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value : null;
+  if (typeof value !== "string") return null;
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  const localized = /^(\d{1,2})\s+([a-z]+)\s+(\d{4})$/i.exec(value.trim());
+  const months = ["januari", "februari", "maret", "april", "mei", "juni", "juli", "agustus", "september", "oktober", "november", "desember"];
+  if (!iso && !localized) return null;
+  const year = Number(iso ? iso[1] : localized[3]);
+  const month = iso ? Number(iso[2]) - 1 : months.indexOf(localized[2].toLowerCase());
+  const day = Number(iso ? iso[3] : localized[1]);
+  if (month < 0 || month > 11) return null;
+  const date = new Date(year, month, day);
+  return date.getFullYear() === year && date.getMonth() === month && date.getDate() === day ? date : null;
+}
+
+export function calculateReportAge(birthDate, reportDate = new Date()) {
+  const birth = parseReportDate(birthDate);
+  const reference = parseReportDate(reportDate);
+  if (!birth || !reference || birth > reference) return null;
+  let age = reference.getFullYear() - birth.getFullYear();
+  if (reference.getMonth() < birth.getMonth() ||
+      (reference.getMonth() === birth.getMonth() && reference.getDate() < birth.getDate())) age--;
+  return age;
+}
+
 export function formatClassName(name) {
   if (!name) return "Kelas";
   const str = String(name).trim();
@@ -203,7 +228,7 @@ export function createFinalReportPage({
       : null;
   }
 
-  const formattedToday = reportDate || new Date().toLocaleDateString("id-ID", {
+  const formattedToday = typeof reportDate === "string" && reportDate ? reportDate : (reportDate || new Date()).toLocaleDateString("id-ID", {
     day: "numeric",
     month: "long",
     year: "numeric"
@@ -263,14 +288,8 @@ export function createFinalReportPage({
     growthDateNote = `Diukur pada ${formattedToday}`;
   }
 
-  let studentAgeText = currentContext.studentAgeText || "-";
-  if ((!studentAgeText || studentAgeText === "-") && student?.birthDate) {
-    const birthYear = new Date(student.birthDate).getFullYear();
-    const currentYear = new Date().getFullYear();
-    if (!isNaN(birthYear) && birthYear > 1990 && currentYear >= birthYear) {
-      studentAgeText = `${currentYear - birthYear} Tahun`;
-    }
-  }
+  const reportAge = calculateReportAge(student?.birthDate || currentContext.student?.birthDate, reportDate || formattedToday);
+  const studentAgeText = reportAge === null ? "-" : `${reportAge} Tahun`;
 
   const schoolName = (school?.name && school.name.trim()) || "Nama sekolah belum diatur";
   const schoolAddress = school?.address ? school.address.trim() : "";
@@ -369,14 +388,14 @@ export function createFinalReportPage({
   const nutritionAdviceText = (currentDraft.nutritionAdvice || "").trim();
   const teacherNoteText = (currentDraft.teacherNote || currentDraft.teacherNotes || currentDraft.attitude || "").trim();
 
-  // NILAI PJOK TENGAH SEMESTER HERO (JIKA ADA & LEARNING SELECTION ACTIVE)
+  // Nilai PJOK untuk semua jenis laporan.
   if (isLearningActive && finalReportData.overallScore !== null && finalReportData.overallScore !== undefined) {
     const scoreHero = document.createElement("section");
     scoreHero.className = "a4-score-hero";
     
     const heroLabel = document.createElement("span");
     heroLabel.className = "a4-score-hero-label";
-    heroLabel.textContent = "NILAI PJOK TENGAH SEMESTER";
+    heroLabel.textContent = "NILAI PJOK";
 
     const heroScoreWrap = document.createElement("div");
     heroScoreWrap.className = "a4-score-hero-num";
