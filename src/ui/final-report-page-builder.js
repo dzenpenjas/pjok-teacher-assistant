@@ -20,8 +20,7 @@ function ensureSentence(text) {
 function normalizeTokens(text) {
   const STOP_WORDS = new Set([
     "dan", "yang", "di", "ke", "dari", "ini", "itu", "untuk", "pada", "adalah",
-    "sebagai", "dengan", "atau", "juga", "sudah", "belum", "masih", "perlu",
-    "kurang", "lebih", "tetapi", "namun", "bisa", "mampu", "sangat", "cukup"
+    "sebagai", "dengan", "atau", "juga", "lebih", "tetapi", "namun", "sangat", "cukup"
   ]);
   const norm = text
     .toLowerCase()
@@ -99,11 +98,21 @@ function buildAssessmentAchievementText(assessment) {
     let duplicate = false;
     for (let i = 0; i < finalSentences.length; i++) {
       const existing = finalSentences[i];
+
+      if (isContrast(sentence, existing)) {
+        continue;
+      }
+
       if (areSentencesSimilar(sentence, existing)) {
         duplicate = true;
-        if (sentence.length > existing.length && !existing.toLowerCase().includes(sentence.toLowerCase())) {
+
+        if (
+          sentence.length > existing.length &&
+          !existing.toLowerCase().includes(sentence.toLowerCase())
+        ) {
           finalSentences[i] = sentence;
         }
+
         break;
       }
     }
