@@ -1,5 +1,5 @@
 import { snapshotBatchReportSelection } from "../services/batch-report-selection.js";
-import { ensureReportFitsA4, ensureSinglePdfPage, reportExceedsA4 } from "./report-pdf-layout.js";
+import { appendReportToPdf, reportPdfFailure, reportExceedsA4 } from "./report-pdf-layout.js";
 import { createReportDetailControls } from "./report-detail-controls.js";
 import { createField, createSelectField, formToObject } from "./form-controls.js";
 import { createPhotoPickerField } from "./student-photo-field.js";
@@ -35,6 +35,17 @@ import {
   createFinalReportPage,
   formatClassName
 } from "./final-report-page-builder.js";
+
+function showReportPdfFailure(studentName, stage, cause) {
+  const error = reportPdfFailure(studentName, stage, cause);
+  void showConfirmModal({
+    title: "Ekspor PDF dihentikan",
+    message: error.message,
+    confirmText: "Mengerti",
+    cancelText: "Tutup",
+    danger: false
+  });
+}
 
 const pendingReports = new Map();
 
@@ -1173,7 +1184,7 @@ export function renderClassesScreen(state, actions) {
 
     downloadAllBtn.addEventListener("click", async () => {
       if (!window.html2pdf) {
-        window.alert("Mesin PDF belum tersedia. Muat ulang aplikasi lalu coba lagi.");
+        showReportPdfFailure(readyStudentsWithReports.map(({ student }) => student?.name || "Siswa").join(", "), "Persiapan mesin PDF", new Error("Mesin PDF belum tersedia. Muat ulang aplikasi lalu coba lagi."));
         return;
       }
       if (readyStudentsWithReports.length === 0) {
@@ -1195,9 +1206,11 @@ export function renderClassesScreen(state, actions) {
       stagingContainer.style.width = "210mm";
       stagingContainer.style.background = "#ffffff";
       stagingContainer.style.pointerEvents = "none";
-      stagingContainer.style.overflow = "hidden";
+      stagingContainer.style.overflow = "visible";
       document.body.appendChild(stagingContainer);
 
+      let exportStudentName = readyStudentsWithReports[0]?.student?.name || "Siswa";
+      let exportStage = "Persiapan PDF";
       try {
         const opt = {
           margin: 0,
@@ -1227,6 +1240,8 @@ export function renderClassesScreen(state, actions) {
 
         for (let i = 0; i < readyStudentsWithReports.length; i++) {
           const { student, savedReport } = readyStudentsWithReports[i];
+          exportStudentName = student?.name || "Siswa";
+          exportStage = "Menyusun halaman laporan";
           if (
             !savedReport ||
             !savedReport.draft ||
@@ -1234,7 +1249,7 @@ export function renderClassesScreen(state, actions) {
             !savedReport.reportContext ||
             typeof savedReport.reportContext !== "object"
           ) {
-            continue;
+            throw new Error("Data laporan tidak valid untuk diekspor.");
           }
 
           downloadAllBtn.textContent = `⏳ Mengekspor PDF (${renderedPageCount + 1}/${readyStudentsWithReports.length})...`;
@@ -1250,44 +1265,9 @@ export function renderClassesScreen(state, actions) {
           // 1. Append page to staging DOM
           stagingContainer.replaceChildren(pageEl);
 
-          await ensureReportFitsA4(pageEl);
-
-          // Validation before capture
-          const textContent = (pageEl.textContent || "").trim();
-          if (!pageEl.isConnected || pageEl.offsetWidth <= 0 || pageEl.offsetHeight <= 0 || textContent.length < 10) {
-            throw new Error(`Validasi halaman laporan siswa "${student?.name || "Siswa"}" gagal: ukuran atau konten tidak valid.`);
-          }
-
-          // Per-page canvas capture through html2pdf Worker
-          if (!pdfDoc) {
-            // First valid student: create/obtain the jsPDF document from existing html2pdf Worker
-            const worker = window.html2pdf().set(opt).from(pageEl);
-            pdfDoc = await worker.toPdf().get("pdf");
-
-            ensureSinglePdfPage(pdfDoc);
-          } else {
-            // Subsequent students: render only this pageEl to canvas, slice pages if multi-page report, add A4 pages to the SAME jsPDF document
-            const worker = window.html2pdf().set(opt).from(pageEl);
-            const canvas = await worker.toCanvas().get("canvas");
-            const width = canvas.width;
-            const height = canvas.height;
-            const pageHeightPx = width * 297 / 210;
-            const studentPages = height > pageHeightPx + 2 ? 2 : 1;
-
-            for (let p = 0; p < studentPages; p++) {
-              const sliceCanvas = document.createElement("canvas");
-              sliceCanvas.width = width;
-              sliceCanvas.height = pageHeightPx;
-              const ctx = sliceCanvas.getContext("2d");
-              ctx.fillStyle = "#ffffff";
-              ctx.fillRect(0, 0, width, pageHeightPx);
-              const sliceHeight = Math.min(pageHeightPx, height - p * pageHeightPx);
-              ctx.drawImage(canvas, 0, p * pageHeightPx, width, sliceHeight, 0, 0, width, sliceHeight);
-              const imgData = sliceCanvas.toDataURL("image/jpeg", 0.98);
-              pdfDoc.addPage("a4", "portrait");
-              pdfDoc.addImage(imgData, "JPEG", 0, 0, 210, 297);
-            }
-          }
+          pdfDoc = await appendReportToPdf({
+            page: pageEl, options: opt, pdf: pdfDoc, studentName: exportStudentName
+          });
 
           // Release page between iterations
           pageEl.remove();
@@ -1302,11 +1282,13 @@ export function renderClassesScreen(state, actions) {
         }
 
         // Final save
-        pdfDoc.save(pdfFilename);
+        exportStage = "Menyimpan PDF gabungan";
+        exportStudentName = readyStudentsWithReports.map(({ student }) => student?.name || "Siswa").join(", ");
+        await pdfDoc.save(pdfFilename, { returnPromise: true });
         showToast(`Berhasil mengunduh semua laporan kelas (${renderedPageCount} siswa)`);
       } catch (pdfErr) {
         console.error("[BATCH PDF GENERATION ERROR]", pdfErr);
-        window.alert("Terjadi kendala saat membuat PDF gabungan kelas: " + (pdfErr?.message || ""));
+        showReportPdfFailure(exportStudentName, exportStage, pdfErr);
       } finally {
         if (stagingContainer && stagingContainer.parentNode) {
           stagingContainer.parentNode.removeChild(stagingContainer);
@@ -3324,7 +3306,7 @@ export function renderClassesScreen(state, actions) {
         const pdfFilename = `Laporan_PJOK_${cleanStudentName}_${formattedDateKey}.pdf`;
 
         if (!window.html2pdf) {
-          window.alert("Mesin PDF belum tersedia. Muat ulang aplikasi lalu coba lagi.");
+          showReportPdfFailure(student?.name, "Persiapan mesin PDF", new Error("Mesin PDF belum tersedia. Muat ulang aplikasi lalu coba lagi."));
           return;
         }
 
@@ -3366,15 +3348,14 @@ export function renderClassesScreen(state, actions) {
           }
         };
 
+        let exportStage = "Menyiapkan laporan";
         try {
-          await ensureReportFitsA4(a4Paper);
-          const worker = window.html2pdf().set(opt).from(a4Paper);
-          const pdf = await worker.toPdf().get("pdf");
-          ensureSinglePdfPage(pdf);
-          await worker.save();
+          const pdf = await appendReportToPdf({ page: a4Paper, options: opt, studentName: student?.name });
+          exportStage = "Menyimpan PDF";
+          await pdf.save(pdfFilename, { returnPromise: true });
         } catch (pdfErr) {
           console.error("[PDF GENERATION ERROR]", pdfErr);
-          window.alert("PDF gagal dibuat: " + (pdfErr?.message || "Silakan coba kembali."));
+          showReportPdfFailure(student?.name, exportStage, pdfErr);
         } finally {
           downloadPdfBtn.disabled = false;
           downloadPdfBtn.textContent = "📥 Unduh PDF";
