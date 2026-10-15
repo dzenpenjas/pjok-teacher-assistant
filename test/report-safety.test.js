@@ -54,17 +54,20 @@ test('PDF detects growing min-height paper even without scroll overflow', () => 
 test('PDF uses compact layout then revalidates; persistent overflow aborts', async () => {
   const fitting=page(1500,1100); await ensureReportFitsA4(fitting);
   assert.equal(fitting.classList.contains(),true);
-  const overflowing=page(1800,1400);
+  const twoPage=page(1800,1400); await ensureReportFitsA4(twoPage);
+  assert.equal(twoPage.classList.contains(),true);
+  const overflowing=page(2800,2400);
   await assert.rejects(ensureReportFitsA4(overflowing),/Ekspor dihentikan/);
   const horizontal=page(1100);horizontal.scrollWidth=900;
   await assert.rejects(ensureReportFitsA4(horizontal),/Ekspor dihentikan/);
 });
 test('PDF rejects extra output pages without deleting them', () => {
   let deleted=false;
-  const pdf={internal:{getNumberOfPages:()=>2},deletePage(){deleted=true;}};
+  const pdf={internal:{getNumberOfPages:()=>3},deletePage(){deleted=true;}};
   assert.throws(()=>ensureSinglePdfPage(pdf),/tanpa menghapus halaman/);
   assert.equal(deleted,false);
   assert.doesNotThrow(()=>ensureSinglePdfPage({internal:{getNumberOfPages:()=>1}}));
+  assert.doesNotThrow(()=>ensureSinglePdfPage({internal:{getNumberOfPages:()=>2}}));
 });
 function contents(node){return [node.textContent,...node.children.map(contents)].join(' ');}
 test('PDF uses generic score label and age at report date instead of stale context age', () => {

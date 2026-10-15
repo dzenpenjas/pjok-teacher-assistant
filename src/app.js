@@ -1231,6 +1231,12 @@ function importData(fileOrText) {
     });
 }
 
+Object.assign(actions, {
+  navigate: setScreen,
+  exportData,
+  importData
+}, createCrudActions());
+
 function renderApp() {
   const sessionContext = getSessionContext();
 
@@ -1456,9 +1462,11 @@ function registerServiceWorker() {
   });
 }
 
-window.addEventListener("online", renderApp);
-window.addEventListener("offline", renderApp);
+if (typeof window !== "undefined") {
+  window.addEventListener("online", renderApp);
+  window.addEventListener("offline", renderApp);
 
-appState = saveState(appState);
-renderApp();
-registerServiceWorker();
+  appState = saveState(appState);
+  renderApp();
+  registerServiceWorker();
+}

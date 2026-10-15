@@ -1216,6 +1216,9 @@ export function renderClassesScreen(state, actions) {
             unit: "mm",
             format: "a4",
             orientation: "portrait"
+          },
+          pagebreak: {
+            mode: ["avoid-all", "css", "legacy"]
           }
         };
 
@@ -1263,12 +1266,27 @@ export function renderClassesScreen(state, actions) {
 
             ensureSinglePdfPage(pdfDoc);
           } else {
-            // Subsequent students: render only this pageEl to canvas, add A4 page to the SAME jsPDF document
+            // Subsequent students: render only this pageEl to canvas, slice pages if multi-page report, add A4 pages to the SAME jsPDF document
             const worker = window.html2pdf().set(opt).from(pageEl);
             const canvas = await worker.toCanvas().get("canvas");
-            const imgData = canvas.toDataURL("image/jpeg", 0.98);
-            pdfDoc.addPage("a4", "portrait");
-            pdfDoc.addImage(imgData, "JPEG", 0, 0, 210, 297);
+            const width = canvas.width;
+            const height = canvas.height;
+            const pageHeightPx = width * 297 / 210;
+            const studentPages = height > pageHeightPx + 2 ? 2 : 1;
+
+            for (let p = 0; p < studentPages; p++) {
+              const sliceCanvas = document.createElement("canvas");
+              sliceCanvas.width = width;
+              sliceCanvas.height = pageHeightPx;
+              const ctx = sliceCanvas.getContext("2d");
+              ctx.fillStyle = "#ffffff";
+              ctx.fillRect(0, 0, width, pageHeightPx);
+              const sliceHeight = Math.min(pageHeightPx, height - p * pageHeightPx);
+              ctx.drawImage(canvas, 0, p * pageHeightPx, width, sliceHeight, 0, 0, width, sliceHeight);
+              const imgData = sliceCanvas.toDataURL("image/jpeg", 0.98);
+              pdfDoc.addPage("a4", "portrait");
+              pdfDoc.addImage(imgData, "JPEG", 0, 0, 210, 297);
+            }
           }
 
           // Release page between iterations

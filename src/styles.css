@@ -4592,8 +4592,6 @@ textarea {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  page-break-inside: avoid;
-  break-inside: avoid;
 }
 
 .batch-pdf-export-container {
@@ -4700,6 +4698,8 @@ textarea {
 
 .a4-section {
   margin-bottom: 5mm;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .a4-section-title {
