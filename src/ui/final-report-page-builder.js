@@ -7,6 +7,118 @@ export function formatClassName(name) {
   return `Kelas ${str}`;
 }
 
+function ensureSentence(text) {
+  if (!text) return "";
+  let clean = text.trim();
+  if (!clean) return "";
+  if (!/[.!?]$/.test(clean)) {
+    clean += ".";
+  }
+  return clean;
+}
+
+function normalizeTokens(text) {
+  const STOP_WORDS = new Set([
+    "dan", "yang", "di", "ke", "dari", "ini", "itu", "untuk", "pada", "adalah",
+    "sebagai", "dengan", "atau", "juga", "sudah", "belum", "masih", "perlu",
+    "kurang", "lebih", "tetapi", "namun", "bisa", "mampu", "sangat", "cukup"
+  ]);
+  const norm = text
+    .toLowerCase()
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const rawWords = norm.split(" ").filter(Boolean);
+  const keywords = rawWords.filter((w) => w.length > 2 && !STOP_WORDS.has(w));
+  return { norm, rawWords, keywords };
+}
+
+function areSentencesSimilar(s1, s2) {
+  const t1 = normalizeTokens(s1);
+  const t2 = normalizeTokens(s2);
+  if (!t1.norm || !t2.norm) return false;
+  if (t1.norm === t2.norm) return true;
+  if (t1.norm.includes(t2.norm) || t2.norm.includes(t1.norm)) return true;
+
+  if (t1.keywords.length > 0 && t2.keywords.length > 0) {
+    let shared = 0;
+    for (const kw of t1.keywords) {
+      if (t2.keywords.includes(kw)) shared++;
+    }
+    const minLen = Math.min(t1.keywords.length, t2.keywords.length);
+    if (shared > 0 && shared / minLen >= 0.5) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isContrast(s1, s2) {
+  const isPositive = (s) => /\b(mampu|benar|baik|sudah|lancar|konsisten)\b/i.test(s);
+  const isNegative = (s) => /\b(belum|kurang|perlu|tidak|sulit|remedial)\b/i.test(s);
+  return (isPositive(s1) && isNegative(s2)) || (isNegative(s1) && isPositive(s2));
+}
+
+function buildAssessmentAchievementText(assessment) {
+  if (!assessment) return "-";
+
+  const rawSentences = [];
+  const items = Array.isArray(assessment.items) ? assessment.items : [];
+
+  for (const item of items) {
+    const rubricText = item.rubricDescription?.trim() || "";
+    const itemNote = item.teacherNote?.trim() || "";
+
+    if (!rubricText && !itemNote) continue;
+
+    if (rubricText && itemNote) {
+      if (isContrast(rubricText, itemNote) && !areSentencesSimilar(rubricText, itemNote)) {
+        rawSentences.push(ensureSentence(rubricText));
+        rawSentences.push(ensureSentence(itemNote));
+      } else if (areSentencesSimilar(rubricText, itemNote)) {
+        rawSentences.push(ensureSentence(itemNote));
+      } else {
+        rawSentences.push(ensureSentence(rubricText));
+        rawSentences.push(ensureSentence(itemNote));
+      }
+    } else if (itemNote) {
+      rawSentences.push(ensureSentence(itemNote));
+    } else if (rubricText) {
+      rawSentences.push(ensureSentence(rubricText));
+    }
+  }
+
+  const assessmentNote = assessment.teacherNote?.trim() || "";
+  if (assessmentNote) {
+    rawSentences.push(ensureSentence(assessmentNote));
+  }
+
+  const finalSentences = [];
+  for (const sentence of rawSentences) {
+    if (!sentence) continue;
+    let duplicate = false;
+    for (let i = 0; i < finalSentences.length; i++) {
+      const existing = finalSentences[i];
+      if (areSentencesSimilar(sentence, existing)) {
+        duplicate = true;
+        if (sentence.length > existing.length && !existing.toLowerCase().includes(sentence.toLowerCase())) {
+          finalSentences[i] = sentence;
+        }
+        break;
+      }
+    }
+    if (!duplicate) {
+      finalSentences.push(sentence);
+    }
+  }
+
+  if (finalSentences.length === 0) {
+    return "-";
+  }
+
+  return finalSentences.slice(0, 3).join(" ");
+}
+
 /**
  * Reusable A4 Final Report Page Builder
  * Constructs a single A4 DOM node for preview and single/batch PDF generation.
@@ -353,7 +465,7 @@ export function createFinalReportPage({
         } else {
           const noScore = document.createElement("span");
           noScore.className = "text-xs text-subtle";
-          noScore.textContent = "Nilai belum tersedia";
+          noScore.textContent = "-";
           tdScore.append(noScore);
         }
         row.append(tdScore);
@@ -361,14 +473,7 @@ export function createFinalReportPage({
         if (showDescriptions) {
           const tdDesc = document.createElement("td");
           tdDesc.className = "a4-td-desc";
-
-          const descriptions = (assessment.items || [])
-            .filter((item) => item.rubricLevel !== null && item.rubricLevel !== undefined)
-            .map((item) => item.rubricDescription?.trim() || item.prompt?.trim() || "")
-            .filter(Boolean);
-          if (assessment.teacherNote?.trim()) descriptions.push(assessment.teacherNote.trim());
-
-          tdDesc.textContent = descriptions.join(" ") || "Deskripsi capaian belum tersedia.";
+          tdDesc.textContent = buildAssessmentAchievementText(assessment);
           row.append(tdDesc);
         }
 
