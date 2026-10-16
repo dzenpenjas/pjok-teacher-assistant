@@ -1,0 +1,106 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {installReportTestEnvironment,findReportButton,waitForReportBatch} from './helpers/report-test-environment.js';
+import {createInitialState} from '../src/data/schema.js';
+import {renderClassesScreen} from '../src/ui/classes-screen.js';
+import {createFinalReportPage} from '../src/ui/final-report-page-builder.js';
+import {formatAiDiagnosticText} from '../src/services/ai-diagnostic-service.js';
+let serial=0;
+function fixture(){
+ const n=++serial;const classId=`class-test-${n}`;const data=createInitialState();
+ data.classes=[{id:classId,name:'1A',grade:1,status:'active'}];
+ data.academicYears=[{id:'year-test',name:'2026-2027'}];data.semesters=[{id:'semester-test',name:'1',academicYearId:'year-test'}];data.activeAcademicYearId='year-test';data.activeSemesterId='semester-test';
+ data.students=Array.from({length:6},(_,i)=>({id:`student-test-${n}-${i}`,name:`Synthetic Student ${i+1}`,classId,gender:'male',birthDate:'2019-02-01'}));
+ data.assessmentDefinitions=[{id:'def-test',method:'rubric'}];
+ data.assessmentSessions=['Lisan','Praktik'].map((method,i)=>({id:`assessment-${n}-${i}`,classId,title:`UTS PJOK Kelas 1 - ${method}`,definitionId:'def-test',date:'2026-09-01',itemsSnapshot:[{id:`item-${i}`,prompt:`Gerak uji ${i}`,rubricScale:5,rubricLevels:[{level:3,label:'Berkembang',desc:`Deskripsi terpilih ${i}`},{level:4,label:'Baik',desc:'Deskripsi lain tidak dipilih'}]}]}));
+ data.assessmentResults=data.students.flatMap((s,index)=>index===5?[]:data.assessmentSessions.map((a,i)=>({id:`result-${s.id}-${i}`,studentId:s.id,assessmentSessionId:a.id,definitionId:'def-test',numericScore:60,itemResults:[{itemId:`item-${i}`,rubricLevel:3,note:'Perlu waktu menjelaskan konsep.'}],note:'Latihan keseimbangan saat berdiri satu kaki.'})));
+ data.growthRecords=data.students.map(s=>({id:`growth-${s.id}`,studentId:s.id,date:'2026-09-01',heightCm:'120',weightKg:'24'}));
+ return data;
+}
+const narrative={strengths:'Capaian gerak yang tercatat.',developing:'Latihan bertahap diperlukan.',teacherAction:'Guru mendampingi latihan.',parentSupport:'Keluarga mendukung latihan.',growth:'Pengukuran tersedia untuk pemantauan.',nutritionAdvice:'Kebiasaan sehat sesuai kebutuhan.',teacherNote:''};
+function provider(body=narrative){return new Response(JSON.stringify({candidates:[{content:{parts:[{text:typeof body==='string'?body:JSON.stringify(body)}]}}]}),{status:200});}
+function reject400(reason){return new Response(JSON.stringify({error:{code:400,status:'INVALID_ARGUMENT',message:'Request contains an invalid argument.',details:reason?[{'@type':'type.googleapis.com/google.rpc.ErrorInfo',reason}]:[{'@type':'type.googleapis.com/google.rpc.BadRequest',fieldViolations:[{field:'generationConfig.unknown',description:'not copied to diagnostics'}]}]}}),{status:400});}
+async function setup({fetchResponse=()=>provider(),asyncSave=false,onSave}={}){
+ const source=fixture();const env=installReportTestEnvironment(source);
+ env.storage.setItem('pjok_gemini_api_key','synthetic-key');
+ const app=await import(`../src/app.js?batch-test=${serial}`);
+ const ui={selectedClassId:source.classes[0].id,mode:'detail',activeTab:'reports',batchReportSelection:{assessmentSessionIds:source.assessmentSessions.map(a=>a.id),includeGrowth:true,includeObservations:false},batchScoringConfig:{enabled:false},batchReportDetails:{enabled:true,descriptions:true}};
+ const state={...env.read(),uiState:{classes:ui}};
+ const requests=[];let active=0,maxConcurrency=0;const saved=[];
+ globalThis.fetch=async(endpoint,options)=>{
+  active++;maxConcurrency=Math.max(maxConcurrency,active);
+  try{
+   const body=JSON.parse(options.body);const text=body.contents[0].parts[0].text;
+   const context=JSON.parse(text.split('Data ReportContext siswa:\n')[1].split('\n\nPRINSIP SINTESIS')[0]);
+   requests.push(context);return await fetchResponse(context,requests.length,{env,state,ui});
+  }finally{active--;}
+ };
+ const save=report=>{if(onSave){const failure=onSave(report);if(failure)return failure;}const result=app.actions.saveStudentReport(report);if(result.success)saved.push(report);return result;};
+ const screen=renderClassesScreen(state,{...app.actions,saveStudentReport:asyncSave?async report=>{await new Promise(resolve=>setTimeout(resolve,1));return save(report);}:save});
+ return {source,env,ui,state,screen,requests,saved,get maxConcurrency(){return maxConcurrency;},async click(label){const button=findReportButton(screen,label);assert.ok(button,`Missing test action: ${label}`);await button.click();await waitForReportBatch(ui);}};
+}
+const originalFetch=globalThis.fetch,originalError=console.error;
+test.afterEach(()=>{globalThis.fetch=originalFetch;console.error=originalError;});
+test('sequential batch builds exact contexts, awaits storage, and keeps detail evidence in final report',async()=>{
+ const h=await setup({asyncSave:true});await h.click('Generate Semua Laporan');
+ assert.equal(h.ui.batchState.successCount,6);assert.equal(h.ui.batchState.failedCount,0);assert.equal(h.maxConcurrency,1);
+ assert.deepEqual(h.requests.map(c=>c.student.id),h.source.students.map(s=>s.id));assert.equal(h.saved.length,6);
+ const stored=h.env.read().studentReports;assert.equal(stored.length,6);
+ for(const report of stored){assert.equal(report.academicYearId,'year-test');assert.equal(report.semesterId,'semester-test');const c=report.reportContext;
+  assert.ok(c.reportDetails.enabled&&c.reportDetails.descriptions);assert.equal(c.observations.length,0);assert.equal(c.reportScoring.enabled,false);
+  assert.ok(c.assessments.every(a=>h.source.assessmentSessions.some(s=>s.id===a.assessmentSessionId)));
+  for(const a of c.assessments){assert.equal(a.items[0].rubricLevel,3);assert.ok(a.items[0].rubricDescription.startsWith('Deskripsi terpilih'));}
+  const page=createFinalReportPage({student:h.source.students.find(s=>s.id===report.studentId),draft:report.draft,reportContext:c});
+  if(c.assessments.length){assert.ok(page.textContent.includes('Detail Nilai Asesmen'));assert.ok(page.textContent.includes('Deskripsi terpilih'));assert.ok(page.textContent.includes('Latihan keseimbangan saat berdiri satu kaki.'));}
+  else assert.equal(report.draft.strengths,'');
+ }
+});
+test('three invalid requests halt; resume and retry retain frozen settings and finish all students',async()=>{
+ console.error=()=>{};let fail=true;const h=await setup({fetchResponse:()=>fail?reject400():provider()});await h.click('Generate Semua Laporan');
+ assert.equal(h.requests.length,3);assert.equal(h.ui.batchState.failedCount,3);assert.equal(h.ui.batchState.unprocessedCount,3);assert.equal(h.ui.batchState.diagnostic.stage,'BATCH_HALTED');
+ assert.ok(formatAiDiagnosticText(h.ui.batchState.diagnostic).includes('generationConfig.unknown'));
+ h.ui.batchReportSelection={assessmentSessionIds:[],includeGrowth:false,includeObservations:true};h.ui.batchScoringConfig={enabled:true,minScore:80,maxScore:90};h.ui.batchReportDetails={enabled:false,descriptions:false};
+ fail=false;await h.click('Lanjutkan Belum Diproses');assert.equal(h.ui.batchState.successCount,3);assert.equal(h.ui.batchState.failedCount,3);assert.equal(h.ui.batchState.unprocessedCount,0);
+ await h.click('Coba Lagi yang Gagal');assert.equal(h.ui.batchState.successCount,6);assert.equal(h.ui.batchState.failedCount,0);assert.equal(h.requests.length,9);
+ for(const c of h.requests){assert.ok(c.growth.length>0);assert.equal(c.observations.length,0);assert.equal(c.reportScoring.enabled,false);assert.ok(c.reportDetails.enabled&&c.reportDetails.descriptions);}
+});
+test('API_KEY_INVALID reason halts after one request and is retained in last failure',async()=>{
+ console.error=()=>{};const h=await setup({fetchResponse:()=>reject400('API_KEY_INVALID')});await h.click('Generate Semua Laporan');
+ assert.equal(h.requests.length,1);assert.equal(h.ui.batchState.failedCount,1);assert.equal(h.ui.batchState.unprocessedCount,5);
+ assert.equal(h.ui.batchState.diagnostic.errorCode,'AUTH_ERROR');assert.equal(h.ui.batchState.diagnostic.lastFailure.googleReason,'API_KEY_INVALID');
+});
+test('invalid narrative is not saved, and failed-only retry saves it once corrected',async()=>{
+ console.error=()=>{};let fail=true;const h=await setup({fetchResponse:(c,index)=>fail&&index===2?provider({...narrative,strengths:''}):provider()});await h.click('Generate Semua Laporan');
+ assert.equal(h.ui.batchState.failedCount,1);assert.equal(h.saved.length,5);assert.equal(h.ui.batchState.diagnostic.lastFailure.failureStage,'RESPONSE_PARSING');
+ fail=false;await h.click('Coba Lagi yang Gagal');assert.equal(h.ui.batchState.successCount,6);assert.equal(h.env.read().studentReports.length,6);assert.equal(h.requests.length,7);
+});
+test('save failure is reported and retry restores persistence without duplicating reports',async()=>{
+ console.error=()=>{};let fail=true,failWrites=false;
+ const h=await setup({onSave:report=>{failWrites=fail&&report.studentId.endsWith('-1');}});
+ const setItem=h.env.storage.setItem;
+ h.env.storage.setItem=(key,value)=>{if(failWrites&&key==='pjokTeacherAssistant.state')throw new Error('Synthetic storage failure');setItem(key,value);};
+ await h.click('Generate Semua Laporan');
+ assert.equal(h.ui.batchState.failedCount,1);assert.equal(h.env.read().studentReports.length,5);assert.equal(h.ui.batchState.diagnostic.lastFailure.failureStage,'REPORT_SAVING');
+ fail=false;await h.click('Coba Lagi yang Gagal');assert.equal(h.ui.batchState.successCount,6);assert.equal(h.env.read().studentReports.length,6);
+});
+test('period change during API wait cannot relabel reports into the new active period',async()=>{
+ const h=await setup({fetchResponse:(c,index,{env})=>{if(index===1){const state=env.read();state.activeAcademicYearId='other-year';state.activeSemesterId='other-semester';env.storage.setItem('pjokTeacherAssistant.state',JSON.stringify(state));}return provider();}});
+ await h.click('Generate Semua Laporan');assert.equal(h.ui.batchState.successCount,6);
+ assert.ok(h.env.read().studentReports.every(r=>r.academicYearId==='year-test'&&r.semesterId==='semester-test'));
+});
+test('continuation rejects a changed active period without another API request',async()=>{
+ console.error=()=>{};const h=await setup({fetchResponse:()=>reject400()});await h.click('Generate Semua Laporan');
+ const state=h.env.read();state.activeSemesterId='different-semester';h.env.storage.setItem('pjokTeacherAssistant.state',JSON.stringify(state));h.state.activeSemesterId='different-semester';
+ await h.click('Coba Lagi yang Gagal');assert.equal(h.requests.length,3);assert.ok(h.env.alerts.some(message=>message.includes('periode telah berubah')));
+});
+
+test('429 stops immediately; three consecutive server failures halt and preserve remaining students',async()=>{
+ console.error=()=>{};
+ for(const [status,limit] of [[429,1],[503,3]]){
+  let fail=true;
+  const h=await setup({fetchResponse:()=>fail?new Response(JSON.stringify({error:{code:status,status:status===429?'RESOURCE_EXHAUSTED':'UNAVAILABLE',message:'Synthetic provider limit'}}),{status}):provider()});
+  await h.click('Generate Semua Laporan');assert.equal(h.requests.length,limit);assert.equal(h.ui.batchState.failedCount,limit);assert.equal(h.ui.batchState.unprocessedCount,6-limit);assert.equal(h.ui.batchState.diagnostic.stage,'BATCH_HALTED');
+  fail=false;await h.click('Lanjutkan Belum Diproses');await h.click('Coba Lagi yang Gagal');
+  assert.equal(h.ui.batchState.successCount,6);assert.equal(h.ui.batchState.unprocessedCount,0);
+ }
+});

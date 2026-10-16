@@ -8,7 +8,7 @@ import {
 } from '../src/services/ai-diagnostic-service.js';
 
 test('getDiagnosticStageLabel returns appropriate Indonesian labels', () => {
-  assert.equal(getDiagnosticStageLabel(BATCH_STAGES.BATCH_HALTED), 'Batch dihentikan: permintaan AI ditolak berulang');
+  assert.equal(getDiagnosticStageLabel(BATCH_STAGES.BATCH_HALTED), 'Batch dihentikan sementara');
   assert.equal(getDiagnosticStageLabel(BATCH_STAGES.API_WAITING), 'Menunggu respons AI...');
   assert.equal(getDiagnosticStageLabel(BATCH_STAGES.RESPONSE_PARSING), 'Memproses hasil AI...');
 });
@@ -68,7 +68,7 @@ test('formatAiDiagnosticText formats safe metadata without leaking API keys or f
   const text = formatAiDiagnosticText(diag);
   assert.match(text, /AI REPORT DIAGNOSTIC/);
   assert.match(text, /Run ID: run-123/);
-  assert.match(text, /Tahap: Batch dihentikan: permintaan AI ditolak berulang/);
+  assert.match(text, /Tahap: Batch dihentikan sementara/);
   assert.match(text, /Model API: gemini-3.8-flash/);
   assert.match(text, /Ukuran Request: 1540 bytes/);
   assert.match(text, /HTTP Status: 400/);
@@ -80,4 +80,12 @@ test('formatAiDiagnosticText formats safe metadata without leaking API keys or f
   assert.doesNotMatch(text, /AIza/i);
   assert.doesNotMatch(text, /x-goog-api-key/i);
   assert.doesNotMatch(text, /Bearer/i);
+});
+
+test('diagnostic export retains safe rejection metadata and redacts modern key formats',()=>{
+ const diag={stage:BATCH_STAGES.ERROR,httpStatus:400,errorCode:'INVALID_ARGUMENT',googleStatus:'INVALID_ARGUMENT',googleReason:'API_KEY_INVALID',googleFields:['generationConfig.syntheticField'],errorMessage:'Rejected AQ.synthetic-key-value'};
+ const output=formatAiDiagnosticText(diag);
+ assert.match(output,/Google Error Reason: API_KEY_INVALID/);
+ assert.match(output,/Google Error Fields: generationConfig.syntheticField/);
+ assert.doesNotMatch(output,/AQ\.synthetic/);
 });

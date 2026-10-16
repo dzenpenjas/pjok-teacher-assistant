@@ -47,7 +47,7 @@ export function getDiagnosticStageLabel(stage) {
     case BATCH_STAGES.BATCH_DONE:
       return "Semua laporan selesai diproses.";
     case BATCH_STAGES.BATCH_HALTED:
-      return "Batch dihentikan: permintaan AI ditolak berulang";
+      return "Batch dihentikan sementara";
     case BATCH_STAGES.ERROR:
       return "Terjadi kendala pada proses.";
     default:
@@ -74,7 +74,7 @@ export function getFriendlyErrorMessage(errorCode, originalError, httpStatus, go
     googleStatus === "INVALID_ARGUMENT" ||
     (typeof originalError === "string" && originalError.includes("INVALID_ARGUMENT"))
   ) {
-    return "Permintaan AI ditolak (HTTP 400 — INVALID_ARGUMENT). Parameter atau struktur request tidak valid.";
+    return "Permintaan AI ditolak (HTTP 400 — INVALID_ARGUMENT). Periksa alasan dan field penolakan Google pada detail diagnostik.";
   }
   if (httpStatus >= 500 || errorCode === "AI_SERVER_ERROR") {
     return "Kendala teknis pada server AI.";
@@ -109,6 +109,7 @@ export function sanitizeDiagnosticErrorMessage(rawMsg) {
 
   // Redact API keys and authorization headers
   str = str.replace(/AIza[0-9A-Za-z_-]{35}/g, "[REDACTED_API_KEY]");
+  str = str.replace(/\bAQ\.[0-9A-Za-z_-]{8,}/g, "[REDACTED_API_KEY]");
   str = str.replace(/key=[^&\s"'`]+/gi, "key=[REDACTED]");
   str = str.replace(/x-goog-api-key\s*:\s*[^,\s"'`]+/gi, "x-goog-api-key: [REDACTED]");
   str = str.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [REDACTED]");
@@ -204,6 +205,8 @@ export function formatAiDiagnosticText(diag) {
     `Data: ${diag.assessmentCount || 0} asesmen, ${diag.growthCount || 0} pertumbuhan, ${diag.observationCount || 0} observasi`,
     `HTTP Status: ${httpStatus}`,
     `Google Error Status: ${googleStatus}`,
+    `Google Error Reason: ${diag.googleReason || diag.lastFailure?.googleReason || "-"}`,
+    `Google Error Fields: ${(diag.googleFields || diag.lastFailure?.googleFields || []).join(", ") || "-"}`,
     `Kegagalan HTTP 400 Berturut-turut: ${consecutiveCount}`,
     `Kode Error: ${errorCode}`,
     `Kategori Kegagalan: ${friendlyError}`,
@@ -235,6 +238,8 @@ export function formatAiDiagnosticText(diag) {
       `Ukuran Request: ${lfRequestBytes}`,
       `HTTP Status: ${lf.httpStatus != null ? String(lf.httpStatus) : "-"}`,
       `Google Error Status: ${lf.googleStatus || "-"}`,
+      `Google Error Reason: ${lf.googleReason || "-"}`,
+      `Google Error Fields: ${(lf.googleFields || []).join(", ") || "-"}`,
       `Kegagalan HTTP 400 Berturut-turut: ${lf.consecutiveHttp400Count != null ? lf.consecutiveHttp400Count : consecutiveCount}`,
       `Waktu Tunggu: ${lfElapsed}`,
       `Kode Error: ${lf.errorCode || "-"}`,

@@ -1669,6 +1669,7 @@ export function renderClassesScreen(state, actions) {
 
       let batchTimerInterval = null;
       let consecutiveHttp400Count = 0;
+      let consecutiveServerErrorCount = 0;
       let wasBatchHalted = false;
 
       function updateAiWaitingIndicator() {
@@ -1751,6 +1752,9 @@ export function renderClassesScreen(state, actions) {
             responseReceivedAt: null,
             elapsedMs: null,
             httpStatus: null,
+            googleStatus: null,
+            googleReason: null,
+            googleFields: [],
             errorCode: null,
             errorMessage: null
           });
@@ -1853,6 +1857,7 @@ export function renderClassesScreen(state, actions) {
                 }
               }
             });
+            consecutiveServerErrorCount = 0;
 
             if (draft && typeof draft === "object") {
               updateDiag(BATCH_STAGES.REPORT_SAVING);
@@ -1861,16 +1866,16 @@ export function renderClassesScreen(state, actions) {
                 actions.requestAppRender();
               }
 
-              const key = getPendingKey(student.id, classRoom.id, state.activeAcademicYearId, state.activeSemesterId);
+              const key = getPendingKey(student.id, classRoom.id, classUi.batchState.academicYearId, classUi.batchState.semesterId);
               pendingReports.set(key, { draft, reportContext });
 
               let saveResult = { success: false, error: new Error("saveStudentReport is not defined") };
               if (actions?.saveStudentReport) {
-                saveResult = actions.saveStudentReport({
+                saveResult = await actions.saveStudentReport({
                   studentId: student.id,
                   classId: classRoom.id,
-                  academicYearId: state.activeAcademicYearId || null,
-                  semesterId: state.activeSemesterId || null,
+                  academicYearId: classUi.batchState.academicYearId,
+                  semesterId: classUi.batchState.semesterId,
                   reportContext,
                   draft
                 });
@@ -1955,6 +1960,8 @@ export function renderClassesScreen(state, actions) {
             const isTimeout = err?.code === "AI_REQUEST_TIMEOUT" || (err?.message && err.message.includes("timed out"));
             const httpStatus = err?.httpStatus || err?.status || (err?.message && err.message.match(/HTTP\s*(\d{3})/i)?.[1] ? Number(err.message.match(/HTTP\s*(\d{3})/i)[1]) : null);
             const googleStatus = err?.googleStatus || null;
+            const googleReason = err?.googleReason || null;
+            const googleFields = err?.googleFields || [];
             const is400InvalidArgument = (httpStatus === 400 || err?.code === "INVALID_ARGUMENT") &&
               (err?.code === "INVALID_ARGUMENT" || googleStatus === "INVALID_ARGUMENT" || /INVALID_ARGUMENT/i.test(err?.message || ""));
 
@@ -1986,12 +1993,15 @@ export function renderClassesScreen(state, actions) {
               consecutiveHttp400Count = 0;
             }
             classUi.batchState.consecutiveHttp400Count = consecutiveHttp400Count;
+            consecutiveServerErrorCount = httpStatus >= 500 ? consecutiveServerErrorCount + 1 : 0;
 
             updateDiag(BATCH_STAGES.ERROR, {
               errorCode,
               errorMessage,
               httpStatus,
               googleStatus,
+              googleReason,
+              googleFields,
               failureStage,
               consecutiveHttp400Count,
               apiModel: err?.apiModel || "gemini-3.8-flash",
@@ -2010,6 +2020,8 @@ export function renderClassesScreen(state, actions) {
               errorMessage,
               httpStatus,
               googleStatus,
+              googleReason,
+              googleFields,
               failureStage,
               consecutiveHttp400Count,
               apiModel: err?.apiModel || "gemini-3.8-flash",
@@ -2043,8 +2055,13 @@ export function renderClassesScreen(state, actions) {
               return;
             }
 
-            if (consecutiveHttp400Count >= 3) {
+            if (consecutiveHttp400Count >= 3 || httpStatus === 429 || consecutiveServerErrorCount >= 3) {
               wasBatchHalted = true;
+              const haltReason = httpStatus === 429
+                ? "Batch dihentikan: batas layanan AI tercapai (HTTP 429). Tunggu sebelum melanjutkan."
+                : consecutiveServerErrorCount >= 3
+                  ? "Batch dihentikan: layanan AI gagal merespons tiga permintaan berturut-turut. Coba lanjutkan nanti."
+                  : `Batch dihentikan: permintaan AI ditolak berulang (${consecutiveHttp400Count} kegagalan HTTP 400 berturut-turut).`;
               const remainingStudents = targetStudents.slice(i + 1);
               for (const rem of remainingStudents) {
                 if (!classUi.batchState.studentStatuses[rem.id] || classUi.batchState.studentStatuses[rem.id] === "Belum diproses") {
@@ -2055,12 +2072,12 @@ export function renderClassesScreen(state, actions) {
 
               updateDiag(BATCH_STAGES.BATCH_HALTED, {
                 stage: BATCH_STAGES.BATCH_HALTED,
-                errorCode: "INVALID_ARGUMENT",
-                errorMessage: `Batch dihentikan: permintaan AI ditolak berulang (${consecutiveHttp400Count} kegagalan HTTP 400 berturut-turut).`,
+                errorCode,
+                errorMessage: haltReason,
                 consecutiveHttp400Count
               });
 
-              classUi.batchState.statusSummary = `Batch dihentikan: permintaan AI ditolak berulang (${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati, ${classUi.batchState.unprocessedCount} belum diproses)`;
+              classUi.batchState.statusSummary = `${haltReason} (${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati, ${classUi.batchState.unprocessedCount} belum diproses)`;
               break;
             }
           }

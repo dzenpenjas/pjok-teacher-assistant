@@ -1,3 +1,5 @@
+import { sanitizeDiagnosticErrorMessage } from "./ai-diagnostic-service.js";
+
 /**
  * Service for generating student report drafts using Gemini AI.
  * strictly interprets data from ReportContext without inventing facts.
@@ -263,12 +265,20 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
       parsedError = null;
     }
 
+    const details = Array.isArray(parsedError?.error?.details) ? parsedError.error.details : [];
+    const reason = details.find(detail => detail?.["@type"] === "type.googleapis.com/google.rpc.ErrorInfo")?.reason;
+    const googleReason = typeof reason === "string" && /^[A-Z0-9_]{1,80}$/.test(reason) ? reason : null;
+    const googleFields = details
+      .filter(detail => detail?.["@type"] === "type.googleapis.com/google.rpc.BadRequest")
+      .flatMap(detail => Array.isArray(detail.fieldViolations) ? detail.fieldViolations : [])
+      .map(violation => violation?.field)
+      .filter(field => typeof field === "string" && /^[A-Za-z][A-Za-z0-9_.\[\]]{0,119}$/.test(field))
+      .slice(0, 10);
     const googleStatus = parsedError?.error?.status || null;
-    let googleMessage = parsedError?.error?.message || null;
-    if (googleMessage) {
-      googleMessage = googleMessage.replace(/AIza[0-9A-Za-z_-]{35}/g, "[REDACTED_API_KEY]");
-      googleMessage = googleMessage.replace(/key=[^&\s"'`]+/gi, "key=[REDACTED]");
-    }
+    const rawMessage = parsedError?.error?.message;
+    const googleMessage = typeof rawMessage === "string"
+      ? sanitizeDiagnosticErrorMessage(rawMessage.split(apiKey.trim()).join("[REDACTED_API_KEY]"))
+      : null;
     const safeFallback = response.status === 400
       ? "Request contains an invalid argument."
       : `HTTP ${response.status} response`;
@@ -295,26 +305,25 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
     error.status = response.status;
     error.googleStatus = googleStatus;
     error.googleMessage = googleMessage;
+    error.googleReason = googleReason;
+    error.googleFields = googleFields;
     error.apiModel = apiModel;
     error.apiEndpoint = apiEndpoint;
     error.requestBytes = requestByteLength;
     error.requestChars = requestCharLength;
 
-    if (response.status === 400) {
+    if (
+      response.status === 401 || response.status === 403 || googleReason === "API_KEY_INVALID" ||
+      /API_KEY_INVALID|API key not valid|INVALID_API_KEY/i.test(errorBody)
+    ) {
+      error.isApiKeyError = true;
+      error.code = "AUTH_ERROR";
+    } else if (response.status === 400) {
       if (googleStatus === "INVALID_ARGUMENT" || /INVALID_ARGUMENT/i.test(errorBody)) {
         error.code = "INVALID_ARGUMENT";
       } else {
         error.code = "HTTP_400_ERROR";
       }
-    } else if (
-      response.status === 401 ||
-      response.status === 403 ||
-      errorBody.includes("API_KEY_INVALID") ||
-      errorBody.includes("API key not valid") ||
-      errorBody.includes("INVALID_API_KEY")
-    ) {
-      error.isApiKeyError = true;
-      error.code = "AUTH_ERROR";
     } else if (response.status === 429) {
       error.code = "RATE_LIMIT_EXCEEDED";
     } else if (response.status >= 500) {
@@ -364,21 +373,21 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
   const isLearningActive = selectedSections.learning !== false;
   const isGrowthActive = selectedSections.growth !== false;
 
-  const strengthsText = typeof parsed.strengths === "string"
+  const strengthsText = !isLearningActive ? "" : (typeof parsed.strengths === "string"
     ? parsed.strengths.trim()
-    : (typeof parsed.summary === "string" ? parsed.summary.trim() : "");
+    : (typeof parsed.summary === "string" ? parsed.summary.trim() : ""));
 
-  const developingText = typeof parsed.developing === "string"
+  const developingText = !isLearningActive ? "" : (typeof parsed.developing === "string"
     ? parsed.developing.trim()
-    : (typeof parsed.understanding === "string" ? parsed.understanding.trim() : "");
+    : (typeof parsed.understanding === "string" ? parsed.understanding.trim() : ""));
 
-  const teacherActionText = typeof parsed.teacherAction === "string"
+  const teacherActionText = !isLearningActive ? "" : (typeof parsed.teacherAction === "string"
     ? parsed.teacherAction.trim()
-    : (typeof parsed.followUp === "string" ? parsed.followUp.trim() : "");
+    : (typeof parsed.followUp === "string" ? parsed.followUp.trim() : ""));
 
-  const parentSupportText = typeof parsed.parentSupport === "string"
+  const parentSupportText = !isLearningActive ? "" : (typeof parsed.parentSupport === "string"
     ? parsed.parentSupport.trim()
-    : (typeof parsed.homeActivity === "string" ? parsed.homeActivity.trim() : "");
+    : (typeof parsed.homeActivity === "string" ? parsed.homeActivity.trim() : ""));
 
   const growthText = isGrowthActive
     ? (typeof parsed.growth === "string" ? parsed.growth.trim() : "")
