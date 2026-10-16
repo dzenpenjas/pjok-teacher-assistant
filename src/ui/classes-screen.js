@@ -1134,6 +1134,16 @@ export function renderClassesScreen(state, actions) {
       batchActionRow.append(retryBtn);
     }
 
+    if (classUi.batchState.unprocessedStudentIds && classUi.batchState.unprocessedStudentIds.length > 0 && !classUi.batchState.isBatchGenerating) {
+      const resumeBtn = createElement("button", "btn-tool text-xs flex items-center gap-1", `▶ Lanjutkan Belum Diproses (${classUi.batchState.unprocessedStudentIds.length})`);
+      resumeBtn.type = "button";
+      resumeBtn.addEventListener("click", () => {
+        const unprocessedStudents = students.filter((s) => classUi.batchState.unprocessedStudentIds.includes(s.id));
+        runBatchReportGeneration(unprocessedStudents, false);
+      });
+      batchActionRow.append(resumeBtn);
+    }
+
     const activeAcademicYearId = state.activeAcademicYearId || null;
     const activeSemesterId = state.activeSemesterId || null;
 
@@ -1344,10 +1354,11 @@ export function renderClassesScreen(state, actions) {
 
     if (showProgressBox) {
       const isGenerating = Boolean(classUi.batchState.isBatchGenerating);
+      const isHalted = Boolean(classUi.batchState.statusSummary && classUi.batchState.statusSummary.includes("dihentikan"));
       const progressBox = createElement("div", "p-3 rounded-lg border text-xs space-y-2 mt-2 " +
         (isGenerating
           ? "bg-blue-50 border-blue-200 text-blue-900 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-200"
-          : (hasDiagError && classUi.batchState.failedCount > 0
+          : (isHalted || (hasDiagError && classUi.batchState.failedCount > 0)
               ? "bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200"
               : "bg-slate-50 border-slate-200 text-slate-800 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"))
       );
@@ -1398,8 +1409,15 @@ export function renderClassesScreen(state, actions) {
 
       progressBox.append(timerEl);
       } else if (classUi.batchState.statusSummary) {
-        const summaryP = createElement("p", "font-semibold", classUi.batchState.statusSummary);
+        const isHaltedSummary = classUi.batchState.statusSummary.includes("dihentikan");
+        const summaryP = createElement("p", isHaltedSummary ? "font-bold text-amber-900 dark:text-amber-200" : "font-semibold", classUi.batchState.statusSummary);
         progressBox.append(summaryP);
+        if (classUi.batchState.unprocessedCount > 0 && !isHaltedSummary) {
+          const detailP = createElement("p", "text-subtle text-xs mt-1",
+            `Siswa berhasil: ${classUi.batchState.successCount} • Gagal: ${classUi.batchState.failedCount} • Dilewati: ${classUi.batchState.skippedCount} • Belum diproses: ${classUi.batchState.unprocessedCount}`
+          );
+          progressBox.append(detailP);
+        }
       }
 
       // Copy Diagnostic Button: Tampil saat batch berjalan atau batch gagal/ada diagnostic error
@@ -1543,8 +1561,11 @@ export function renderClassesScreen(state, actions) {
       classUi.batchState.successCount = 0;
       classUi.batchState.failedCount = 0;
       classUi.batchState.skippedCount = 0;
+      classUi.batchState.unprocessedCount = 0;
       classUi.batchState.failedStudentIds = [];
+      classUi.batchState.unprocessedStudentIds = [];
       classUi.batchState.statusSummary = null;
+      classUi.batchState.consecutiveHttp400Count = 0;
       if (!isRetry) {
         classUi.batchState.studentStatuses = {};
       }
@@ -1563,6 +1584,13 @@ export function renderClassesScreen(state, actions) {
         responseReceivedAt: null,
         elapsedMs: null,
         httpStatus: null,
+        googleStatus: null,
+        apiModel: "gemini-3.8-flash",
+        apiEndpoint: "v1beta/models/gemini-3.8-flash:generateContent",
+        requestBytes: null,
+        requestChars: null,
+        failureStage: null,
+        consecutiveHttp400Count: 0,
         lastCompletedStage: null,
         errorCode: null,
         errorMessage: null,
@@ -1570,6 +1598,8 @@ export function renderClassesScreen(state, actions) {
       };
 
       let batchTimerInterval = null;
+      let consecutiveHttp400Count = 0;
+      let wasBatchHalted = false;
 
       function updateAiWaitingIndicator() {
         const timerEl = document.getElementById("batch-student-timer");
@@ -1726,7 +1756,12 @@ export function renderClassesScreen(state, actions) {
                     requestStartedAt: new Date(reqStartTime).toISOString(),
                     responseReceivedAt: null,
                     elapsedMs: null,
-                    httpStatus: null
+                    httpStatus: null,
+                    googleStatus: null,
+                    requestBytes: meta?.requestBytes ?? null,
+                    requestChars: meta?.requestChars ?? null,
+                    apiModel: meta?.apiModel || "gemini-3.8-flash",
+                    apiEndpoint: meta?.apiEndpoint || "v1beta/models/gemini-3.8-flash:generateContent"
                   });
                 } else if (stageName === "API_WAITING") {
                   updateDiag(BATCH_STAGES.API_WAITING);
@@ -1735,7 +1770,9 @@ export function renderClassesScreen(state, actions) {
                   updateDiag(BATCH_STAGES.API_RESPONSE_RECEIVED, {
                     responseReceivedAt: new Date(now).toISOString(),
                     elapsedMs: reqStartTime ? (now - reqStartTime) : null,
-                    httpStatus: meta?.httpStatus ?? null
+                    httpStatus: meta?.httpStatus ?? null,
+                    apiModel: meta?.apiModel || "gemini-3.8-flash",
+                    apiEndpoint: meta?.apiEndpoint || "v1beta/models/gemini-3.8-flash:generateContent"
                   });
                 } else if (stageName === "RESPONSE_PARSING") {
                   updateDiag(BATCH_STAGES.RESPONSE_PARSING);
@@ -1773,14 +1810,22 @@ export function renderClassesScreen(state, actions) {
                 pendingReports.delete(key);
                 classUi.batchState.successCount++;
                 classUi.batchState.studentStatuses[student.id] = "Berhasil";
-                updateDiag(BATCH_STAGES.STUDENT_DONE);
+                consecutiveHttp400Count = 0;
+                classUi.batchState.consecutiveHttp400Count = 0;
+                updateDiag(BATCH_STAGES.STUDENT_DONE, {
+                  consecutiveHttp400Count: 0
+                });
               } else {
+                consecutiveHttp400Count = 0;
+                classUi.batchState.consecutiveHttp400Count = 0;
                 classUi.batchState.failedCount++;
                 classUi.batchState.failedStudentIds.push(student.id);
                 classUi.batchState.studentStatuses[student.id] = "Gagal simpan";
                 updateDiag(BATCH_STAGES.ERROR, {
                   errorCode: "SAVE_ERROR",
-                  errorMessage: saveResult?.error?.message || "Gagal menyimpan laporan ke penyimpanan lokal"
+                  errorMessage: saveResult?.error?.message || "Gagal menyimpan laporan ke penyimpanan lokal",
+                  failureStage: BATCH_STAGES.REPORT_SAVING,
+                  consecutiveHttp400Count: 0
                 });
                 classUi.batchState.diagnostic.lastFailure = {
                   studentId: student.id,
@@ -1791,18 +1836,29 @@ export function renderClassesScreen(state, actions) {
                   errorCode: "SAVE_ERROR",
                   errorMessage: saveResult?.error?.message || "Gagal menyimpan laporan ke penyimpanan lokal",
                   httpStatus: classUi.batchState.diagnostic.httpStatus,
+                  googleStatus: null,
+                  failureStage: BATCH_STAGES.REPORT_SAVING,
+                  consecutiveHttp400Count: 0,
+                  apiModel: "gemini-3.8-flash",
+                  apiEndpoint: "v1beta/models/gemini-3.8-flash:generateContent",
+                  requestBytes: classUi.batchState.diagnostic.requestBytes,
+                  requestChars: classUi.batchState.diagnostic.requestChars,
                   requestStartedAt: classUi.batchState.diagnostic.requestStartedAt,
                   responseReceivedAt: classUi.batchState.diagnostic.responseReceivedAt,
                   elapsedMs: classUi.batchState.diagnostic.elapsedMs
                 };
               }
             } else {
+              consecutiveHttp400Count = 0;
+              classUi.batchState.consecutiveHttp400Count = 0;
               classUi.batchState.failedCount++;
               classUi.batchState.failedStudentIds.push(student.id);
               classUi.batchState.studentStatuses[student.id] = "Gagal — respon AI tidak valid";
               updateDiag(BATCH_STAGES.ERROR, {
                 errorCode: "INVALID_AI_RESPONSE",
-                errorMessage: "Format respon AI tidak valid"
+                errorMessage: "Format respon AI tidak valid",
+                failureStage: BATCH_STAGES.RESPONSE_PARSING,
+                consecutiveHttp400Count: 0
               });
               classUi.batchState.diagnostic.lastFailure = {
                 studentId: student.id,
@@ -1813,6 +1869,13 @@ export function renderClassesScreen(state, actions) {
                 errorCode: "INVALID_AI_RESPONSE",
                 errorMessage: "Format respon AI tidak valid",
                 httpStatus: classUi.batchState.diagnostic.httpStatus,
+                googleStatus: null,
+                failureStage: BATCH_STAGES.RESPONSE_PARSING,
+                consecutiveHttp400Count: 0,
+                apiModel: "gemini-3.8-flash",
+                apiEndpoint: "v1beta/models/gemini-3.8-flash:generateContent",
+                requestBytes: classUi.batchState.diagnostic.requestBytes,
+                requestChars: classUi.batchState.diagnostic.requestChars,
                 requestStartedAt: classUi.batchState.diagnostic.requestStartedAt,
                 responseReceivedAt: classUi.batchState.diagnostic.responseReceivedAt,
                 elapsedMs: classUi.batchState.diagnostic.elapsedMs
@@ -1822,23 +1885,69 @@ export function renderClassesScreen(state, actions) {
             console.error("[BATCH REPORT AI ERROR for student]", student.name, err);
             const isKeyError = err?.isApiKeyError || (err?.message && (err.message.includes("API key") || err.message.includes("API_KEY")));
             const isTimeout = err?.code === "AI_REQUEST_TIMEOUT" || (err?.message && err.message.includes("timed out"));
-            const errorCode = isKeyError ? "AUTH_ERROR" : (isTimeout ? "AI_REQUEST_TIMEOUT" : (err?.code || "AI_REQUEST_ERROR"));
+            const httpStatus = err?.httpStatus || err?.status || (err?.message && err.message.match(/HTTP\s*(\d{3})/i)?.[1] ? Number(err.message.match(/HTTP\s*(\d{3})/i)[1]) : null);
+            const googleStatus = err?.googleStatus || null;
+            const is400InvalidArgument = (httpStatus === 400 || err?.code === "INVALID_ARGUMENT") &&
+              (err?.code === "INVALID_ARGUMENT" || googleStatus === "INVALID_ARGUMENT" || /INVALID_ARGUMENT/i.test(err?.message || ""));
+
+            let errorCode;
+            if (isKeyError) {
+              errorCode = "AUTH_ERROR";
+            } else if (isTimeout) {
+              errorCode = "AI_REQUEST_TIMEOUT";
+            } else if (is400InvalidArgument) {
+              errorCode = "INVALID_ARGUMENT";
+            } else if (httpStatus === 400) {
+              errorCode = "HTTP_400_ERROR";
+            } else if (httpStatus === 404) {
+              errorCode = "MODEL_NOT_FOUND";
+            } else if (httpStatus === 429) {
+              errorCode = "RATE_LIMIT_EXCEEDED";
+            } else if (httpStatus >= 500) {
+              errorCode = "AI_SERVER_ERROR";
+            } else {
+              errorCode = err?.code || "AI_REQUEST_ERROR";
+            }
+
             const errorMessage = err?.message || "Error network/API";
+            const failureStage = classUi.batchState.diagnostic?.stage || BATCH_STAGES.ERROR;
+
+            if (is400InvalidArgument) {
+              consecutiveHttp400Count++;
+            } else {
+              consecutiveHttp400Count = 0;
+            }
+            classUi.batchState.consecutiveHttp400Count = consecutiveHttp400Count;
 
             updateDiag(BATCH_STAGES.ERROR, {
               errorCode,
-              errorMessage
+              errorMessage,
+              httpStatus,
+              googleStatus,
+              failureStage,
+              consecutiveHttp400Count,
+              apiModel: err?.apiModel || "gemini-3.8-flash",
+              apiEndpoint: err?.apiEndpoint || "v1beta/models/gemini-3.8-flash:generateContent",
+              requestBytes: err?.requestBytes ?? classUi.batchState.diagnostic?.requestBytes,
+              requestChars: err?.requestChars ?? classUi.batchState.diagnostic?.requestChars
             });
 
             classUi.batchState.diagnostic.lastFailure = {
               studentId: student.id,
               studentName: student.name,
               studentIndex: i + 1,
-              stage: BATCH_STAGES.ERROR,
+              stage: failureStage,
               lastCompletedStage: classUi.batchState.diagnostic.lastCompletedStage,
               errorCode,
               errorMessage,
-              httpStatus: classUi.batchState.diagnostic.httpStatus,
+              httpStatus,
+              googleStatus,
+              failureStage,
+              consecutiveHttp400Count,
+              apiModel: err?.apiModel || "gemini-3.8-flash",
+              apiEndpoint: err?.apiEndpoint || "v1beta/models/gemini-3.8-flash:generateContent",
+              requestBytes: err?.requestBytes ?? classUi.batchState.diagnostic?.requestBytes,
+              requestChars: err?.requestChars ?? classUi.batchState.diagnostic?.requestChars,
               requestStartedAt: classUi.batchState.diagnostic.requestStartedAt,
               responseReceivedAt: classUi.batchState.diagnostic.responseReceivedAt,
               elapsedMs: classUi.batchState.diagnostic.elapsedMs
@@ -1857,13 +1966,39 @@ export function renderClassesScreen(state, actions) {
 
             classUi.batchState.failedCount++;
             classUi.batchState.failedStudentIds.push(student.id);
-            classUi.batchState.studentStatuses[student.id] = `Gagal — ${errorMessage}`;
+            classUi.batchState.studentStatuses[student.id] = `Gagal — ${errorCode === "INVALID_ARGUMENT" ? "Permintaan AI ditolak (HTTP 400 — INVALID_ARGUMENT)" : errorMessage}`;
+
+            if (consecutiveHttp400Count >= 3) {
+              wasBatchHalted = true;
+              const remainingStudents = targetStudents.slice(i + 1);
+              classUi.batchState.unprocessedStudentIds = remainingStudents.map((s) => s.id);
+              classUi.batchState.unprocessedCount = remainingStudents.length;
+              for (const rem of remainingStudents) {
+                if (!classUi.batchState.studentStatuses[rem.id]) {
+                  classUi.batchState.studentStatuses[rem.id] = "Belum diproses";
+                }
+              }
+
+              updateDiag(BATCH_STAGES.BATCH_HALTED, {
+                stage: BATCH_STAGES.BATCH_HALTED,
+                errorCode: "INVALID_ARGUMENT",
+                errorMessage: `Batch dihentikan: permintaan AI ditolak berulang (${consecutiveHttp400Count} kegagalan HTTP 400 berturut-turut).`,
+                consecutiveHttp400Count
+              });
+
+              classUi.batchState.statusSummary = `Batch dihentikan: permintaan AI ditolak berulang (${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati, ${classUi.batchState.unprocessedCount} belum diproses)`;
+              break;
+            }
           }
         }
 
-        updateDiag(BATCH_STAGES.BATCH_DONE);
-        clearBatchTimer();
-        classUi.batchState.statusSummary = `Ringkasan: ${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati`;
+        if (!wasBatchHalted) {
+          updateDiag(BATCH_STAGES.BATCH_DONE);
+          clearBatchTimer();
+          classUi.batchState.statusSummary = `Ringkasan: ${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati`;
+        } else {
+          clearBatchTimer();
+        }
       } catch (outerErr) {
         console.error("[BATCH REPORT OUTER ERROR]", outerErr);
         clearBatchTimer();

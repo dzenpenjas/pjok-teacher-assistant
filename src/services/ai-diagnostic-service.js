@@ -15,6 +15,7 @@ export const BATCH_STAGES = {
   REPORT_SAVING: "REPORT_SAVING",
   STUDENT_DONE: "STUDENT_DONE",
   BATCH_DONE: "BATCH_DONE",
+  BATCH_HALTED: "BATCH_HALTED",
   ERROR: "ERROR"
 };
 
@@ -45,6 +46,8 @@ export function getDiagnosticStageLabel(stage) {
       return "Selesai memproses siswa...";
     case BATCH_STAGES.BATCH_DONE:
       return "Semua laporan selesai diproses.";
+    case BATCH_STAGES.BATCH_HALTED:
+      return "Batch dihentikan: permintaan AI ditolak berulang";
     case BATCH_STAGES.ERROR:
       return "Terjadi kendala pada proses.";
     default:
@@ -55,15 +58,29 @@ export function getDiagnosticStageLabel(stage) {
 /**
  * Categorizes AI diagnostic errors into teacher-friendly labels.
  */
-export function getFriendlyErrorMessage(errorCode, originalError, httpStatus) {
-  if (httpStatus === 401 || httpStatus === 403) return "Izin akses AI tidak valid (Periksa API Key).";
-  if (httpStatus === 404) return "Model AI tidak tersedia.";
-  if (httpStatus === 429) return "Terlalu banyak permintaan (Rate limit). Tunggu sebentar.";
-  if (httpStatus >= 500) return "Kendala teknis pada server AI.";
+export function getFriendlyErrorMessage(errorCode, originalError, httpStatus, googleStatus) {
+  if (httpStatus === 401 || httpStatus === 403 || errorCode === "AUTH_ERROR") {
+    return "Izin akses AI tidak valid (Periksa API Key).";
+  }
+  if (httpStatus === 404 || errorCode === "MODEL_NOT_FOUND") {
+    return "Model AI tidak tersedia untuk project/kunci ini.";
+  }
+  if (httpStatus === 429 || errorCode === "RATE_LIMIT_EXCEEDED") {
+    return "Terlalu banyak permintaan (Rate limit). Tunggu sebentar.";
+  }
+  if (
+    httpStatus === 400 ||
+    errorCode === "INVALID_ARGUMENT" ||
+    googleStatus === "INVALID_ARGUMENT" ||
+    (typeof originalError === "string" && originalError.includes("INVALID_ARGUMENT"))
+  ) {
+    return "Permintaan AI ditolak (HTTP 400 — INVALID_ARGUMENT). Parameter atau struktur request tidak valid.";
+  }
+  if (httpStatus >= 500 || errorCode === "AI_SERVER_ERROR") {
+    return "Kendala teknis pada server AI.";
+  }
 
   switch (errorCode) {
-    case "AUTH_ERROR":
-      return "Izin akses AI tidak valid (Periksa API Key).";
     case "AI_REQUEST_TIMEOUT":
       return "Permintaan AI terlalu lama (Timeout).";
     case "INVALID_AI_RESPONSE":
@@ -72,8 +89,10 @@ export function getFriendlyErrorMessage(errorCode, originalError, httpStatus) {
       return "Gagal menyimpan laporan ke penyimpanan.";
     case "AI_REQUEST_ERROR":
       return "Kendala teknis pada layanan AI.";
+    case "NETWORK_ERROR":
+      return "Kendala jaringan. Pastikan koneksi internet stabil.";
     default:
-      if (originalError && typeof originalError === 'string' && originalError.includes("Network")) {
+      if (originalError && typeof originalError === "string" && originalError.includes("Network")) {
         return "Kendala jaringan. Pastikan koneksi internet stabil.";
       }
       return originalError || "Kendala tidak dikenal.";
@@ -93,7 +112,6 @@ export function formatAiDiagnosticText(diag) {
   const progress = (diag.totalStudents != null && diag.totalStudents > 0)
     ? `${diag.studentIndex || 0} / ${diag.totalStudents}`
     : "-";
-  const requestStarted = diag.requestStartedAt || "-";
 
   let elapsed = "-";
   if (diag.elapsedMs != null) {
@@ -104,21 +122,40 @@ export function formatAiDiagnosticText(diag) {
   }
 
   const httpStatus = diag.httpStatus != null ? String(diag.httpStatus) : "-";
+  const googleStatus = diag.googleStatus || (diag.lastFailure?.googleStatus) || "-";
   const errorCode = diag.errorCode || "-";
   const error = diag.errorMessage || "-";
-  const friendlyError = getFriendlyErrorMessage(diag.errorCode, diag.errorMessage, diag.httpStatus);
+  const friendlyError = getFriendlyErrorMessage(diag.errorCode, diag.errorMessage, diag.httpStatus, diag.googleStatus);
+
+  const apiModel = diag.apiModel || (diag.lastFailure?.apiModel) || "gemini-3.8-flash";
+  const apiEndpoint = diag.apiEndpoint || (diag.lastFailure?.apiEndpoint) || "v1beta/models/gemini-3.8-flash:generateContent";
+  const requestBytes = diag.requestBytes != null
+    ? `${diag.requestBytes} bytes (${diag.requestChars || diag.requestBytes} karakter)`
+    : (diag.lastFailure?.requestBytes != null
+        ? `${diag.lastFailure.requestBytes} bytes (${diag.lastFailure.requestChars || diag.lastFailure.requestBytes} karakter)`
+        : "-");
+  const failureStage = diag.failureStage || (diag.lastFailure?.stage) || (diag.stage === BATCH_STAGES.ERROR || diag.stage === BATCH_STAGES.BATCH_HALTED ? diag.stage : "-");
+  const consecutiveCount = diag.consecutiveHttp400Count != null
+    ? diag.consecutiveHttp400Count
+    : (diag.lastFailure?.consecutiveHttp400Count != null ? diag.lastFailure.consecutiveHttp400Count : 0);
 
   const lines = [
     "AI REPORT DIAGNOSTIC",
     `Run ID: ${runId}`,
     `Tahap: ${stageLabel} (${diag.stage || "-"})`,
     `Tahap Terakhir: ${diag.lastCompletedStage || "-"}`,
+    `Tahap Kegagalan: ${failureStage}`,
     `Siswa: ${studentName}`,
     `Progres: ${progress}`,
+    `Model API: ${apiModel}`,
+    `Endpoint API: ${apiEndpoint}`,
+    `Ukuran Request: ${requestBytes}`,
     `Waktu Tunggu: ${elapsed}`,
     `Waktu Mulai Request: ${diag.requestStartedAt ? new Date(diag.requestStartedAt).toLocaleTimeString() : "-"}`,
     `Data: ${diag.assessmentCount || 0} asesmen, ${diag.growthCount || 0} pertumbuhan, ${diag.observationCount || 0} observasi`,
     `HTTP Status: ${httpStatus}`,
+    `Google Error Status: ${googleStatus}`,
+    `Kegagalan HTTP 400 Berturut-turut: ${consecutiveCount}`,
     `Kode Error: ${errorCode}`,
     `Deskripsi Error: ${friendlyError}`,
     `Detail Error: ${error}`
@@ -130,17 +167,27 @@ export function formatAiDiagnosticText(diag) {
       ? `${lf.studentIndex || 0} / ${diag.totalStudents}`
       : (lf.studentIndex != null ? String(lf.studentIndex) : "-");
     const lfElapsed = lf.elapsedMs != null ? `${lf.elapsedMs}ms` : "-";
+    const lfRequestBytes = lf.requestBytes != null
+      ? `${lf.requestBytes} bytes (${lf.requestChars || lf.requestBytes} karakter)`
+      : "-";
 
     lines.push(
       "",
       "LAST FAILURE",
       `Siswa: ${lf.studentName || "-"}`,
       `Progres: ${lfProgress}`,
-      `Tahap: ${getDiagnosticStageLabel(lf.stage) || lf.stage || "-"}`,
-      `HTTP status: ${lf.httpStatus != null ? String(lf.httpStatus) : "-"}`,
+      `Tahap Kegagalan: ${getDiagnosticStageLabel(lf.stage) || lf.stage || "-"}`,
+      `Tahap Sebelumnya: ${lf.lastCompletedStage || "-"}`,
+      `Model API: ${lf.apiModel || apiModel}`,
+      `Endpoint API: ${lf.apiEndpoint || apiEndpoint}`,
+      `Ukuran Request: ${lfRequestBytes}`,
+      `HTTP Status: ${lf.httpStatus != null ? String(lf.httpStatus) : "-"}`,
+      `Google Error Status: ${lf.googleStatus || "-"}`,
+      `Kegagalan HTTP 400 Berturut-turut: ${lf.consecutiveHttp400Count != null ? lf.consecutiveHttp400Count : consecutiveCount}`,
       `Waktu Tunggu: ${lfElapsed}`,
       `Kode Error: ${lf.errorCode || "-"}`,
-      `Deskripsi Error: ${getFriendlyErrorMessage(lf.errorCode, lf.errorMessage, lf.httpStatus)}`
+      `Deskripsi Error: ${getFriendlyErrorMessage(lf.errorCode, lf.errorMessage, lf.httpStatus, lf.googleStatus)}`,
+      `Detail Error: ${lf.errorMessage || "-"}`
     );
   }
 

@@ -189,9 +189,27 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
     controller.abort();
   }, 60000);
 
+  const serializedBody = JSON.stringify(requestBody);
+  const requestByteLength = typeof TextEncoder !== "undefined"
+    ? new TextEncoder().encode(serializedBody).length
+    : serializedBody.length;
+  const requestCharLength = serializedBody.length;
+  const apiModel = "gemini-3.8-flash";
+  const apiEndpoint = "v1beta/models/gemini-3.8-flash:generateContent";
+
   if (typeof onDiagnosticStage === "function") {
-    onDiagnosticStage("API_REQUEST_START");
-    onDiagnosticStage("API_WAITING");
+    onDiagnosticStage("API_REQUEST_START", {
+      requestBytes: requestByteLength,
+      requestChars: requestCharLength,
+      apiModel,
+      apiEndpoint
+    });
+    onDiagnosticStage("API_WAITING", {
+      requestBytes: requestByteLength,
+      requestChars: requestCharLength,
+      apiModel,
+      apiEndpoint
+    });
   }
 
   let response;
@@ -202,33 +220,87 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
         "Content-Type": "application/json",
         "x-goog-api-key": apiKey.trim()
       },
-      body: JSON.stringify(requestBody),
+      body: serializedBody,
       signal: controller.signal
     });
   } catch (networkErr) {
     if (networkErr.name === "AbortError" || controller.signal.aborted) {
       const timeoutError = new Error("AI request timed out after 60 seconds");
       timeoutError.code = "AI_REQUEST_TIMEOUT";
+      timeoutError.apiModel = apiModel;
+      timeoutError.apiEndpoint = apiEndpoint;
+      timeoutError.requestBytes = requestByteLength;
+      timeoutError.requestChars = requestCharLength;
       throw timeoutError;
     }
-    throw new Error(`Network error: ${networkErr.message}`);
+    const netErr = new Error(`Network error: ${networkErr.message}`);
+    netErr.code = "NETWORK_ERROR";
+    netErr.apiModel = apiModel;
+    netErr.apiEndpoint = apiEndpoint;
+    netErr.requestBytes = requestByteLength;
+    netErr.requestChars = requestCharLength;
+    throw netErr;
   } finally {
     clearTimeout(timeoutId);
   }
 
   if (typeof onDiagnosticStage === "function") {
-    onDiagnosticStage("API_RESPONSE_RECEIVED", { httpStatus: response.status });
+    onDiagnosticStage("API_RESPONSE_RECEIVED", {
+      httpStatus: response.status,
+      apiModel,
+      apiEndpoint,
+      requestBytes: requestByteLength,
+      requestChars: requestCharLength
+    });
   }
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => "");
-    if (response.status === 404) {
-      throw new Error(
-        `Model Gemini tidak tersedia untuk API key/project ini. API error (404): ${errorBody}`
-      );
+    let parsedError = null;
+    try {
+      parsedError = JSON.parse(errorBody);
+    } catch {
+      parsedError = null;
     }
-    const error = new Error(`API error (${response.status}): ${errorBody}`);
-    if (
+
+    const googleStatus = parsedError?.error?.status || null;
+    const googleMessage = parsedError?.error?.message || null;
+    const safeDetail = googleMessage ? `${googleStatus ? `[${googleStatus}] ` : ""}${googleMessage}` : errorBody;
+
+    if (response.status === 404) {
+      const notFoundErr = new Error(
+        `Model Gemini tidak tersedia untuk API key/project ini. API error (404): ${safeDetail || errorBody}`
+      );
+      notFoundErr.httpStatus = 404;
+      notFoundErr.status = 404;
+      notFoundErr.code = "MODEL_NOT_FOUND";
+      notFoundErr.googleStatus = googleStatus || "NOT_FOUND";
+      notFoundErr.googleMessage = googleMessage;
+      notFoundErr.apiModel = apiModel;
+      notFoundErr.apiEndpoint = apiEndpoint;
+      notFoundErr.requestBytes = requestByteLength;
+      notFoundErr.requestChars = requestCharLength;
+      throw notFoundErr;
+    }
+
+    const error = new Error(`API error (${response.status}): ${safeDetail || errorBody}`);
+    error.httpStatus = response.status;
+    error.status = response.status;
+    error.googleStatus = googleStatus;
+    error.googleMessage = googleMessage;
+    error.rawErrorBody = errorBody;
+    error.apiModel = apiModel;
+    error.apiEndpoint = apiEndpoint;
+    error.requestBytes = requestByteLength;
+    error.requestChars = requestCharLength;
+
+    if (response.status === 400) {
+      if (googleStatus === "INVALID_ARGUMENT" || /INVALID_ARGUMENT/i.test(errorBody)) {
+        error.code = "INVALID_ARGUMENT";
+      } else {
+        error.code = "HTTP_400_ERROR";
+      }
+    } else if (
       response.status === 401 ||
       response.status === 403 ||
       errorBody.includes("API_KEY_INVALID") ||
@@ -236,7 +308,15 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
       errorBody.includes("INVALID_API_KEY")
     ) {
       error.isApiKeyError = true;
+      error.code = "AUTH_ERROR";
+    } else if (response.status === 429) {
+      error.code = "RATE_LIMIT_EXCEEDED";
+    } else if (response.status >= 500) {
+      error.code = "AI_SERVER_ERROR";
+    } else {
+      error.code = "AI_REQUEST_ERROR";
     }
+
     throw error;
   }
 
