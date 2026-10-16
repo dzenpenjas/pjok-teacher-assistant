@@ -264,12 +264,19 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
     }
 
     const googleStatus = parsedError?.error?.status || null;
-    const googleMessage = parsedError?.error?.message || null;
-    const safeDetail = googleMessage ? `${googleStatus ? `[${googleStatus}] ` : ""}${googleMessage}` : errorBody;
+    let googleMessage = parsedError?.error?.message || null;
+    if (googleMessage) {
+      googleMessage = googleMessage.replace(/AIza[0-9A-Za-z_-]{35}/g, "[REDACTED_API_KEY]");
+      googleMessage = googleMessage.replace(/key=[^&\s"'`]+/gi, "key=[REDACTED]");
+    }
+    const safeFallback = response.status === 400
+      ? "Request contains an invalid argument."
+      : `HTTP ${response.status} response`;
+    const safeDetail = googleMessage ? `${googleStatus ? `[${googleStatus}] ` : ""}${googleMessage}` : safeFallback;
 
     if (response.status === 404) {
       const notFoundErr = new Error(
-        `Model Gemini tidak tersedia untuk API key/project ini. API error (404): ${safeDetail || errorBody}`
+        `Model Gemini tidak tersedia untuk API key/project ini. API error (404): ${safeDetail}`
       );
       notFoundErr.httpStatus = 404;
       notFoundErr.status = 404;
@@ -283,12 +290,11 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
       throw notFoundErr;
     }
 
-    const error = new Error(`API error (${response.status}): ${safeDetail || errorBody}`);
+    const error = new Error(`API error (${response.status}): ${safeDetail}`);
     error.httpStatus = response.status;
     error.status = response.status;
     error.googleStatus = googleStatus;
     error.googleMessage = googleMessage;
-    error.rawErrorBody = errorBody;
     error.apiModel = apiModel;
     error.apiEndpoint = apiEndpoint;
     error.requestBytes = requestByteLength;

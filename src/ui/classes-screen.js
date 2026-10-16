@@ -902,7 +902,10 @@ export function renderClassesScreen(state, actions) {
         successCount: 0,
         failedCount: 0,
         skippedCount: 0,
+        unprocessedCount: 0,
         failedStudentIds: [],
+        unprocessedStudentIds: [],
+        batchStudentIds: [],
         statusSummary: null,
         studentStatuses: {},
         diagnostic: null
@@ -1117,19 +1120,17 @@ export function renderClassesScreen(state, actions) {
     updateBatchValidation();
 
     runBatchBtn.addEventListener("click", () => {
-      runBatchReportGeneration(students, false);
+      runBatchReportGeneration(students, { isRetry: false, isResume: false });
     });
 
     batchActionRow.append(runBatchBtn);
-    
-
 
     if (classUi.batchState.failedStudentIds && classUi.batchState.failedStudentIds.length > 0 && !classUi.batchState.isBatchGenerating) {
       const retryBtn = createElement("button", "btn-tool btn-tool-primary text-xs", `🔄 Coba Lagi yang Gagal (${classUi.batchState.failedStudentIds.length})`);
       retryBtn.type = "button";
       retryBtn.addEventListener("click", () => {
         const failedStudents = students.filter((s) => classUi.batchState.failedStudentIds.includes(s.id));
-        runBatchReportGeneration(failedStudents, true);
+        runBatchReportGeneration(failedStudents, { isRetry: true, isResume: false });
       });
       batchActionRow.append(retryBtn);
     }
@@ -1139,7 +1140,7 @@ export function renderClassesScreen(state, actions) {
       resumeBtn.type = "button";
       resumeBtn.addEventListener("click", () => {
         const unprocessedStudents = students.filter((s) => classUi.batchState.unprocessedStudentIds.includes(s.id));
-        runBatchReportGeneration(unprocessedStudents, false);
+        runBatchReportGeneration(unprocessedStudents, { isRetry: false, isResume: true });
       });
       batchActionRow.append(resumeBtn);
     }
@@ -1457,7 +1458,18 @@ export function renderClassesScreen(state, actions) {
 
     container.append(batchPanel);
 
-    async function runBatchReportGeneration(targetStudents, isRetry = false) {
+    async function runBatchReportGeneration(targetStudents, options = {}, maybeResume = false) {
+      let isRetry = false;
+      let isResume = false;
+      if (typeof options === "boolean") {
+        isRetry = options;
+        isResume = Boolean(maybeResume);
+      } else if (options && typeof options === "object") {
+        isRetry = Boolean(options.isRetry);
+        isResume = Boolean(options.isResume);
+      }
+      const isContinuing = isRetry || isResume;
+
       const apiKey = getGeminiApiKey();
 
       if (!apiKey) {
@@ -1492,15 +1504,63 @@ export function renderClassesScreen(state, actions) {
         classUi.batchReportSelection.assessmentSessionIds = [];
       }
 
-      if (isRetry && (classUi.batchState.classId !== classRoom.id || !classUi.batchState.frozenSourceSelection)) {
-        window.alert("Snapshot sumber batch awal tidak tersedia atau milik kelas lain. Tidak dapat melakukan retry.");
-        return;
-      }
-      const sourceSelection = isRetry
-        ? classUi.batchState.frozenSourceSelection
-        : snapshotBatchReportSelection(classUi.batchReportSelection, validClassSessionIds);
-      const effectiveSessionIdSet = new Set(sourceSelection.assessmentSessionIds);
+      let sourceSelection;
+      let frozenScoringConfig;
 
+      if (isContinuing) {
+        const activeAcademicYearId = state.activeAcademicYearId || null;
+        const activeSemesterId = state.activeSemesterId || null;
+
+        const isSnapshotMissing =
+          !classUi.batchState.classId ||
+          !classUi.batchState.frozenSourceSelection ||
+          !classUi.batchState.frozenScoringConfig ||
+          !classUi.batchState.frozenReportDetails;
+
+        const isClassMismatch = classUi.batchState.classId !== classRoom.id;
+        const isPeriodMismatch =
+          (classUi.batchState.academicYearId || null) !== activeAcademicYearId ||
+          (classUi.batchState.semesterId || null) !== activeSemesterId;
+
+        if (isSnapshotMissing || isClassMismatch || isPeriodMismatch) {
+          const actionLabel = isResume ? "melanjutkan batch" : "mencoba lagi siswa yang gagal";
+          window.alert(`Snapshot konfigurasi batch awal tidak tersedia atau kelas/periode telah berubah. Tidak dapat ${actionLabel}.`);
+          return;
+        }
+
+        sourceSelection = classUi.batchState.frozenSourceSelection;
+        frozenScoringConfig = classUi.batchState.frozenScoringConfig;
+      } else {
+        frozenScoringConfig = { enabled: false };
+        if (classUi.batchScoringConfig && classUi.batchScoringConfig.enabled) {
+          const minStr = String(classUi.batchScoringConfig.minScore ?? "").trim();
+          const maxStr = String(classUi.batchScoringConfig.maxScore ?? "").trim();
+          if (!minStr || !maxStr) {
+            window.alert("Rentang konversi tidak boleh kosong. Masukkan nilai minimum dan maksimum.");
+            return;
+          }
+          const minNum = Number(minStr);
+          const maxNum = Number(maxStr);
+          if (!Number.isFinite(minNum) || !Number.isFinite(maxNum) || minNum < 0 || maxNum > 100 || minNum >= maxNum) {
+            window.alert("Rentang konversi tidak valid (0 ≤ minimum < maksimum ≤ 100).");
+            return;
+          }
+          frozenScoringConfig = { enabled: true, minScore: minNum, maxScore: maxNum };
+        }
+
+        sourceSelection = snapshotBatchReportSelection(classUi.batchReportSelection, validClassSessionIds);
+
+        classUi.batchState.classId = classRoom.id;
+        classUi.batchState.className = classRoom.name;
+        classUi.batchState.academicYearId = state.activeAcademicYearId || null;
+        classUi.batchState.semesterId = state.activeSemesterId || null;
+        classUi.batchState.frozenSourceSelection = sourceSelection;
+        classUi.batchState.frozenScoringConfig = frozenScoringConfig;
+        classUi.batchState.frozenReportDetails = { ...classUi.batchReportDetails };
+        classUi.batchState.batchStudentIds = students.map((s) => s.id);
+      }
+
+      const effectiveSessionIdSet = new Set(sourceSelection.assessmentSessionIds || []);
       const targetStudentIdSet = new Set(targetStudents.map((s) => s.id));
 
       const hasAssessmentData = (state.assessmentResults || []).some(
@@ -1520,55 +1580,65 @@ export function renderClassesScreen(state, actions) {
         return;
       }
 
-      let frozenScoringConfig;
-      if (isRetry) {
-        if (classUi.batchState.classId !== classRoom.id || !classUi.batchState.frozenScoringConfig) {
-          window.alert("Snapshot batch awal tidak tersedia atau milik kelas lain. Tidak dapat melakukan retry.");
-          return;
-        }
-        frozenScoringConfig = classUi.batchState.frozenScoringConfig;
-      } else {
-        frozenScoringConfig = { enabled: false };
-        if (classUi.batchScoringConfig && classUi.batchScoringConfig.enabled) {
-          const minStr = String(classUi.batchScoringConfig.minScore ?? "").trim();
-          const maxStr = String(classUi.batchScoringConfig.maxScore ?? "").trim();
-          if (!minStr || !maxStr) {
-            window.alert("Rentang konversi tidak boleh kosong. Masukkan nilai minimum dan maksimum.");
-            return;
+      function syncBatchStateCounts() {
+        const allIds = classUi.batchState.batchStudentIds || students.map((s) => s.id);
+        const statuses = classUi.batchState.studentStatuses || {};
+
+        let success = 0;
+        let failed = 0;
+        let skipped = 0;
+        let unprocessed = 0;
+
+        const failedIdsSet = new Set();
+        const unprocessedIdsSet = new Set();
+
+        for (const id of allIds) {
+          const status = statuses[id];
+          if (status === "Berhasil") {
+            success++;
+          } else if (typeof status === "string" && status.startsWith("Dilewati")) {
+            skipped++;
+          } else if (typeof status === "string" && status.startsWith("Gagal")) {
+            failed++;
+            failedIdsSet.add(id);
+          } else {
+            unprocessed++;
+            unprocessedIdsSet.add(id);
           }
-          const minNum = Number(minStr);
-          const maxNum = Number(maxStr);
-          if (!Number.isFinite(minNum) || !Number.isFinite(maxNum) || minNum < 0 || maxNum > 100 || minNum >= maxNum) {
-            window.alert("Rentang konversi tidak valid (0 ≤ minimum < maksimum ≤ 100).");
-            return;
-          }
-          frozenScoringConfig = { enabled: true, minScore: minNum, maxScore: maxNum };
         }
-        classUi.batchState.frozenSourceSelection = sourceSelection;
-        classUi.batchState.frozenScoringConfig = frozenScoringConfig;
-        classUi.batchState.frozenReportDetails = { ...classUi.batchReportDetails };
+
+        classUi.batchState.totalStudents = allIds.length;
+        classUi.batchState.successCount = success;
+        classUi.batchState.failedCount = failed;
+        classUi.batchState.skippedCount = skipped;
+        classUi.batchState.unprocessedCount = unprocessed;
+        classUi.batchState.failedStudentIds = Array.from(failedIdsSet);
+        classUi.batchState.unprocessedStudentIds = Array.from(unprocessedIdsSet);
       }
 
-      const runId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      if (!isContinuing) {
+        classUi.batchState.studentStatuses = {};
+        for (const s of students) {
+          classUi.batchState.studentStatuses[s.id] = undefined;
+        }
+        syncBatchStateCounts();
+      } else {
+        if (!classUi.batchState.studentStatuses) {
+          classUi.batchState.studentStatuses = {};
+        }
+        syncBatchStateCounts();
+      }
+
+      const runId = classUi.batchState.diagnostic?.runId && isContinuing
+        ? classUi.batchState.diagnostic.runId
+        : `batch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const startedAt = new Date().toISOString();
 
-      classUi.batchState.classId = classRoom.id;
-      classUi.batchState.className = classRoom.name;
       classUi.batchState.isBatchGenerating = true;
-      classUi.batchState.totalStudents = targetStudents.length;
       classUi.batchState.currentStudentIndex = 0;
       classUi.batchState.currentStudentName = "";
-      classUi.batchState.successCount = 0;
-      classUi.batchState.failedCount = 0;
-      classUi.batchState.skippedCount = 0;
-      classUi.batchState.unprocessedCount = 0;
-      classUi.batchState.failedStudentIds = [];
-      classUi.batchState.unprocessedStudentIds = [];
       classUi.batchState.statusSummary = null;
       classUi.batchState.consecutiveHttp400Count = 0;
-      if (!isRetry) {
-        classUi.batchState.studentStatuses = {};
-      }
       classUi.batchState.diagnostic = {
         runId,
         startedAt,
@@ -1594,7 +1664,7 @@ export function renderClassesScreen(state, actions) {
         lastCompletedStage: null,
         errorCode: null,
         errorMessage: null,
-        lastFailure: null
+        lastFailure: classUi.batchState.diagnostic?.lastFailure || null
       };
 
       let batchTimerInterval = null;
@@ -1727,8 +1797,8 @@ export function renderClassesScreen(state, actions) {
           const totalSources = selectedAssessments.length + selectedGrowth.length + selectedObs.length;
 
           if (totalSources === 0) {
-            classUi.batchState.skippedCount++;
             classUi.batchState.studentStatuses[student.id] = "Dilewati — data tidak tersedia";
+            syncBatchStateCounts();
             updateDiag(BATCH_STAGES.STUDENT_DONE);
             continue;
           }
@@ -1808,8 +1878,8 @@ export function renderClassesScreen(state, actions) {
 
               if (saveResult && saveResult.success) {
                 pendingReports.delete(key);
-                classUi.batchState.successCount++;
                 classUi.batchState.studentStatuses[student.id] = "Berhasil";
+                syncBatchStateCounts();
                 consecutiveHttp400Count = 0;
                 classUi.batchState.consecutiveHttp400Count = 0;
                 updateDiag(BATCH_STAGES.STUDENT_DONE, {
@@ -1818,9 +1888,8 @@ export function renderClassesScreen(state, actions) {
               } else {
                 consecutiveHttp400Count = 0;
                 classUi.batchState.consecutiveHttp400Count = 0;
-                classUi.batchState.failedCount++;
-                classUi.batchState.failedStudentIds.push(student.id);
                 classUi.batchState.studentStatuses[student.id] = "Gagal simpan";
+                syncBatchStateCounts();
                 updateDiag(BATCH_STAGES.ERROR, {
                   errorCode: "SAVE_ERROR",
                   errorMessage: saveResult?.error?.message || "Gagal menyimpan laporan ke penyimpanan lokal",
@@ -1851,9 +1920,8 @@ export function renderClassesScreen(state, actions) {
             } else {
               consecutiveHttp400Count = 0;
               classUi.batchState.consecutiveHttp400Count = 0;
-              classUi.batchState.failedCount++;
-              classUi.batchState.failedStudentIds.push(student.id);
               classUi.batchState.studentStatuses[student.id] = "Gagal — respon AI tidak valid";
+              syncBatchStateCounts();
               updateDiag(BATCH_STAGES.ERROR, {
                 errorCode: "INVALID_AI_RESPONSE",
                 errorMessage: "Format respon AI tidak valid",
@@ -1953,7 +2021,18 @@ export function renderClassesScreen(state, actions) {
               elapsedMs: classUi.batchState.diagnostic.elapsedMs
             };
 
+            classUi.batchState.studentStatuses[student.id] = `Gagal — ${errorCode === "INVALID_ARGUMENT" ? "Permintaan AI ditolak (HTTP 400 — INVALID_ARGUMENT)" : errorMessage}`;
+            syncBatchStateCounts();
+
             if (isKeyError) {
+              clearBatchTimer();
+              const remainingStudents = targetStudents.slice(i + 1);
+              for (const rem of remainingStudents) {
+                if (!classUi.batchState.studentStatuses[rem.id] || classUi.batchState.studentStatuses[rem.id] === "Belum diproses") {
+                  classUi.batchState.studentStatuses[rem.id] = "Belum diproses";
+                }
+              }
+              syncBatchStateCounts();
               classUi.batchState.isBatchGenerating = false;
               classUi.batchState.statusSummary = "API key tidak valid. Periksa di Pengaturan → AI.";
               window.alert("API key tidak valid. Periksa di Pengaturan → AI.");
@@ -1964,20 +2043,15 @@ export function renderClassesScreen(state, actions) {
               return;
             }
 
-            classUi.batchState.failedCount++;
-            classUi.batchState.failedStudentIds.push(student.id);
-            classUi.batchState.studentStatuses[student.id] = `Gagal — ${errorCode === "INVALID_ARGUMENT" ? "Permintaan AI ditolak (HTTP 400 — INVALID_ARGUMENT)" : errorMessage}`;
-
             if (consecutiveHttp400Count >= 3) {
               wasBatchHalted = true;
               const remainingStudents = targetStudents.slice(i + 1);
-              classUi.batchState.unprocessedStudentIds = remainingStudents.map((s) => s.id);
-              classUi.batchState.unprocessedCount = remainingStudents.length;
               for (const rem of remainingStudents) {
-                if (!classUi.batchState.studentStatuses[rem.id]) {
+                if (!classUi.batchState.studentStatuses[rem.id] || classUi.batchState.studentStatuses[rem.id] === "Belum diproses") {
                   classUi.batchState.studentStatuses[rem.id] = "Belum diproses";
                 }
               }
+              syncBatchStateCounts();
 
               updateDiag(BATCH_STAGES.BATCH_HALTED, {
                 stage: BATCH_STAGES.BATCH_HALTED,
@@ -1995,13 +2069,19 @@ export function renderClassesScreen(state, actions) {
         if (!wasBatchHalted) {
           updateDiag(BATCH_STAGES.BATCH_DONE);
           clearBatchTimer();
-          classUi.batchState.statusSummary = `Ringkasan: ${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati`;
+          syncBatchStateCounts();
+          if (classUi.batchState.unprocessedCount > 0) {
+            classUi.batchState.statusSummary = `Ringkasan: ${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati, ${classUi.batchState.unprocessedCount} belum diproses`;
+          } else {
+            classUi.batchState.statusSummary = `Ringkasan: ${classUi.batchState.successCount} berhasil, ${classUi.batchState.failedCount} gagal, ${classUi.batchState.skippedCount} dilewati`;
+          }
         } else {
           clearBatchTimer();
         }
       } catch (outerErr) {
         console.error("[BATCH REPORT OUTER ERROR]", outerErr);
         clearBatchTimer();
+        syncBatchStateCounts();
         updateDiag(BATCH_STAGES.ERROR, {
           errorCode: outerErr?.code || "FATAL_BATCH_ERROR",
           errorMessage: outerErr?.message || String(outerErr)
@@ -2025,6 +2105,7 @@ export function renderClassesScreen(state, actions) {
       } finally {
         clearBatchTimer();
         classUi.batchState.isBatchGenerating = false;
+        syncBatchStateCounts();
         render();
         if (actions?.requestAppRender) {
           actions.requestAppRender();
@@ -2157,9 +2238,17 @@ export function renderClassesScreen(state, actions) {
           const st = classUi.batchState.studentStatuses[student.id];
           const isOk = st.startsWith("Berhasil");
           const isSkip = st.startsWith("Dilewati");
+          const isUnproc = st.startsWith("Belum diproses");
+          const pillColor = isOk
+            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold"
+            : isSkip
+            ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold"
+            : isUnproc
+            ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 font-medium"
+            : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 font-semibold";
           reportStatusPill = createElement(
             "span",
-            `results-stat-pill ${isOk ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold" : isSkip ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold" : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 font-semibold"}`,
+            `results-stat-pill ${pillColor}`,
             st
           );
         } else if (pendingReport) {

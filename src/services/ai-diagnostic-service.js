@@ -100,6 +100,54 @@ export function getFriendlyErrorMessage(errorCode, originalError, httpStatus, go
 }
 
 /**
+ * Sanitizes error messages for clipboard diagnostic export.
+ * Strips API keys, auth headers, raw payload echoes, raw HTML responses, and oversized text.
+ */
+export function sanitizeDiagnosticErrorMessage(rawMsg) {
+  if (!rawMsg || typeof rawMsg !== "string") return "-";
+  let str = rawMsg;
+
+  // Redact API keys and authorization headers
+  str = str.replace(/AIza[0-9A-Za-z_-]{35}/g, "[REDACTED_API_KEY]");
+  str = str.replace(/key=[^&\s"'`]+/gi, "key=[REDACTED]");
+  str = str.replace(/x-goog-api-key\s*:\s*[^,\s"'`]+/gi, "x-goog-api-key: [REDACTED]");
+  str = str.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [REDACTED]");
+  str = str.replace(/authorization\s*:\s*[^,\s"'`]+/gi, "authorization: [REDACTED]");
+
+  // Strip raw JSON payloads / contents / prompts / student private data
+  if (str.includes('"contents"') || str.includes('"parts"') || str.includes('"text"')) {
+    str = str.replace(/\{[\s\S]*"contents"[\s\S]*\}/g, "[PAYLOAD_REDACTED]");
+  }
+
+  // Strip raw HTML error pages (e.g. <html>...</html> or <!DOCTYPE...)
+  if (/<(!DOCTYPE|html|body|script)[\s\S]*>/i.test(str)) {
+    str = "[RAW_HTML_RESPONSE_FILTERED]";
+  }
+
+  // If the message still looks like an unsanitized raw JSON response body
+  if (str.trim().startsWith("{") && str.trim().endsWith("}")) {
+    try {
+      const parsed = JSON.parse(str);
+      if (parsed?.error?.message) {
+        str = parsed.error.message;
+      } else {
+        str = "[FILTERED_RAW_RESPONSE]";
+      }
+    } catch {
+      str = "[FILTERED_RAW_RESPONSE]";
+    }
+  }
+
+  // Ensure message is trimmed and not excessively long (max 180 chars) to prevent prompt leakage
+  str = str.trim();
+  if (str.length > 180) {
+    str = str.slice(0, 180) + "...";
+  }
+
+  return str || "-";
+}
+
+/**
  * Formats diagnostic state into a clean, human-readable text block for clipboard.
  * Strictly excludes API keys, request headers, full prompt, and full report contents.
  */
@@ -124,8 +172,9 @@ export function formatAiDiagnosticText(diag) {
   const httpStatus = diag.httpStatus != null ? String(diag.httpStatus) : "-";
   const googleStatus = diag.googleStatus || (diag.lastFailure?.googleStatus) || "-";
   const errorCode = diag.errorCode || "-";
-  const error = diag.errorMessage || "-";
+  const rawError = diag.errorMessage || "-";
   const friendlyError = getFriendlyErrorMessage(diag.errorCode, diag.errorMessage, diag.httpStatus, diag.googleStatus);
+  const sanitizedError = sanitizeDiagnosticErrorMessage(rawError);
 
   const apiModel = diag.apiModel || (diag.lastFailure?.apiModel) || "gemini-3.8-flash";
   const apiEndpoint = diag.apiEndpoint || (diag.lastFailure?.apiEndpoint) || "v1beta/models/gemini-3.8-flash:generateContent";
@@ -157,8 +206,9 @@ export function formatAiDiagnosticText(diag) {
     `Google Error Status: ${googleStatus}`,
     `Kegagalan HTTP 400 Berturut-turut: ${consecutiveCount}`,
     `Kode Error: ${errorCode}`,
+    `Kategori Kegagalan: ${friendlyError}`,
     `Deskripsi Error: ${friendlyError}`,
-    `Detail Error: ${error}`
+    `Detail Error: ${sanitizedError}`
   ];
 
   if (diag.lastFailure) {
@@ -170,6 +220,8 @@ export function formatAiDiagnosticText(diag) {
     const lfRequestBytes = lf.requestBytes != null
       ? `${lf.requestBytes} bytes (${lf.requestChars || lf.requestBytes} karakter)`
       : "-";
+    const lfFriendlyError = getFriendlyErrorMessage(lf.errorCode, lf.errorMessage, lf.httpStatus, lf.googleStatus);
+    const sanitizedLfError = sanitizeDiagnosticErrorMessage(lf.errorMessage);
 
     lines.push(
       "",
@@ -186,8 +238,9 @@ export function formatAiDiagnosticText(diag) {
       `Kegagalan HTTP 400 Berturut-turut: ${lf.consecutiveHttp400Count != null ? lf.consecutiveHttp400Count : consecutiveCount}`,
       `Waktu Tunggu: ${lfElapsed}`,
       `Kode Error: ${lf.errorCode || "-"}`,
-      `Deskripsi Error: ${getFriendlyErrorMessage(lf.errorCode, lf.errorMessage, lf.httpStatus, lf.googleStatus)}`,
-      `Detail Error: ${lf.errorMessage || "-"}`
+      `Kategori Kegagalan: ${lfFriendlyError}`,
+      `Deskripsi Error: ${lfFriendlyError}`,
+      `Detail Error: ${sanitizedLfError}`
     );
   }
 
