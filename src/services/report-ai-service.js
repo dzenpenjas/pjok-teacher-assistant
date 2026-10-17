@@ -274,7 +274,8 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
       .map(violation => violation?.field)
       .filter(field => typeof field === "string" && /^[A-Za-z][A-Za-z0-9_.\[\]]{0,119}$/.test(field))
       .slice(0, 10);
-    const googleStatus = parsedError?.error?.status || null;
+    const rawStatus = parsedError?.error?.status;
+    const googleStatus = typeof rawStatus === "string" && /^[A-Z_]{1,80}$/.test(rawStatus) ? rawStatus : null;
     const rawMessage = parsedError?.error?.message;
     const googleMessage = typeof rawMessage === "string"
       ? sanitizeDiagnosticErrorMessage(rawMessage.split(apiKey.trim()).join("[REDACTED_API_KEY]"))
@@ -293,6 +294,8 @@ KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAINNYA.`;
       notFoundErr.code = "MODEL_NOT_FOUND";
       notFoundErr.googleStatus = googleStatus || "NOT_FOUND";
       notFoundErr.googleMessage = googleMessage;
+      notFoundErr.googleReason = googleReason;
+      notFoundErr.googleFields = googleFields;
       notFoundErr.apiModel = apiModel;
       notFoundErr.apiEndpoint = apiEndpoint;
       notFoundErr.requestBytes = requestByteLength;

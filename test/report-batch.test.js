@@ -20,8 +20,8 @@ function fixture(){
 const narrative={strengths:'Capaian gerak yang tercatat.',developing:'Latihan bertahap diperlukan.',teacherAction:'Guru mendampingi latihan.',parentSupport:'Keluarga mendukung latihan.',growth:'Pengukuran tersedia untuk pemantauan.',nutritionAdvice:'Kebiasaan sehat sesuai kebutuhan.',teacherNote:''};
 function provider(body=narrative){return new Response(JSON.stringify({candidates:[{content:{parts:[{text:typeof body==='string'?body:JSON.stringify(body)}]}}]}),{status:200});}
 function reject400(reason){return new Response(JSON.stringify({error:{code:400,status:'INVALID_ARGUMENT',message:'Request contains an invalid argument.',details:reason?[{'@type':'type.googleapis.com/google.rpc.ErrorInfo',reason}]:[{'@type':'type.googleapis.com/google.rpc.BadRequest',fieldViolations:[{field:'generationConfig.unknown',description:'not copied to diagnostics'}]}]}}),{status:400});}
-async function setup({fetchResponse=()=>provider(),asyncSave=false,onSave}={}){
- const source=fixture();const env=installReportTestEnvironment(source);
+async function setup({fetchResponse=()=>provider(),asyncSave=false,onSave,sourceState}={}){
+ const source=sourceState || fixture();if(sourceState)serial++;const env=installReportTestEnvironment(source);
  env.storage.setItem('pjok_gemini_api_key','synthetic-key');
  const app=await import(`../src/app.js?batch-test=${serial}`);
  const ui={selectedClassId:source.classes[0].id,mode:'detail',activeTab:'reports',batchReportSelection:{assessmentSessionIds:source.assessmentSessions.map(a=>a.id),includeGrowth:true,includeObservations:false},batchScoringConfig:{enabled:false},batchReportDetails:{enabled:true,descriptions:true}};
@@ -103,4 +103,50 @@ test('429 stops immediately; three consecutive server failures halt and preserve
   fail=false;await h.click('Lanjutkan Belum Diproses');await h.click('Coba Lagi yang Gagal');
   assert.equal(h.ui.batchState.successCount,6);assert.equal(h.ui.batchState.unprocessedCount,0);
  }
+});
+
+test('404 model failure retains Google metadata and never masquerades as authentication',async()=>{
+ console.error=()=>{};
+ const h=await setup({fetchResponse:()=>new Response(JSON.stringify({error:{status:'NOT_FOUND',message:'Model unavailable',details:[{'@type':'type.googleapis.com/google.rpc.ErrorInfo',reason:'MODEL_NOT_FOUND'},{'@type':'type.googleapis.com/google.rpc.BadRequest',fieldViolations:[{field:'model'}]}]}}),{status:404})});
+ await h.click('Generate Semua Laporan');
+ assert.equal(h.ui.batchState.diagnostic.lastFailure.errorCode,'MODEL_NOT_FOUND');
+ assert.equal(h.ui.batchState.diagnostic.lastFailure.googleReason,'MODEL_NOT_FOUND');
+ assert.deepEqual(h.ui.batchState.diagnostic.lastFailure.googleFields,['model']);
+ assert.equal(h.ui.batchState.failedCount,6);
+});
+
+test('external backup: isolated class batch preserves settings, halts, resumes and saves without duplicates', {skip:!process.env.PJOK_REPORT_TEST_BACKUP}, async()=>{
+ console.error=()=>{};
+ const {readFile}=await import('node:fs/promises');
+ const backup=JSON.parse(await readFile(process.env.PJOK_REPORT_TEST_BACKUP,'utf8'));
+ const room=backup.classes.find(c=>c.name==='Kelas 1A');assert.ok(room);
+ const source=structuredClone(backup);source.classes=[room];source.students=source.students.filter(s=>s.classId===room.id);
+ source.assessmentSessions=source.assessmentSessions.filter(s=>s.classId===room.id&&/^UTS PJOK Kelas 1 - (Lisan|Praktik)$/.test(s.title));
+ assert.equal(source.assessmentSessions.length,2);assert.ok(source.students.length>3);
+ for(const [status,limit] of [[429,1],[503,3]]){
+  let fail=true;
+  const h=await setup({sourceState:structuredClone(source),fetchResponse:()=>fail?new Response(JSON.stringify({error:{status:status===429?'RESOURCE_EXHAUSTED':'UNAVAILABLE',message:'Synthetic provider failure'}}),{status}):provider()});
+  await h.click('Generate Semua Laporan');
+  assert.deepEqual([h.ui.batchState.successCount,h.ui.batchState.failedCount,h.ui.batchState.skippedCount,h.ui.batchState.unprocessedCount],[0,limit,0,source.students.length-limit]);
+  assert.deepEqual(h.env.read().studentReports,backup.studentReports);
+  h.ui.batchReportSelection={assessmentSessionIds:[],includeGrowth:false,includeObservations:true};h.ui.batchReportDetails={enabled:false,descriptions:false};h.ui.batchScoringConfig={enabled:true,minScore:80,maxScore:90};
+  fail=false;await h.click('Lanjutkan Belum Diproses');
+  const successful=new Set(h.saved.map(r=>r.studentId));const before=h.requests.length;
+  await h.click('Coba Lagi yang Gagal');
+  assert.ok(h.requests.slice(before).every(c=>!successful.has(c.student.id)));
+  assert.deepEqual([h.ui.batchState.successCount,h.ui.batchState.failedCount,h.ui.batchState.skippedCount,h.ui.batchState.unprocessedCount],[source.students.length,0,0,0]);
+  for(const r of h.saved){assert.equal(r.academicYearId,backup.activeAcademicYearId);assert.equal(r.semesterId,backup.activeSemesterId);assert.equal(r.reportContext.reportScoring.enabled,false);assert.equal(r.reportContext.observations.length,0);assert.ok(r.reportContext.reportDetails.enabled&&r.reportContext.reportDetails.descriptions);}
+  const stored=h.env.read().studentReports;
+  for(const student of source.students)assert.equal(stored.filter(r=>r.studentId===student.id&&r.classId===room.id&&r.academicYearId===backup.activeAcademicYearId&&r.semesterId===backup.activeSemesterId).length,1);
+  const untouched=r=>r.classId!==room.id||r.academicYearId!==backup.activeAcademicYearId||r.semesterId!==backup.activeSemesterId;
+  assert.deepEqual(stored.filter(untouched),backup.studentReports.filter(untouched));
+  console.log(`External backup MOCK HTTP ${status}: halted 0/${limit}/0/${source.students.length-limit}; resumed ${h.ui.batchState.successCount}/0/0/0; persisted ${h.saved.length}`);
+ }
+});
+
+test('a successful response resets the consecutive server failure counter',async()=>{
+ console.error=()=>{};
+ const h=await setup({fetchResponse:(_,index)=>[1,2,4,5].includes(index)?new Response(JSON.stringify({error:{status:'UNAVAILABLE',message:'Synthetic server error'}}),{status:503}):provider()});
+ await h.click('Generate Semua Laporan');
+ assert.equal(h.requests.length,6);assert.equal(h.ui.batchState.successCount,2);assert.equal(h.ui.batchState.failedCount,4);assert.equal(h.ui.batchState.unprocessedCount,0);
 });

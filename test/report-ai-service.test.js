@@ -48,3 +48,9 @@ test('missing learning narrative and invalid JSON remain rejected',async()=>{
   await withFetch(async()=>new Response(JSON.stringify({candidates:[{content:{parts:[{text}]}}]}),{status:200}),()=>assert.rejects(generateStudentReportWithAI({apiKey:'synthetic-key',reportContext:context}),{code:'INVALID_AI_RESPONSE'}));
  }
 });
+
+test('untrusted Google status cannot leak key or payload into error metadata',async()=>{
+ await withFetch(async()=>new Response(JSON.stringify({error:{status:'synthetic-key private payload',message:'Request rejected'}}),{status:400}),()=>assert.rejects(generateStudentReportWithAI({apiKey:'synthetic-key',reportContext:context}),error=>{
+  assert.equal(error.googleStatus,null);assert.ok(!error.message.includes('synthetic-key'));return true;
+ }));
+});

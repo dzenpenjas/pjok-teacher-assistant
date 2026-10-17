@@ -1956,7 +1956,7 @@ export function renderClassesScreen(state, actions) {
             }
           } catch (err) {
             console.error("[BATCH REPORT AI ERROR for student]", student.name, err);
-            const isKeyError = err?.isApiKeyError || (err?.message && (err.message.includes("API key") || err.message.includes("API_KEY")));
+            const isKeyError = err?.isApiKeyError || err?.code === "AUTH_ERROR";
             const isTimeout = err?.code === "AI_REQUEST_TIMEOUT" || (err?.message && err.message.includes("timed out"));
             const httpStatus = err?.httpStatus || err?.status || (err?.message && err.message.match(/HTTP\s*(\d{3})/i)?.[1] ? Number(err.message.match(/HTTP\s*(\d{3})/i)[1]) : null);
             const googleStatus = err?.googleStatus || null;
