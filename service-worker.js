@@ -1,4 +1,4 @@
-const CACHE_NAME = "pjok-teacher-assistant-v47";
+const CACHE_NAME = "pjok-teacher-assistant-v48";
 
 const APP_ASSETS = [
   "./",
@@ -8,6 +8,7 @@ const APP_ASSETS = [
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/apple-touch-icon.png",
+  "./src/services/pwa-install-service.js",
   "./vendor/html2pdf.bundle.min.js",
   "./vendor/xlsx.full.min.js",
   "./src/app.js",

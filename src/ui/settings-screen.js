@@ -32,7 +32,15 @@ const SETTINGS_TABS = [
   { id: "backup", label: "Cadangan Data", icon: () => ICONS.database(16) }
 ];
 
+let activeSettingsPwaUnsubscribe = null;
+
 export function renderSettingsScreen(state, actions, options = {}) {
+  // Clean up any previous settings screen subscription to prevent listener buildup
+  if (typeof activeSettingsPwaUnsubscribe === "function") {
+    activeSettingsPwaUnsubscribe();
+    activeSettingsPwaUnsubscribe = null;
+  }
+
   const screen = createElement("main", "screen wide-screen settings-hub-screen");
 
   const allowedTabs = [
@@ -767,122 +775,215 @@ export function renderSettingsScreen(state, actions, options = {}) {
     card.append(header);
 
     const installState = getPwaInstallState();
+    const platform = installState.platform || {};
+
+    // 1. Status row
+    const statusRow = createElement("div", "pwa-status-row");
+    const statusBadge = createElement("div", "pwa-status-badge");
 
     if (installState.isInstalled) {
-      // 1. Status: Already Installed
-      const installedBadge = createElement("div", "pwa-installed-badge");
-      installedBadge.append(
+      statusBadge.classList.add("is-installed");
+      statusBadge.append(
         ICONS.check ? ICONS.check(18) : createElement("span", "", "✓"),
         document.createTextNode(" Aplikasi sudah terinstal")
       );
+      statusRow.append(statusBadge);
+      card.append(statusRow);
+
       const subText = createElement(
         "p",
         "pwa-installed-note",
         "Aplikasi sedang berjalan dalam mode mandiri (PWA) di perangkat Anda."
       );
-      card.append(installedBadge, subText);
+      card.append(subText);
     } else {
-      // 2. Action Buttons & Guides
+      let statusText = "Pemasangan Manual";
+      let statusClass = "is-unsupported";
+      let statusIcon = ICONS.info ? ICONS.info(16) : createElement("span", "", "ℹ");
+
+      if (installState.status === "ready" || installState.canPrompt) {
+        statusText = "Siap Dipasang";
+        statusClass = "is-ready";
+        statusIcon = ICONS.download ? ICONS.download(16) : createElement("span", "", "⬇");
+      } else if (installState.status === "waiting_confirmation") {
+        statusText = "Menunggu Konfirmasi Browser";
+        statusClass = "is-waiting";
+        statusIcon = ICONS.sync ? ICONS.sync(16) : createElement("span", "", "⏳");
+      } else if (installState.status === "dismissed") {
+        statusText = "Pemasangan Dibatalkan";
+        statusClass = "is-dismissed";
+        statusIcon = ICONS.close ? ICONS.close(16) : createElement("span", "", "✕");
+      }
+
+      statusBadge.classList.add(statusClass);
+      statusBadge.append(statusIcon, document.createTextNode(` ${statusText}`));
+      statusRow.append(statusBadge);
+      card.append(statusRow);
+
+      // Actions row
       const actionsRow = createElement("div", "pwa-install-actions");
 
-      const installBtn = createElement("button", "primary-action compact-action pwa-install-btn");
-      installBtn.type = "button";
-      installBtn.append(
-        ICONS.install ? ICONS.install(16) : (ICONS.download ? ICONS.download(16) : createElement("span", "", "⬇")),
-        document.createTextNode(" Instal Aplikasi PJOK")
-      );
-
-      actionsRow.append(installBtn);
-      card.append(actionsRow);
-
-      // Manual instructions container
+      // Guide container
       const guideBox = createElement("div", "pwa-guide-box");
-      const platform = installState.platform;
+      guideBox.setAttribute("role", "region");
+      guideBox.setAttribute("aria-label", "Petunjuk Pemasangan Manual");
+
+      let isGuideOpen = false;
+      const updateGuideDisplay = () => {
+        if (isGuideOpen) {
+          guideBox.classList.add("is-open", "is-expanded");
+          guideBox.style.display = "block";
+        } else {
+          guideBox.classList.remove("is-open", "is-expanded");
+          guideBox.style.display = "none";
+        }
+      };
+      updateGuideDisplay();
 
       if (installState.canPrompt) {
-        // Native browser prompt is supported and ready
+        // Automatic prompt available
+        const installBtn = createElement("button", "primary-action compact-action pwa-install-btn");
+        installBtn.type = "button";
+        installBtn.append(
+          ICONS.install ? ICONS.install(16) : (ICONS.download ? ICONS.download(16) : createElement("span", "", "⬇")),
+          document.createTextNode(" Instal Aplikasi PJOK")
+        );
+
         installBtn.addEventListener("click", async () => {
           installBtn.disabled = true;
+          installBtn.textContent = "Menunggu respons browser...";
           try {
             const res = await promptPwaInstall();
             if (res.outcome === "accepted") {
-              showToast("Aplikasi PJOK berhasil ditambahkan!", "success");
+              // Wait for appinstalled event to confirm installation
+              showToast("Permintaan pemasangan diterima. Menunggu browser menyelesaikan proses instalasi...", "info");
             } else if (res.outcome === "dismissed") {
               showToast("Pemasangan aplikasi dibatalkan.", "info");
+            } else {
+              showToast("Dialog instalasi tidak tersedia. Buka petunjuk manual.", "info");
             }
           } catch (err) {
             console.error(err);
             showToast("Terjadi kendala saat membuka dialog instalasi.", "error");
           } finally {
-            installBtn.disabled = false;
             render();
           }
         });
 
-        const autoHint = createElement(
+        actionsRow.append(installBtn);
+        card.append(actionsRow);
+
+        const promptHint = createElement(
           "p",
-          "pwa-prompt-ready-hint",
-          "Klik tombol di atas untuk membuka dialog pemasangan otomatis dari browser Anda."
+          "pwa-prompt-hint",
+          "Klik tombol di atas untuk membuka dialog pemasangan resmi dari browser Anda."
         );
-        card.append(autoHint);
+        card.append(promptHint);
       } else {
-        // Prompt is not immediately ready / iOS Safari / unsupported browser
-        // Clicking the install button toggles/focuses the platform-specific instructions
-        installBtn.addEventListener("click", () => {
-          guideBox.classList.toggle("is-expanded");
-          if (guideBox.classList.contains("is-expanded")) {
+        // Unsupported or dismissed -> Provide explicit manual guide toggle
+        const toggleGuideBtn = createElement("button", "primary-action compact-action pwa-install-btn");
+        toggleGuideBtn.type = "button";
+        toggleGuideBtn.setAttribute("aria-expanded", "false");
+        toggleGuideBtn.append(
+          ICONS.help ? ICONS.help(16) : (ICONS.info ? ICONS.info(16) : createElement("span", "", "📖")),
+          document.createTextNode(" Lihat Petunjuk Pemasangan")
+        );
+
+        toggleGuideBtn.addEventListener("click", () => {
+          isGuideOpen = !isGuideOpen;
+          updateGuideDisplay();
+          toggleGuideBtn.setAttribute("aria-expanded", String(isGuideOpen));
+          toggleGuideBtn.replaceChildren(
+            ICONS.help ? ICONS.help(16) : (ICONS.info ? ICONS.info(16) : createElement("span", "", "📖")),
+            document.createTextNode(isGuideOpen ? " Tutup Petunjuk Pemasangan" : " Lihat Petunjuk Pemasangan")
+          );
+          if (isGuideOpen) {
             guideBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
-            showToast("Ikuti langkah pemasangan manual di bawah ini.", "info");
+            showToast("Petunjuk pemasangan ditampilkan di bawah.", "info");
           }
         });
 
-        const guideNotice = createElement(
-          "div",
-          "pwa-manual-guide-notice"
-        );
-        guideNotice.append(
-          ICONS.info ? ICONS.info(16) : createElement("span", "", "ℹ"),
-          document.createTextNode(
-            platform.isIOS
-              ? " Browser Safari iOS memerlukan langkah manual melalui menu Bagikan (Share)."
-              : " Pemasangan otomatis belum tersedia di browser ini. Ikuti petunjuk manual di bawah:"
-          )
-        );
-        guideBox.append(guideNotice);
+        actionsRow.append(toggleGuideBtn);
+        card.append(actionsRow);
 
-        // Platform specific instructions list
+        const manualNotice = createElement(
+          "p",
+          "pwa-prompt-hint",
+          installState.status === "dismissed"
+            ? "Pemasangan otomatis dibatalkan. Anda tetap dapat memasang aplikasi secara manual ke layar utama."
+            : "Browser ini memerlukan langkah manual singkat untuk memasang aplikasi ke layar utama."
+        );
+        card.append(manualNotice);
+      }
+
+      // Populate guide box contents
+      let selectedPlatform = platform.isIOS ? "ios" : (platform.isAndroid ? "android" : "desktop");
+
+      const platformTabs = createElement("div", "pwa-platform-tabs");
+      const tabOptions = [
+        { id: "android", label: "Android (Chrome)" },
+        { id: "ios", label: "iPhone / iPad (Safari)" },
+        { id: "desktop", label: "Laptop / PC (Chrome/Edge)" }
+      ];
+
+      const stepsContainer = createElement("div", "pwa-steps-container");
+
+      function renderPlatformSteps(tabId) {
+        stepsContainer.replaceChildren();
         const stepsList = createElement("ul", "pwa-steps-list");
 
-        if (platform.isIOS) {
-          const step1 = createElement("li");
-          step1.innerHTML = '1. Buka halaman ini di browser <strong>Safari</strong>.';
-          const step2 = createElement("li");
-          step2.innerHTML = '2. Ketuk tombol <strong>Bagikan (Share)</strong> ikon <span class="share-icon-inline">⎋</span> di bilah navigasi Safari.';
-          const step3 = createElement("li");
-          step3.innerHTML = '3. Gulir ke bawah lalu pilih <strong>Tambah ke Layar Utama (Add to Home Screen)</strong>.';
-          const step4 = createElement("li");
-          step4.innerHTML = '4. Ketuk <strong>Tambah (Add)</strong> di sudut kanan atas.';
-          stepsList.append(step1, step2, step3, step4);
-        } else if (platform.isAndroid) {
-          const step1 = createElement("li");
-          step1.innerHTML = '1. Ketuk tombol <strong>menu titik tiga (⋮)</strong> di sudut kanan atas browser Chrome.';
-          const step2 = createElement("li");
-          step2.innerHTML = '2. Pilih menu <strong>Instal aplikasi</strong> atau <strong>Tambahkan ke Layar Utama</strong>.';
-          const step3 = createElement("li");
-          step3.innerHTML = '3. Konfirmasi dengan memilih <strong>Instal</strong>.';
-          stepsList.append(step1, step2, step3);
+        if (tabId === "ios") {
+          const s1 = createElement("li");
+          s1.innerHTML = '1. Buka aplikasi ini di browser <strong>Safari</strong> (bukan Chrome di iOS).';
+          const s2 = createElement("li");
+          s2.innerHTML = '2. Ketuk tombol <strong>Bagikan (Share)</strong> ikon <span class="share-icon-inline">⎋</span> di bilah bawah/atas Safari.';
+          const s3 = createElement("li");
+          s3.innerHTML = '3. Gulir ke bawah lalu pilih menu <strong>Tambah ke Layar Utama (Add to Home Screen)</strong>.';
+          const s4 = createElement("li");
+          s4.innerHTML = '4. Ketuk <strong>Tambah (Add)</strong> di sudut kanan atas. Ikon aplikasi akan langsung muncul di layar utama iPhone/iPad.';
+          stepsList.append(s1, s2, s3, s4);
+        } else if (tabId === "android") {
+          const s1 = createElement("li");
+          s1.innerHTML = '1. Buka browser <strong>Chrome</strong> di ponsel Android.';
+          const s2 = createElement("li");
+          s2.innerHTML = '2. Ketuk tombol menu <strong>titik tiga (⋮)</strong> di sudut kanan atas layar.';
+          const s3 = createElement("li");
+          s3.innerHTML = '3. Pilih menu <strong>Instal aplikasi</strong> atau <strong>Tambahkan ke Layar Utama</strong>.';
+          const s4 = createElement("li");
+          s4.innerHTML = '4. Konfirmasi dengan memilih <strong>Instal</strong>. Aplikasi akan muncul seperti aplikasi biasa di Android Anda.';
+          stepsList.append(s1, s2, s3, s4);
         } else {
-          // Desktop Chrome / Edge
-          const step1 = createElement("li");
-          step1.innerHTML = '1. Pada bilah alamat browser (address bar), klik ikon <strong>Instal Aplikasi</strong> (atau menu titik tiga ⋮).';
-          const step2 = createElement("li");
-          step2.innerHTML = '2. Pilih <strong>Instal PJOK Teacher Assistant</strong> lalu klik <strong>Instal</strong>.';
-          stepsList.append(step1, step2);
+          const s1 = createElement("li");
+          s1.innerHTML = '1. Di browser <strong>Google Chrome</strong> atau <strong>Microsoft Edge</strong> di komputer Anda.';
+          const s2 = createElement("li");
+          s2.innerHTML = '2. Perhatikan ikon <strong>Instal Aplikasi</strong> di ujung kanan bilah alamat (address bar), atau klik menu titik tiga (⋮).';
+          const s3 = createElement("li");
+          s3.innerHTML = '3. Pilih <strong>Instal PJOK Teacher Assistant</strong> lalu konfirmasi <strong>Instal</strong>.';
+          stepsList.append(s1, s2, s3);
         }
-
-        guideBox.append(stepsList);
-        card.append(guideBox);
+        stepsContainer.append(stepsList);
       }
+
+      tabOptions.forEach((tab) => {
+        const tabBtn = createElement(
+          "button",
+          `pwa-platform-tab ${selectedPlatform === tab.id ? "is-active" : ""}`,
+          tab.label
+        );
+        tabBtn.type = "button";
+        tabBtn.addEventListener("click", () => {
+          selectedPlatform = tab.id;
+          platformTabs.querySelectorAll(".pwa-platform-tab").forEach((btn, idx) => {
+            btn.classList.toggle("is-active", tabOptions[idx].id === selectedPlatform);
+          });
+          renderPlatformSteps(selectedPlatform);
+        });
+        platformTabs.append(tabBtn);
+      });
+
+      guideBox.append(platformTabs, stepsContainer);
+      renderPlatformSteps(selectedPlatform);
+      card.append(guideBox);
     }
 
     // 3. Data Safety Reminder Notice
@@ -953,10 +1054,19 @@ export function renderSettingsScreen(state, actions, options = {}) {
 
   // Subscribe to beforeinstallprompt/appinstalled events so the button/state reflects immediately
   const unsubscribePwa = subscribePwaInstallState(() => {
-    if (activeTab === "backup" && container.isConnected) {
+    // If this screen instance is no longer attached in DOM, clean up listener to prevent buildup
+    if (!screen.isConnected && !container.isConnected) {
+      if (activeSettingsPwaUnsubscribe === unsubscribePwa) {
+        activeSettingsPwaUnsubscribe = null;
+      }
+      unsubscribePwa();
+      return;
+    }
+    if (activeTab === "backup") {
       render();
     }
   });
+  activeSettingsPwaUnsubscribe = unsubscribePwa;
 
   render();
   return screen;
