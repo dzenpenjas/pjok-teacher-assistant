@@ -313,6 +313,48 @@ export function saveState(state) {
   return nextState;
 }
 
+const SAFETY_SNAPSHOT_KEY = "pjokTeacherAssistant.safetySnapshot";
+
+export function getSafetySnapshotKey() {
+  return SAFETY_SNAPSHOT_KEY;
+}
+
+export function createSafetySnapshot(existingRaw) {
+  try {
+    const raw = existingRaw !== undefined ? existingRaw : window.localStorage.getItem(STORAGE_KEY);
+    const snapshotValue = raw !== null ? raw : "__EMPTY__";
+    window.localStorage.setItem(SAFETY_SNAPSHOT_KEY, snapshotValue);
+    return { success: true, snapshot: snapshotValue };
+  } catch (error) {
+    console.error("Gagal menyimpan snapshot pengaman:", error);
+    return { success: false, error };
+  }
+}
+
+export function restoreSafetySnapshot() {
+  try {
+    const snapshotRaw = window.localStorage.getItem(SAFETY_SNAPSHOT_KEY);
+    if (snapshotRaw === null) {
+      return { success: false, error: new Error("Snapshot pengaman tidak ditemukan.") };
+    }
+    if (snapshotRaw === "__EMPTY__") {
+      window.localStorage.removeItem(STORAGE_KEY);
+      return { success: true, state: createInitialState() };
+    }
+    window.localStorage.setItem(STORAGE_KEY, snapshotRaw);
+    return { success: true, state: JSON.parse(snapshotRaw) };
+  } catch (error) {
+    console.error("Gagal memulihkan snapshot pengaman:", error);
+    return { success: false, error };
+  }
+}
+
+export function clearSafetySnapshot() {
+  try {
+    window.localStorage.removeItem(SAFETY_SNAPSHOT_KEY);
+  } catch (_) {}
+}
+
 export function verifyPersistedIntegrity(candidate, readBack) {
   if (!candidate || !readBack) {
     return { valid: false, error: "Data kandidat atau data tersimpan kosong." };
@@ -325,36 +367,57 @@ export function verifyPersistedIntegrity(candidate, readBack) {
     };
   }
 
+  // Check scalar scoping identifiers
+  if (candidate.activeAcademicYearId !== readBack.activeAcademicYearId) {
+    return {
+      valid: false,
+      error: `activeAcademicYearId tidak sesuai: kandidat ${candidate.activeAcademicYearId}, tersimpan ${readBack.activeAcademicYearId}`
+    };
+  }
+  if (candidate.activeSemesterId !== readBack.activeSemesterId) {
+    return {
+      valid: false,
+      error: `activeSemesterId tidak sesuai: kandidat ${candidate.activeSemesterId}, tersimpan ${readBack.activeSemesterId}`
+    };
+  }
+
   const collectionsToCheck = Object.values(COLLECTIONS);
   for (const col of collectionsToCheck) {
     const candidateList = Array.isArray(candidate[col]) ? candidate[col] : [];
     const readBackList = Array.isArray(readBack[col]) ? readBack[col] : [];
+
+    // Verify collection count
     if (candidateList.length !== readBackList.length) {
       return {
         valid: false,
         error: `Jumlah data pada koleksi ${col} tidak sesuai: kandidat ${candidateList.length}, tersimpan ${readBackList.length}`
       };
     }
-  }
 
-  const idChecks = [
-    { name: "students", list: candidate.students },
-    { name: "classes", list: candidate.classes },
-    { name: "assessmentResults", list: candidate.assessmentResults },
-    { name: "growthRecords", list: candidate.growthRecords },
-    { name: "attendanceRecords", list: candidate.attendanceRecords }
-  ];
+    // Build readBack lookup by entity ID or array index
+    const readBackMap = new Map();
+    readBackList.forEach((item, idx) => {
+      const key = item && item.id ? String(item.id) : `__idx_${idx}`;
+      readBackMap.set(key, item);
+    });
 
-  for (const check of idChecks) {
-    const candidateList = Array.isArray(check.list) ? check.list : [];
-    const readBackList = Array.isArray(readBack[check.name]) ? readBack[check.name] : [];
-    const readBackIdSet = new Set(readBackList.map((item) => item.id).filter(Boolean));
+    // Deep content verification of every record (verifies actual fields/photos/scores, not just counts or IDs)
+    for (let i = 0; i < candidateList.length; i++) {
+      const item = candidateList[i];
+      const key = item && item.id ? String(item.id) : `__idx_${i}`;
+      const readBackItem = readBackMap.get(key);
 
-    for (const item of candidateList) {
-      if (item && item.id && !readBackIdSet.has(item.id)) {
+      if (!readBackItem) {
         return {
           valid: false,
-          error: `ID entitas ${item.id} pada ${check.name} tidak ditemukan dalam data tersimpan.`
+          error: `Entitas ${key} pada koleksi ${col} tidak ditemukan dalam data tersimpan.`
+        };
+      }
+
+      if (JSON.stringify(item) !== JSON.stringify(readBackItem)) {
+        return {
+          valid: false,
+          error: `Integritas konten data pada koleksi ${col} (ID: ${key}) tidak cocok dengan data tersimpan.`
         };
       }
     }
@@ -369,10 +432,22 @@ export function replaceState(state) {
     previousRaw = window.localStorage.getItem(STORAGE_KEY);
   } catch (_) {}
 
+  // 1. Save safety snapshot of active data before replacement.
+  // If snapshot fails to save reliably, abort restore immediately to prevent data loss.
+  const snapshotRes = createSafetySnapshot(previousRaw);
+  if (!snapshotRes.success) {
+    return {
+      success: false,
+      state: null,
+      error: snapshotRes.error || new Error("Gagal menyimpan snapshot pengaman sebelum pemulihan.")
+    };
+  }
+
   let nextState;
   try {
     nextState = normalizeState(state);
   } catch (normError) {
+    restoreSafetySnapshot();
     return {
       success: false,
       state: null,
@@ -392,10 +467,14 @@ export function replaceState(state) {
     const parsedReadBack = JSON.parse(rawReadBack);
     const normalizedReadBack = normalizeState(parsedReadBack);
 
+    // Deep content verification across all records
     const isVerified = verifyPersistedIntegrity(nextState, normalizedReadBack);
     if (!isVerified.valid) {
       throw new Error(isVerified.error || "Verifikasi integritas data tersimpan gagal.");
     }
+
+    // Clean up temporary safety snapshot after verified success
+    clearSafetySnapshot();
 
     return {
       success: true,
@@ -403,7 +482,9 @@ export function replaceState(state) {
       error: null
     };
   } catch (error) {
-    // Attempt rollback to previous raw state if available
+    // Restore previous data from safety snapshot upon any failure
+    restoreSafetySnapshot();
+
     if (previousRaw !== null) {
       try {
         window.localStorage.setItem(STORAGE_KEY, previousRaw);
@@ -429,3 +510,4 @@ export function replaceState(state) {
 export function getStorageKey() {
   return STORAGE_KEY;
 }
+

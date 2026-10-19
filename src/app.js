@@ -1,6 +1,12 @@
 import { SCREENS } from "./data/schema.js";
 import { createStudent, createStudentNote, createGrowthRecord } from "./data/models.js";
-import { importStateFromJson, exportStateAsJson, inspectBackupJson } from "./storage/backup.js";
+import {
+  importStateFromJson,
+  exportStateAsJson,
+  inspectBackupJson,
+  generateBackupFilename,
+  markStateAsBackedUp
+} from "./storage/backup.js";
 import { loadState, saveState } from "./storage/storage.js";
 import { createRepositoryContext } from "./repositories/repository-context.js";
 import { SessionManager } from "./services/session-manager.js";
@@ -1194,50 +1200,99 @@ function loadDefaultActivitiesForSession(sessionId) {
 }
 
 function exportData() {
-  const blob = new Blob([exportStateAsJson()], { type: "application/json" });
+  const filename = generateBackupFilename();
+  const jsonContent = exportStateAsJson();
+  const blob = new Blob([jsonContent], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "pjok-teacher-assistant-backup.json";
+  link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+  markStateAsBackedUp(appState);
+  showToast(`✓ Cadangan diekspor: ${filename}`, 2500);
+  return { filename, content: jsonContent };
 }
 
-function importData(fileOrText) {
+async function importData(fileOrText) {
   const getTextPromise = typeof fileOrText === "string"
     ? Promise.resolve(fileOrText)
-    : (fileOrText && typeof fileOrText.text === "function" ? fileOrText.text() : Promise.reject(new Error("Invalid file or text")));
+    : (fileOrText && typeof fileOrText.text === "function" ? fileOrText.text() : Promise.reject(new Error("File atau data tidak valid")));
 
-  getTextPromise
-    .then((text) => {
-      const check = inspectBackupJson(text);
-      if (!check.valid) {
-        window.alert(`Data cadangan tidak valid:\n${check.error}`);
-        return;
-      }
+  try {
+    const text = await getTextPromise;
+    const check = inspectBackupJson(text);
+    if (!check.valid) {
+      window.alert(`Data cadangan tidak valid:\n${check.error}`);
+      showToast(`Impor gagal: ${check.error}`, 3500);
+      return { success: false, error: new Error(check.error) };
+    }
 
-      const result = importStateFromJson(text);
-      if (!result || !result.success) {
-        window.alert(
-          "Pemulihan data gagal.\n\n" +
-          "Data cadangan dapat dibaca, tetapi tidak berhasil disimpan ke perangkat.\n" +
-          "Kemungkinan penyimpanan browser penuh atau tidak tersedia."
-        );
-        return;
-      }
+    const s = check.summary;
+    const summaryLines = [
+      "=== RINGKASAN DATA CADANGAN ===",
+      `• Kelas: ${s.classes}`,
+      `• Siswa: ${s.students}`,
+      `• Perencanaan Asesmen: ${s.assessmentDefinitions}`,
+      `• Hasil Penilaian: ${s.assessmentResults}`,
+      `• Catatan Pertumbuhan: ${s.growthRecords}`,
+      `• Laporan Siswa: ${s.studentReports}`,
+      ""
+    ];
 
-      appState = result.state || loadState();
-      refreshState();
-      window.alert("Data cadangan berhasil dipulihkan.");
-    })
-    .catch((error) => {
+    if (check.warnings && check.warnings.length > 0) {
+      summaryLines.push(
+        `Catatan: Terdapat ${check.warnings.length} peringatan referensi data (data tetap dipertahankan).`,
+        ""
+      );
+    }
+
+    summaryLines.push(
+      "⚠️ PERINGATAN PENTING:",
+      "Memulihkan cadangan ini akan MENGGANTI SELURUH DATA yang tersimpan di perangkat lokal saat ini.",
+      "Data lokal saat ini akan ditimpa dengan isi cadangan ini.",
+      "",
+      "Apakah Anda yakin ingin melanjutkan proses pemulihan data?"
+    );
+
+    const confirmMessage = summaryLines.join("\n");
+    const userConfirmed = typeof window !== "undefined" && typeof window.confirm === "function"
+      ? window.confirm(confirmMessage)
+      : true;
+
+    if (!userConfirmed) {
+      showToast("Pemulihan data dibatalkan oleh pengguna.", 2500);
+      return { success: false, cancelled: true };
+    }
+
+    const result = importStateFromJson(text);
+    if (!result || !result.success) {
+      const errMsg = result?.error?.message || "Data cadangan tidak berhasil disimpan ke perangkat.";
       window.alert(
         "Pemulihan data gagal.\n\n" +
-        "Data cadangan dapat dibaca, tetapi tidak berhasil disimpan ke perangkat.\n" +
-        "Kemungkinan penyimpanan browser penuh atau tidak tersedia."
+        errMsg + "\n\n" +
+        "Data sebelumnya tetap dipertahankan secara utuh."
       );
-      console.warn("Import data gagal.", error);
-    });
+      showToast("Pemulihan data gagal. Data lokal tetap aman.", 3500);
+      return { success: false, error: result?.error || new Error(errMsg) };
+    }
+
+    appState = result.state || loadState();
+    markStateAsBackedUp(appState);
+    refreshState();
+    window.alert("Data cadangan berhasil dipulihkan.");
+    showToast("✓ Data cadangan berhasil dipulihkan.", 3000);
+    return { success: true, state: appState };
+  } catch (error) {
+    window.alert(
+      "Pemulihan data gagal.\n\n" +
+      (error.message || "Data cadangan tidak dapat diproses.") + "\n\n" +
+      "Data sebelumnya tetap dipertahankan secara utuh."
+    );
+    showToast("Pemulihan data gagal.", 3500);
+    console.warn("Import data gagal.", error);
+    return { success: false, error };
+  }
 }
 
 Object.assign(actions, {

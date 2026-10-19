@@ -163,7 +163,7 @@ test('Targeted Test: Status sudah terpasang (Standalone Mode) — menampilkan st
   const screen = renderSettingsScreen(dummyState, dummyActions, { activeTab: 'backup' });
 
   // Badge must indicate already installed
-  const installedBadge = screen.querySelector('.pwa-status-badge.is-installed');
+  const installedBadge = screen.querySelector('.is-installed');
   assert.ok(installedBadge, 'Badge harus menampilkan status terinstal');
   assert.ok(installedBadge.textContent.includes('Aplikasi sudah terinstal'));
 

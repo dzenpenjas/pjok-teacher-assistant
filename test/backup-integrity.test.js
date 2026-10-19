@@ -19,12 +19,22 @@ import {
   loadState,
   saveState,
   getStorageKey,
-  verifyPersistedIntegrity
+  verifyPersistedIntegrity,
+  createSafetySnapshot,
+  restoreSafetySnapshot,
+  getSafetySnapshotKey
 } from "../src/storage/storage.js";
 import {
   exportStateAsJson,
   inspectBackupJson,
-  importStateFromJson
+  importStateFromJson,
+  generateBackupFilename,
+  _resetBackupFilenameCounterForTesting,
+  hasSubstantialDataChanged,
+  markStateAsBackedUp,
+  isBackupNeeded,
+  extractSubstantialState,
+  _resetBackupDetectionForTesting
 } from "../src/storage/backup.js";
 
 test("Full Backup Round-Trip preserves complete state, all collections, IDs, photos, and relationships", () => {
@@ -377,3 +387,199 @@ test("inspectBackupJson detects orphan references and reports clear integrity wa
   assert.equal(check.data.studentNotes.length, 2);
   assert.equal(check.data.growthRecords.length, 1);
 });
+
+test("generateBackupFilename creates timestamped filename in Asia/Jakarta timezone and enforces uniqueness on collision", () => {
+  _resetBackupFilenameCounterForTesting();
+
+  // Test with fixed UTC date: 2026-08-17T03:30:45.000Z -> Jakarta is UTC+7 -> 10:30:45 WIB
+  const fixedDate = new Date("2026-08-17T03:30:45.000Z");
+  const fn1 = generateBackupFilename(fixedDate);
+  assert.equal(fn1, "GuruPJOK_Backup_2026-08-17_10-30-45_WIB.json");
+
+  // Exact same second collision: must append sequential uniqueness disambiguator
+  const fn2 = generateBackupFilename(fixedDate);
+  assert.equal(fn2, "GuruPJOK_Backup_2026-08-17_10-30-45_WIB_1.json");
+
+  const fn3 = generateBackupFilename(fixedDate);
+  assert.equal(fn3, "GuruPJOK_Backup_2026-08-17_10-30-45_WIB_2.json");
+
+  // Next second: returns canonical filename format without suffix
+  const nextSecond = new Date("2026-08-17T03:30:46.000Z");
+  const fn4 = generateBackupFilename(nextSecond);
+  assert.equal(fn4, "GuruPJOK_Backup_2026-08-17_10-30-46_WIB.json");
+});
+
+test("inspectBackupJson strictly rejects unsupported newer schema versions, invalid versions, and corrupted collections", () => {
+  // 1. Newer unsupported schemaVersion (e.g. v99 when app is v8)
+  const newerSchema = JSON.stringify({
+    schemaVersion: 99,
+    classes: [{ id: "c1", name: "6A" }],
+    students: [{ id: "s1", name: "Budi" }]
+  });
+  const checkNewer = inspectBackupJson(newerSchema);
+  assert.equal(checkNewer.valid, false);
+  assert.match(checkNewer.error, /lebih baru dari versi yang didukung/);
+
+  // 2. Invalid schemaVersion type or negative
+  const invalidVersion = JSON.stringify({
+    schemaVersion: -5,
+    classes: [{ id: "c1" }]
+  });
+  const checkInvalidVer = inspectBackupJson(invalidVersion);
+  assert.equal(checkInvalidVer.valid, false);
+
+  // 3. Corrupted collection structure (string instead of array)
+  const corruptedCollection = JSON.stringify({
+    schemaVersion: 7,
+    students: "this-is-corrupted-not-an-array",
+    classes: []
+  });
+  const checkCorrupted = inspectBackupJson(corruptedCollection);
+  assert.equal(checkCorrupted.valid, false);
+  assert.match(checkCorrupted.error, /properti students harus berupa array/);
+
+  // 4. Corrupted items inside collection (primitive instead of object)
+  const corruptedItems = JSON.stringify({
+    schemaVersion: 7,
+    students: [null, "not-an-object"],
+    classes: []
+  });
+  const checkCorruptedItems = inspectBackupJson(corruptedItems);
+  assert.equal(checkCorruptedItems.valid, false);
+  assert.match(checkCorruptedItems.error, /bukan objek valid/);
+
+  // 5. Valid legacy backup (schemaVersion 1, 4, 6) is accepted for migration
+  const validLegacy = JSON.stringify({
+    schemaVersion: 4,
+    classes: [{ id: "c1", name: "Kelas 4" }],
+    students: [{ id: "s1", name: "Andi" }]
+  });
+  const checkLegacy = inspectBackupJson(validLegacy);
+  assert.equal(checkLegacy.valid, true);
+  assert.equal(checkLegacy.summary.classes, 1);
+  assert.equal(checkLegacy.summary.students, 1);
+});
+
+test("verifyPersistedIntegrity performs deep record content verification, rejecting alterations in fields or photos", () => {
+  const candidate = {
+    schemaVersion: 8,
+    activeAcademicYearId: "ay-1",
+    activeSemesterId: "sem-1",
+    classes: [{ id: "c1", name: "Kelas 1A" }],
+    students: [{ id: "s1", name: "Budi", photo: "data:image/png;base64,aaa" }]
+  };
+
+  // Same count, but student name altered in readBack
+  const alteredContentReadBack = {
+    schemaVersion: 8,
+    activeAcademicYearId: "ay-1",
+    activeSemesterId: "sem-1",
+    classes: [{ id: "c1", name: "Kelas 1A" }],
+    students: [{ id: "s1", name: "Budi Berubah", photo: "data:image/png;base64,aaa" }]
+  };
+
+  const checkAltered = verifyPersistedIntegrity(candidate, alteredContentReadBack);
+  assert.equal(checkAltered.valid, false);
+  assert.match(checkAltered.error, /Integritas konten data pada koleksi students/);
+
+  // Identical content passes
+  const identicalReadBack = JSON.parse(JSON.stringify(candidate));
+  const checkIdentical = verifyPersistedIntegrity(candidate, identicalReadBack);
+  assert.equal(checkIdentical.valid, true);
+});
+
+test("Safety snapshot aborts restore when snapshot cannot be saved and protects existing data", () => {
+  memoryStorage.clear();
+
+  const originalState = {
+    schemaVersion: 8,
+    students: [{ id: "std-safe", name: "Siswa Asli Terlindungi" }],
+    classes: [{ id: "cls-safe", name: "Kelas Asli" }]
+  };
+  replaceState(originalState);
+  const originalRaw = memoryStorage.get(getStorageKey());
+  assert.ok(originalRaw);
+
+  // Mock setItem to fail specifically when writing the safety snapshot
+  const originalSetItem = globalThis.window.localStorage.setItem;
+  const snapshotError = new Error("Disk Full / Quota Exceeded on Snapshot");
+
+  globalThis.window.localStorage.setItem = (key, val) => {
+    if (key === getSafetySnapshotKey()) {
+      throw snapshotError;
+    }
+    originalSetItem(key, val);
+  };
+
+  const incomingCandidate = {
+    schemaVersion: 8,
+    students: [{ id: "std-danger", name: "Siswa Berbahaya" }]
+  };
+
+  const result = replaceState(incomingCandidate);
+  assert.equal(result.success, false);
+  assert.equal(result.state, null);
+  assert.equal(result.error, snapshotError);
+
+  // Restore setItem mock
+  globalThis.window.localStorage.setItem = originalSetItem;
+
+  // Verify that active data was untouched and not replaced
+  const currentRaw = memoryStorage.get(getStorageKey());
+  assert.equal(currentRaw, originalRaw);
+});
+
+test("Substantial data change detection isolates data changes from UI navigation, updatedAt, and filters", () => {
+  _resetBackupDetectionForTesting();
+
+  const baseState = {
+    schemaVersion: 8,
+    currentScreen: "classes",
+    updatedAt: "2026-10-19T01:00:00.000Z",
+    classes: [{ id: "c1", name: "Kelas 5A" }],
+    students: [{ id: "s1", name: "Budi", classId: "c1" }]
+  };
+
+  // Case 1: Only currentScreen changes (UI navigation)
+  const navState = {
+    ...baseState,
+    currentScreen: "settings"
+  };
+  assert.equal(
+    hasSubstantialDataChanged(baseState, navState),
+    false,
+    "Navigation change must not be treated as substantial data change"
+  );
+
+  // Case 2: Only updatedAt changes
+  const touchState = {
+    ...baseState,
+    updatedAt: "2026-10-19T02:30:00.000Z"
+  };
+  assert.equal(
+    hasSubstantialDataChanged(baseState, touchState),
+    false,
+    "Timestamp-only update must not trigger substantial change"
+  );
+
+  // Case 3: Real data change (adding a student)
+  const dataEditedState = {
+    ...baseState,
+    students: [
+      { id: "s1", name: "Budi", classId: "c1" },
+      { id: "s2", name: "Siti", classId: "c1" }
+    ]
+  };
+  assert.equal(
+    hasSubstantialDataChanged(baseState, dataEditedState),
+    true,
+    "Adding a student must trigger substantial change"
+  );
+
+  // Case 4: Backup need tracking
+  markStateAsBackedUp(baseState);
+  assert.equal(isBackupNeeded(baseState), false, "State immediately after backup does not need backup");
+  assert.equal(isBackupNeeded(navState), false, "Navigation does not trigger backup requirement");
+  assert.equal(isBackupNeeded(dataEditedState), true, "Substantial data edit requires backup");
+});
+
