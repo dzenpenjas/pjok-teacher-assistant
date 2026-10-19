@@ -10,6 +10,12 @@ import { renderStudentDetailModal } from "./ui/student-detail-modal.js";
 import { createSeedData } from "./data/seed.js";
 import { confirmIfDirty } from "./ui/feedback.js";
 import { BATCH_STAGES, getDiagnosticStageLabel } from "./services/ai-diagnostic-service.js";
+import { initPwaInstallService } from "./services/pwa-install-service.js";
+
+// Initialize PWA installation listeners early
+if (typeof window !== "undefined") {
+  initPwaInstallService();
+}
 
 const appRoot = typeof document !== "undefined" && typeof document.querySelector === "function" ? document.querySelector("#app") : null;
 let appState = loadState();
