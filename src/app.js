@@ -16,7 +16,7 @@ import { initPwaInstallService } from "./services/pwa-install-service.js";
 if (typeof window !== "undefined") {
   initPwaInstallService();
   window.addEventListener("appinstalled", () => {
-    showToast("Aplikasi PJOK berhasil dipasang di perangkat!", "success");
+    showToast("Aplikasi PJOK berhasil dipasang di perangkat!", 3000);
   });
 }
 

@@ -34,10 +34,14 @@ export function confirmIfDirty() {
 
 export function showToast(message, durationMs = 2200) {
   if (typeof document === "undefined") return;
-  const existing = document.querySelector(".app-toast");
-  if (existing) {
+  const duration = typeof durationMs === "number" && Number.isFinite(durationMs) && durationMs > 0
+    ? durationMs
+    : 2200;
+  const existing = typeof document.querySelector === "function" ? document.querySelector(".app-toast") : null;
+  if (existing && typeof existing.remove === "function") {
     existing.remove();
   }
+  if (!document.body || typeof document.createElement !== "function") return;
   const toast = document.createElement("div");
   toast.className = "app-toast";
   toast.setAttribute("role", "status");
@@ -45,10 +49,10 @@ export function showToast(message, durationMs = 2200) {
   toast.textContent = message;
   document.body.appendChild(toast);
   setTimeout(() => {
-    if (toast.parentNode) {
+    if (toast.parentNode && typeof toast.remove === "function") {
       toast.remove();
     }
-  }, durationMs);
+  }, duration);
 }
 
 export function showConfirmModal({

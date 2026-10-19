@@ -9,7 +9,8 @@ import {
 import {
   getPwaInstallState,
   promptPwaInstall,
-  subscribePwaInstallState
+  subscribePwaInstallState,
+  getPwaDiagnostics
 } from "../services/pwa-install-service.js";
 
 function createElement(tagName, className, textContent) {
@@ -776,13 +777,12 @@ export function renderSettingsScreen(state, actions, options = {}) {
 
     const installState = getPwaInstallState();
     const platform = installState.platform || {};
+    const diagnostics = getPwaDiagnostics();
 
-    // 1. Status row
-    const statusRow = createElement("div", "pwa-status-row");
-    const statusBadge = createElement("div", "pwa-status-badge");
-
+    // 1. If already installed in standalone mode:
     if (installState.isInstalled) {
-      statusBadge.classList.add("is-installed");
+      const statusRow = createElement("div", "pwa-status-row");
+      const statusBadge = createElement("div", "pwa-status-badge is-installed");
       statusBadge.append(
         ICONS.check ? ICONS.check(18) : createElement("span", "", "✓"),
         document.createTextNode(" Aplikasi sudah terinstal")
@@ -797,12 +797,16 @@ export function renderSettingsScreen(state, actions, options = {}) {
       );
       card.append(subText);
     } else {
-      let statusText = "Pemasangan Manual";
+      // 2. If not standalone / not yet installed:
+      const statusRow = createElement("div", "pwa-status-row");
+      const statusBadge = createElement("div", "pwa-status-badge");
+
+      let statusText = "Pemasangan Manual Tersedia";
       let statusClass = "is-unsupported";
       let statusIcon = ICONS.info ? ICONS.info(16) : createElement("span", "", "ℹ");
 
       if (installState.status === "ready" || installState.canPrompt) {
-        statusText = "Siap Dipasang";
+        statusText = "Siap Dipasang Langsung";
         statusClass = "is-ready";
         statusIcon = ICONS.download ? ICONS.download(16) : createElement("span", "", "⬇");
       } else if (installState.status === "waiting_confirmation") {
@@ -820,103 +824,128 @@ export function renderSettingsScreen(state, actions, options = {}) {
       statusRow.append(statusBadge);
       card.append(statusRow);
 
-      // Actions row
+      // Actions row (Always shows the primary install button!)
       const actionsRow = createElement("div", "pwa-install-actions");
 
-      // Guide container
+      // PRIMARY ACTION: ALWAYS "Instal Aplikasi PJOK"
+      const installBtn = createElement("button", "primary-action compact-action pwa-install-btn");
+      installBtn.type = "button";
+      installBtn.append(
+        ICONS.install ? ICONS.install(16) : (ICONS.download ? ICONS.download(16) : createElement("span", "", "⬇")),
+        document.createTextNode(" Instal Aplikasi PJOK")
+      );
+
+      // SECONDARY ACTION: "Petunjuk & Diagnostik"
+      let isGuideOpen = false;
+      const toggleGuideBtn = createElement("button", "pwa-secondary-btn secondary-action compact-action pwa-guide-btn");
+      toggleGuideBtn.type = "button";
+      toggleGuideBtn.setAttribute("aria-expanded", "false");
+      toggleGuideBtn.append(
+        ICONS.help ? ICONS.help(16) : (ICONS.info ? ICONS.info(16) : createElement("span", "", "📖")),
+        document.createTextNode(" Petunjuk & Diagnostik")
+      );
+
+      // Guide and Diagnostics container
       const guideBox = createElement("div", "pwa-guide-box");
       guideBox.setAttribute("role", "region");
-      guideBox.setAttribute("aria-label", "Petunjuk Pemasangan Manual");
+      guideBox.setAttribute("aria-label", "Petunjuk dan Diagnostik PWA");
 
-      let isGuideOpen = false;
-      const updateGuideDisplay = () => {
+      const updateGuideDisplay = (focusBox = false) => {
         if (isGuideOpen) {
           guideBox.classList.add("is-open", "is-expanded");
           guideBox.style.display = "block";
+          toggleGuideBtn.setAttribute("aria-expanded", "true");
+          toggleGuideBtn.replaceChildren(
+            ICONS.close ? ICONS.close(16) : createElement("span", "", "✕"),
+            document.createTextNode(" Tutup Petunjuk & Diagnostik")
+          );
+          if (focusBox && typeof guideBox.scrollIntoView === "function") {
+            guideBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
         } else {
           guideBox.classList.remove("is-open", "is-expanded");
           guideBox.style.display = "none";
+          toggleGuideBtn.setAttribute("aria-expanded", "false");
+          toggleGuideBtn.replaceChildren(
+            ICONS.help ? ICONS.help(16) : (ICONS.info ? ICONS.info(16) : createElement("span", "", "📖")),
+            document.createTextNode(" Petunjuk & Diagnostik")
+          );
         }
       };
-      updateGuideDisplay();
+      updateGuideDisplay(false);
 
-      if (installState.canPrompt) {
-        // Automatic prompt available
-        const installBtn = createElement("button", "primary-action compact-action pwa-install-btn");
-        installBtn.type = "button";
-        installBtn.append(
-          ICONS.install ? ICONS.install(16) : (ICONS.download ? ICONS.download(16) : createElement("span", "", "⬇")),
-          document.createTextNode(" Instal Aplikasi PJOK")
-        );
+      toggleGuideBtn.addEventListener("click", () => {
+        isGuideOpen = !isGuideOpen;
+        updateGuideDisplay(isGuideOpen);
+        if (isGuideOpen) {
+          showToast("Petunjuk pemasangan & hasil diagnostik ditampilkan di bawah.", 2500);
+        }
+      });
 
-        installBtn.addEventListener("click", async () => {
+      // Primary Button Click Handler
+      installBtn.addEventListener("click", async () => {
+        if (installState.canPrompt) {
+          // Automatic prompt available: call prompt() immediately!
           installBtn.disabled = true;
           installBtn.textContent = "Menunggu respons browser...";
           try {
             const res = await promptPwaInstall();
             if (res.outcome === "accepted") {
-              // Wait for appinstalled event to confirm installation
-              showToast("Permintaan pemasangan diterima. Menunggu browser menyelesaikan proses instalasi...", "info");
+              showToast("Permintaan pemasangan diterima. Menunggu browser menyelesaikan proses instalasi...", 3000);
             } else if (res.outcome === "dismissed") {
-              showToast("Pemasangan aplikasi dibatalkan.", "info");
+              showToast("Pemasangan aplikasi dibatalkan.", 2500);
             } else {
-              showToast("Dialog instalasi tidak tersedia. Buka petunjuk manual.", "info");
+              showToast("Dialog instalasi otomatis tidak dapat dibuka. Silakan ikuti petunjuk alternatif di bawah.", 3500);
+              isGuideOpen = true;
+              updateGuideDisplay(true);
             }
           } catch (err) {
             console.error(err);
-            showToast("Terjadi kendala saat membuka dialog instalasi.", "error");
+            showToast("Terjadi kendala saat membuka dialog instalasi.", 3000);
           } finally {
             render();
           }
-        });
+        } else {
+          // Automatic prompt event is not available
+          showToast("Pemasangan langsung satu-klik belum tersedia di browser ini. Periksa status dan petunjuk alternatif di bawah.", 3500);
+          isGuideOpen = true;
+          updateGuideDisplay(true);
+        }
+      });
 
-        actionsRow.append(installBtn);
-        card.append(actionsRow);
+      actionsRow.append(installBtn, toggleGuideBtn);
+      card.append(actionsRow);
 
-        const promptHint = createElement(
-          "p",
-          "pwa-prompt-hint",
-          "Klik tombol di atas untuk membuka dialog pemasangan resmi dari browser Anda."
-        );
-        card.append(promptHint);
-      } else {
-        // Unsupported or dismissed -> Provide explicit manual guide toggle
-        const toggleGuideBtn = createElement("button", "primary-action compact-action pwa-install-btn");
-        toggleGuideBtn.type = "button";
-        toggleGuideBtn.setAttribute("aria-expanded", "false");
-        toggleGuideBtn.append(
-          ICONS.help ? ICONS.help(16) : (ICONS.info ? ICONS.info(16) : createElement("span", "", "📖")),
-          document.createTextNode(" Lihat Petunjuk Pemasangan")
-        );
+      const promptHint = createElement(
+        "p",
+        "pwa-prompt-hint",
+        installState.canPrompt
+          ? "Klik tombol di atas untuk membuka dialog pemasangan resmi dari browser Anda."
+          : "Klik 'Instal Aplikasi PJOK' atau 'Petunjuk & Diagnostik' untuk melihat status sistem dan langkah pemasangan alternatif."
+      );
+      card.append(promptHint);
 
-        toggleGuideBtn.addEventListener("click", () => {
-          isGuideOpen = !isGuideOpen;
-          updateGuideDisplay();
-          toggleGuideBtn.setAttribute("aria-expanded", String(isGuideOpen));
-          toggleGuideBtn.replaceChildren(
-            ICONS.help ? ICONS.help(16) : (ICONS.info ? ICONS.info(16) : createElement("span", "", "📖")),
-            document.createTextNode(isGuideOpen ? " Tutup Petunjuk Pemasangan" : " Lihat Petunjuk Pemasangan")
-          );
-          if (isGuideOpen) {
-            guideBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
-            showToast("Petunjuk pemasangan ditampilkan di bawah.", "info");
-          }
-        });
+      // Audit & Diagnostics Card
+      const diagCard = createElement("div", "pwa-diagnostics-card");
+      const diagHeader = createElement("h4", "pwa-diagnostics-title", "Status Diagnostik PWA");
+      const diagSummary = createElement("p", "pwa-diagnostics-summary", diagnostics.reason || "Pemeriksaan kesiapan sistem aplikasi dan browser:");
+      diagCard.append(diagHeader, diagSummary);
 
-        actionsRow.append(toggleGuideBtn);
-        card.append(actionsRow);
+      const diagList = createElement("ul", "pwa-diagnostics-list");
+      diagnostics.checks.forEach((chk) => {
+        const item = createElement("li", `pwa-diag-item ${chk.ok ? "is-ok" : "is-warn"}`);
+        const badge = createElement("span", `pwa-diag-badge ${chk.ok ? "is-ok" : "is-warn"}`, chk.ok ? "✓ Siap" : "ℹ Info");
+        const body = createElement("div", "pwa-diag-body");
+        const name = createElement("strong", "pwa-diag-name", chk.label);
+        const desc = createElement("span", "pwa-diag-desc", chk.detail);
+        body.append(name, desc);
+        item.append(badge, body);
+        diagList.append(item);
+      });
+      diagCard.append(diagList);
+      guideBox.append(diagCard);
 
-        const manualNotice = createElement(
-          "p",
-          "pwa-prompt-hint",
-          installState.status === "dismissed"
-            ? "Pemasangan otomatis dibatalkan. Anda tetap dapat memasang aplikasi secara manual ke layar utama."
-            : "Browser ini memerlukan langkah manual singkat untuk memasang aplikasi ke layar utama."
-        );
-        card.append(manualNotice);
-      }
-
-      // Populate guide box contents
+      // Platform steps (Chrome Android, Safari iOS, Desktop)
       let selectedPlatform = platform.isIOS ? "ios" : (platform.isAndroid ? "android" : "desktop");
 
       const platformTabs = createElement("div", "pwa-platform-tabs");

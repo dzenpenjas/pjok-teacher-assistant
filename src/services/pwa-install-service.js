@@ -184,6 +184,119 @@ export function getPwaListenerCount() {
   return listeners.size;
 }
 
+export function getPwaDiagnostics() {
+  const isInstalled = isStandaloneMode() || installStatus === "installed";
+  const platform = detectDevicePlatform();
+  const promptAvailable = Boolean(deferredPrompt && !isInstalled);
+
+  const isSecure = typeof window !== "undefined" && typeof location !== "undefined"
+    ? Boolean(
+        window.isSecureContext ||
+        location.protocol === "https:" ||
+        location.hostname === "localhost" ||
+        location.hostname === "127.0.0.1"
+      )
+    : true;
+
+  const swSupported = typeof navigator !== "undefined" && "serviceWorker" in navigator;
+  const swActive = Boolean(
+    typeof navigator !== "undefined" &&
+    navigator.serviceWorker &&
+    navigator.serviceWorker.controller
+  );
+
+  const manifestLinked = typeof document !== "undefined" && typeof document.querySelector === "function"
+    ? Boolean(document.querySelector('link[rel="manifest"]'))
+    : true;
+
+  const iconsLinked = typeof document !== "undefined" && typeof document.querySelector === "function"
+    ? Boolean(document.querySelector('link[rel*="icon"]'))
+    : true;
+
+  const checks = [
+    {
+      id: "standalone",
+      label: "Status Mode Standalone",
+      ok: isInstalled,
+      detail: isInstalled
+        ? "Aplikasi berjalan dalam mode mandiri/terpasang."
+        : "Aplikasi sedang dibuka dalam tab browser biasa."
+    },
+    {
+      id: "secure",
+      label: "Konteks Aman (HTTPS / Localhost)",
+      ok: isSecure,
+      detail: isSecure
+        ? "Protokol aman aktif, memenuhi syarat instalasi PWA."
+        : "Aplikasi tidak diakses melalui protokol aman (HTTPS atau localhost)."
+    },
+    {
+      id: "manifest",
+      label: "Web App Manifest",
+      ok: manifestLinked,
+      detail: manifestLinked
+        ? "File manifest.webmanifest terhubung di HTML dengan konfigurasi lengkap."
+        : "Tag link manifest tidak ditemukan di dokumen HTML."
+    },
+    {
+      id: "icons",
+      label: "Ikon Aplikasi (PNG 192 & 512)",
+      ok: iconsLinked,
+      detail: iconsLinked
+        ? "Tag ikon terdefinisi di header aplikasi untuk tampilan layar utama."
+        : "Tag ikon aplikasi tidak ditemukan di header dokumen."
+    },
+    {
+      id: "service_worker",
+      label: "Service Worker & Offline",
+      ok: swSupported,
+      detail: swSupported
+        ? (swActive
+            ? "Service Worker aktif untuk pengelolaan cache aset offline."
+            : "Service Worker didukung oleh browser.")
+        : "Browser saat ini tidak mendukung Service Worker."
+    },
+    {
+      id: "prompt",
+      label: "Event Pemasangan Browser (beforeinstallprompt)",
+      ok: promptAvailable,
+      detail: promptAvailable
+        ? "Event instalasi browser siap memicu dialog langsung satu-klik."
+        : (platform.isIOS
+            ? "Safari di iOS tidak menyediakan event pemasangan otomatis. Gunakan tombol Bagikan → Tambah ke Layar Utama."
+            : "Browser belum menerbitkan event pemasangan otomatis. Anda dapat memasang melalui menu browser atau mengikuti langkah di bawah.")
+    }
+  ];
+
+  let reason = "";
+  if (isInstalled) {
+    reason = "Aplikasi sudah terpasang di perangkat Anda.";
+  } else if (!isSecure) {
+    reason = "Koneksi tidak menggunakan protokol aman (HTTPS/localhost).";
+  } else if (!promptAvailable) {
+    if (platform.isIOS) {
+      reason = "iOS Safari tidak menyediakan pemicuan dialog otomatis via tombol web. Pemasangan dilakukan melalui menu Bagikan di bilah Safari.";
+    } else if (platform.isDesktop) {
+      reason = "Browser desktop belum memicu event dialog otomatis. Anda dapat memasangnya lewat ikon di bilah alamat (address bar) atau menu titik tiga browser.";
+    } else {
+      reason = "Browser belum memicu event dialog otomatis. Anda dapat memasangnya lewat menu titik tiga Chrome → 'Instal aplikasi'.";
+    }
+  }
+
+  return {
+    isInstalled,
+    isSecure,
+    swSupported,
+    swActive,
+    manifestLinked,
+    iconsLinked,
+    promptAvailable,
+    platform,
+    checks,
+    reason
+  };
+}
+
 // Test hooks
 export function _setDeferredPromptForTesting(event) {
   deferredPrompt = event;

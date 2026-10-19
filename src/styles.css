@@ -5870,6 +5870,86 @@ textarea {
   margin-top: 2px;
 }
 
+/* PWA DIAGNOSTICS CARD & ITEMS */
+.pwa-diagnostics-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.pwa-diagnostics-title {
+  margin: 0 0 4px 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.pwa-diagnostics-summary {
+  margin: 0 0 10px 0;
+  font-size: 0.83rem;
+  color: var(--color-muted);
+  line-height: 1.4;
+}
+
+.pwa-diagnostics-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.pwa-diag-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-surface-muted);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.pwa-diag-badge {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  margin-top: 1px;
+}
+
+.pwa-diag-badge.is-ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.pwa-diag-badge.is-warn {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.pwa-diag-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pwa-diag-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.pwa-diag-desc {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  line-height: 1.35;
+}
+
+
 
 
 
