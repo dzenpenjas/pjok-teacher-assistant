@@ -1,0 +1,9 @@
+/www
+/android/app/src/main/assets/public
+/android/app/build
+/android/app/debug.keystore
+/android/.gradle
+/android/local.properties
+.DS_Store
+*.apk
+*.aab

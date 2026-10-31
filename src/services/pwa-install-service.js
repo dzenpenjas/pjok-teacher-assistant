@@ -323,7 +323,6 @@ export function _resetPwaInstallServiceForTesting() {
 
 export function isNativeAndroid() {
   if (typeof window === 'undefined') return false;
-  // Based on Capacitor platform detection
-  return /android/i.test(navigator.userAgent) && window.Capacitor !== undefined;
+  return window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.getPlatform() === 'android';
 }
 

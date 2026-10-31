@@ -1531,5 +1531,7 @@ if (typeof window !== "undefined") {
 
   appState = saveState(appState);
   renderApp();
-  registerServiceWorker();
+  if (!isNativeAndroid()) {
+    registerServiceWorker();
+  }
 }
