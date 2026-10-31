@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#147458"/>
+      <stop offset="100%" stop-color="#0a4633"/>
+    </linearGradient>
+    <filter id="dropShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  
+  <!-- Base Background with 10% corner radius -->
+  <rect width="512" height="512" rx="100" fill="url(#bgGrad)"/>
+  
+  <!-- Outer Decorative Ring -->
+  <circle cx="256" cy="256" r="210" fill="none" stroke="#25a37e" stroke-width="6" opacity="0.4"/>
+  
+  <!-- Whistle / Sports Element & Stopwatch Motif -->
+  <!-- Whistle body -->
+  <g filter="url(#dropShadow)" transform="translate(256, 235)">
+    <!-- Main Whistle Body -->
+    <path d="M -90 -30 L -10 -30 L -10 -55 C -10 -95 40 -115 80 -80 C 115 -50 115 15 75 45 C 50 65 15 65 -15 65 L -90 65 C -105 65 -115 55 -115 40 L -115 -5 C -115 -20 -105 -30 -90 -30 Z" 
+          fill="#f6fff9" stroke="#0a4633" stroke-width="8" stroke-linejoin="round"/>
+    
+    <!-- Whistle sphere / chamber -->
+    <circle cx="55" cy="-10" r="48" fill="#e2f7ed" stroke="#0a4633" stroke-width="8"/>
+    <circle cx="55" cy="-10" r="20" fill="#147458"/>
+
+    <!-- Sound slit -->
+    <rect x="-10" y="-30" width="16" height="25" rx="3" fill="#0a4633"/>
+    
+    <!-- Lanyard loop -->
+    <circle cx="-115" cy="18" r="14" fill="none" stroke="#f6fff9" stroke-width="8"/>
+  </g>
+
+  <!-- Text "PJOK" Badge -->
+  <g transform="translate(256, 395)">
+    <rect x="-100" y="-32" width="200" height="58" rx="29" fill="#f8fafc" filter="url(#dropShadow)"/>
+    <text x="0" y="8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+          font-size="34" font-weight="900" fill="#116149" text-anchor="middle" letter-spacing="3">PJOK</text>
+  </g>
+
+  <!-- Dynamic Stars / Motion Lines -->
+  <path d="M 120 135 L 140 145 L 120 155 Z" fill="#6ee7b7" opacity="0.8"/>
+  <path d="M 370 120 L 395 130 L 380 145 Z" fill="#6ee7b7" opacity="0.8"/>
+</svg>

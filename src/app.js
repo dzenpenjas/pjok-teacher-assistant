@@ -5,7 +5,7 @@ import {
   exportStateAsJson,
   inspectBackupJson,
   generateBackupFilename,
-  markStateAsBackedUp
+  recordManualExport
 } from "./storage/backup.js";
 import { loadState, saveState } from "./storage/storage.js";
 import { createRepositoryContext } from "./repositories/repository-context.js";
@@ -16,10 +16,10 @@ import { renderStudentDetailModal } from "./ui/student-detail-modal.js";
 import { createSeedData } from "./data/seed.js";
 import { confirmIfDirty, showToast } from "./ui/feedback.js";
 import { BATCH_STAGES, getDiagnosticStageLabel } from "./services/ai-diagnostic-service.js";
-import { initPwaInstallService } from "./services/pwa-install-service.js";
+import { initPwaInstallService, isNativeAndroid } from "./services/pwa-install-service.js";
 
 // Initialize PWA installation listeners early
-if (typeof window !== "undefined") {
+if (typeof window !== "undefined" && !isNativeAndroid()) {
   initPwaInstallService();
   window.addEventListener("appinstalled", () => {
     showToast("Aplikasi PJOK berhasil dipasang di perangkat!", 3000);
@@ -1209,7 +1209,7 @@ function exportData() {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
-  markStateAsBackedUp(appState);
+  recordManualExport({ filename, state: appState });
   showToast(`✓ Cadangan diekspor: ${filename}`, 2500);
   return { filename, content: jsonContent };
 }
@@ -1278,7 +1278,6 @@ async function importData(fileOrText) {
     }
 
     appState = result.state || loadState();
-    markStateAsBackedUp(appState);
     refreshState();
     window.alert("Data cadangan berhasil dipulihkan.");
     showToast("✓ Data cadangan berhasil dipulihkan.", 3000);

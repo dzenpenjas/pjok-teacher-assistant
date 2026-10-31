@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">GuruPJOK</string>
+    <string name="title_activity_main">GuruPJOK</string>
+    <string name="package_name">id.gurupjok.app</string>
+    <string name="custom_url_scheme">id.gurupjok.app</string>
+</resources>

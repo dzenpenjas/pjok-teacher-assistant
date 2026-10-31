@@ -1,0 +1,1535 @@
+import { SCREENS } from "./data/schema.js";
+import { createStudent, createStudentNote, createGrowthRecord } from "./data/models.js";
+import {
+  importStateFromJson,
+  exportStateAsJson,
+  inspectBackupJson,
+  generateBackupFilename,
+  recordManualExport
+} from "./storage/backup.js";
+import { loadState, saveState } from "./storage/storage.js";
+import { createRepositoryContext } from "./repositories/repository-context.js";
+import { SessionManager } from "./services/session-manager.js";
+import { createNavigation } from "./ui/navigation.js";
+import { renderScreen } from "./ui/screens.js";
+import { renderStudentDetailModal } from "./ui/student-detail-modal.js";
+import { createSeedData } from "./data/seed.js";
+import { confirmIfDirty, showToast } from "./ui/feedback.js";
+import { BATCH_STAGES, getDiagnosticStageLabel } from "./services/ai-diagnostic-service.js";
+import { initPwaInstallService } from "./services/pwa-install-service.js";
+
+// Initialize PWA installation listeners early
+if (typeof window !== "undefined") {
+  initPwaInstallService();
+  window.addEventListener("appinstalled", () => {
+    showToast("Aplikasi PJOK berhasil dipasang di perangkat!", 3000);
+  });
+}
+
+const appRoot = typeof document !== "undefined" && typeof document.querySelector === "function" ? document.querySelector("#app") : null;
+let appState = loadState();
+const repositories = createRepositoryContext();
+const sessionManager = new SessionManager(repositories.sessions);
+
+let activeModalStudentId = null;
+let explicitSessionId = null;
+let settingsActiveTab = "school-teacher";
+
+const uiState = {
+  classes: {
+    selectedClassId: null,
+    mode: "list",
+    activeTab: "students",
+    activeAssessmentSessionId: null,
+    activeAssessmentStudentIndex: 0,
+    activeAssessmentItemIndex: 0,
+    studentSearchQuery: "",
+    reportStudentId: null,
+    reportSelection: {
+      assessmentSessionIds: [],
+      growthRecordIds: [],
+      observationIds: []
+    }
+  },
+  session: {
+    activeTab: "attendance",
+    activeAssessmentDefinitionId: null,
+    lastCapturedStopwatchTime: null
+  }
+};
+
+// Export and expose actions globally early so external/test environments have access
+export let actions = {};
+if (typeof window !== "undefined") {
+  window.actions = actions;
+}
+if (typeof globalThis !== "undefined") {
+  globalThis.actions = actions;
+}
+
+function isKnownScreen(screenId) {
+  return Object.values(SCREENS).includes(screenId);
+}
+
+function setScreen(screenId) {
+  if (!confirmIfDirty()) {
+    return;
+  }
+  appState = saveState({
+    ...appState,
+    currentScreen: isKnownScreen(screenId) ? screenId : SCREENS.dashboard
+  });
+  renderApp();
+}
+
+function refreshState() {
+  appState = loadState();
+  syncSessionPointer();
+  renderApp();
+}
+
+function syncSessionPointer() {
+  const session = sessionManager.getResumeCandidate();
+  const activeSessionId = session ? session.id : null;
+
+  if (appState.activeSessionId !== activeSessionId) {
+    appState = saveState({
+      ...appState,
+      activeSessionId
+    });
+  }
+}
+
+function getSessionContext() {
+  if (explicitSessionId === "new-session") {
+    return {
+      session: null,
+      className: "",
+      statusLabel: "",
+      resumeAvailable: false
+    };
+  }
+
+  let session = null;
+  if (explicitSessionId) {
+    session = repositories.sessions.findById(explicitSessionId);
+  }
+  if (!session) {
+    session = sessionManager.getResumeCandidate() || repositories.sessions.findAll().at(-1) || null;
+  }
+  const classRoom = session
+    ? appState.classes.find((item) => item.id === session.classId) || null
+    : null;
+
+  return {
+    session,
+    className: classRoom ? classRoom.name : "",
+    statusLabel: session ? session.status : "",
+    resumeAvailable: Boolean(session && (session.status === "active" || session.status === "paused"))
+  };
+}
+
+function createCrudActions() {
+  return {
+    // MODAL DIALOG
+    openStudentDetail: (studentId) => {
+      activeModalStudentId = studentId;
+      renderApp();
+    },
+    closeStudentDetail: () => {
+      activeModalStudentId = null;
+      renderApp();
+    },
+
+    // FIRST RUN & SETUP ACTIONS
+    completeFirstRunSetup: (vals = {}) => {
+      if (vals.schoolName && vals.schoolName.trim()) {
+        repositories.schools.save({
+          name: vals.schoolName.trim(),
+          address: (vals.schoolAddress || "").trim(),
+          phone: (vals.schoolPhone || "").trim()
+        });
+      }
+      if (vals.teacherName && vals.teacherName.trim()) {
+        repositories.teachers.save({
+          name: vals.teacherName.trim(),
+          employeeNumber: (vals.employeeNumber || "").trim(),
+          phone: (vals.teacherPhone || "").trim()
+        });
+      }
+
+      let activeYear = repositories.academicYears.findAll()[0];
+      if (!activeYear) {
+        const res = repositories.academicYears.create({
+          name: (vals.academicYearName || "2026/2027").trim(),
+          isActive: true
+        });
+        activeYear = Array.isArray(res) ? res.at(-1) : res;
+      } else if (vals.academicYearName && vals.academicYearName.trim()) {
+        repositories.academicYears.update(activeYear.id, {
+          ...activeYear,
+          name: vals.academicYearName.trim(),
+          isActive: true
+        });
+      }
+
+      let activeSemester = repositories.semesters.findAll()[0];
+      if (!activeSemester) {
+        const res = repositories.semesters.create({
+          name: (vals.semesterName || "Semester 1").trim(),
+          academicYearId: activeYear ? activeYear.id : "",
+          isActive: true
+        });
+        activeSemester = Array.isArray(res) ? res.at(-1) : res;
+      } else {
+        repositories.semesters.update(activeSemester.id, {
+          ...activeSemester,
+          name: (vals.semesterName && vals.semesterName.trim()) ? vals.semesterName.trim() : activeSemester.name,
+          academicYearId: activeYear ? activeYear.id : activeSemester.academicYearId,
+          isActive: true
+        });
+      }
+
+      const latestState = loadState();
+      appState = saveState({
+        ...latestState,
+        activeAcademicYearId: activeYear?.id || null,
+        activeSemesterId: activeSemester?.id || null,
+        currentScreen: SCREENS.dashboard
+      });
+      refreshState();
+    },
+
+    loadDemoData: () => {
+      const seed = createSeedData();
+      appState = saveState({
+        ...appState,
+        ...seed,
+        activeAcademicYearId: seed.academicYears[0]?.id || null,
+        activeSemesterId: seed.semesters[0]?.id || null,
+        currentScreen: SCREENS.dashboard
+      });
+      refreshState();
+    },
+
+    // SESSION SELECTION & LAUNCHER
+    selectSession: (sessionId) => {
+      explicitSessionId = sessionId;
+      setScreen(SCREENS.session);
+    },
+
+    startSessionForClass: (classId, overrides = {}) => {
+      const existingForClass = repositories.sessions.findByClass(classId);
+      const activeForClass = existingForClass.find((s) => s.status === "active");
+      if (activeForClass) {
+        explicitSessionId = activeForClass.id;
+        refreshState();
+        setScreen(SCREENS.session);
+        return;
+      }
+      
+      const pausedForClass = existingForClass.find((s) => s.status === "paused");
+      if (pausedForClass) {
+        const currentActive = sessionManager.getActiveSession();
+        if (currentActive && currentActive.classId !== classId && (currentActive.status === "active" || currentActive.status === "paused")) {
+          const currentClassObj = (appState.classes || []).find((c) => c.id === currentActive.classId);
+          const targetClassObj = (appState.classes || []).find((c) => c.id === classId);
+          const currentName = currentClassObj ? currentClassObj.name : "sebelumnya";
+          const targetName = targetClassObj ? targetClassObj.name : "baru";
+
+          const proceed = window.confirm(
+            `Anda sedang memiliki sesi mengajar aktif untuk Kelas ${currentName}.\n\n` +
+            `Lanjutkan sesi untuk Kelas ${targetName}?\n` +
+            `Sesi Kelas ${currentName} akan otomatis dijeda (pause).`
+          );
+          if (!proceed) {
+            return;
+          }
+        }
+
+        const resumed = sessionManager.resumeSession(pausedForClass.id);
+        if (!resumed || resumed.status !== "active") {
+          window.alert("Sesi gagal dilanjutkan. Silakan coba kembali.");
+          return;
+        }
+        explicitSessionId = resumed.id;
+        refreshState();
+        setScreen(SCREENS.session);
+        return;
+      }
+
+
+      // 2. If another class has an active session, prompt teacher before auto-pausing
+      const currentActive = sessionManager.getResumeCandidate();
+      if (currentActive && currentActive.classId !== classId && (currentActive.status === "active" || currentActive.status === "paused")) {
+        const currentClassObj = (appState.classes || []).find((c) => c.id === currentActive.classId);
+        const targetClassObj = (appState.classes || []).find((c) => c.id === classId);
+        const currentName = currentClassObj ? currentClassObj.name : "sebelumnya";
+        const targetName = targetClassObj ? targetClassObj.name : "baru";
+
+        const proceed = window.confirm(
+          `Anda sedang memiliki sesi mengajar aktif untuk Kelas ${currentName}.\n\n` +
+          `Mulai sesi untuk Kelas ${targetName}?\n` +
+          `Sesi Kelas ${currentName} akan otomatis dijeda (pause) dan dapat dilanjutkan kembali kapan saja.`
+        );
+        if (!proceed) {
+          return;
+        }
+      }
+
+      const existingSessionsForClass = repositories.sessions.findByClass(classId);
+      const nextNum = existingSessionsForClass.length + 1;
+      const today = new Date().toISOString().slice(0, 10);
+      const school = repositories.schools.get();
+      const teacher = repositories.teachers.get();
+      const academicYear = appState.academicYears.find((y) => y.id === appState.activeAcademicYearId) || appState.academicYears[0];
+      const semester = appState.semesters.find((s) => s.id === appState.activeSemesterId) || appState.semesters[0];
+
+      const newSession = sessionManager.createSession(
+        {
+          schoolId: school?.id || "",
+          teacherId: teacher?.id || "",
+          academicYearId: academicYear?.id || "",
+          semesterId: semester?.id || "",
+          classId,
+          sessionNumber: nextNum,
+          date: today,
+          startTime: overrides.startTime || "07:30",
+          topic: overrides.topic || `Pertemuan PJOK Ke-${nextNum}`,
+          material: overrides.material || "Praktik Kebugaran & Gerak Dasar",
+          location: overrides.location || "Lapangan Utama",
+          weather: overrides.weather || "Cerah"
+        },
+        { startImmediately: true, autoPauseOther: true }
+      );
+
+      if (newSession) {
+        explicitSessionId = newSession.id;
+        loadDefaultActivitiesForSession(newSession.id);
+      }
+      refreshState();
+      setScreen(SCREENS.session);
+    },
+
+    quickStartClassSession: (classId, overrides = {}) => {
+      actions.startSessionForClass(classId, overrides);
+    },
+
+    // SINGLETON PROFILES
+    saveSchool: (input) => {
+      repositories.schools.save(input);
+      refreshState();
+    },
+    saveSchoolProfile: (input) => {
+      repositories.schools.save(input);
+      refreshState();
+    },
+    saveTeacher: (input) => {
+      repositories.teachers.save(input);
+      refreshState();
+    },
+    saveTeacherProfile: (input) => {
+      repositories.teachers.save(input);
+      refreshState();
+    },
+
+    // MASTER DATA ACTIONS
+    createSchool: (input) => {
+      repositories.schools.save(input);
+      refreshState();
+    },
+    updateSchool: (id, input) => {
+      repositories.schools.save(input);
+      refreshState();
+    },
+    deleteSchool: () => {
+      window.alert("Data sekolah merupakan profil utama dan tidak dapat dihapus.");
+    },
+    createTeacher: (input) => {
+      repositories.teachers.save(input);
+      refreshState();
+    },
+    updateTeacher: (id, input) => {
+      repositories.teachers.save(input);
+      refreshState();
+    },
+    deleteTeacher: () => {
+      window.alert("Data guru merupakan profil utama dan tidak dapat dihapus.");
+    },
+    createAcademicYear: (input) => {
+      const res = repositories.academicYears.create(input);
+      const newYear = Array.isArray(res) ? res.at(-1) : res;
+      if (newYear && !appState.activeAcademicYearId) {
+        repositories.academicYears.setActive(newYear.id);
+      }
+      refreshState();
+    },
+    updateAcademicYear: (id, input) => {
+      repositories.academicYears.update(id, input);
+      refreshState();
+    },
+    deleteAcademicYear: (id) => {
+      if (window.confirm("Hapus tahun ajaran ini?")) {
+        repositories.academicYears.delete(id);
+        refreshState();
+      }
+    },
+    createSemester: (input) => {
+      const activeYear = repositories.academicYears.getActive();
+      if (!activeYear) {
+        window.alert("Tambahkan Tahun Ajaran terlebih dahulu.");
+        return;
+      }
+
+      const res = repositories.semesters.create({
+        ...input,
+        academicYearId: activeYear.id,
+        isActive: !appState.activeSemesterId
+      });
+      const newSemester = Array.isArray(res) ? res.at(-1) : res;
+
+      if (newSemester && !appState.activeSemesterId) {
+        repositories.semesters.setActive(newSemester.id);
+      }
+
+      refreshState();
+    },
+    updateSemester: (id, input) => {
+      repositories.semesters.update(id, input);
+      refreshState();
+    },
+    deleteSemester: (id) => {
+      if (window.confirm("Hapus semester ini?")) {
+        repositories.semesters.delete(id);
+        refreshState();
+      }
+    },
+    createClass: (input) => {
+      const name = String(input?.name || "").trim();
+      if (!name) {
+        const error = new Error("Nama kelas tidak boleh kosong.");
+        return { success: false, data: null, error };
+      }
+      const rawGrade = String(input.grade ?? input.gradeLevel ?? "").trim();
+      const gradeNum = parseInt(rawGrade, 10);
+      if (isNaN(gradeNum) || gradeNum < 1 || gradeNum > 6) {
+        const error = new Error("Tingkat kelas harus berada pada rentang 1–6.");
+        return { success: false, data: null, error };
+      }
+      const payload = {
+        ...input,
+        name,
+        grade: String(gradeNum),
+        gradeLevel: String(gradeNum),
+        homeroomTeacher: String(input.homeroomTeacher || "").trim(),
+        academicYear: String(input.academicYear || "").trim(),
+        status: input.status || "active"
+      };
+      const result = repositories.classes.create(payload);
+      const isSuccess = Boolean(result && (result.success !== false));
+      if (!isSuccess) {
+        return {
+          success: false,
+          data: null,
+          error: result?.error || new Error("Gagal menyimpan data kelas.")
+        };
+      }
+      refreshState();
+      return {
+        success: true,
+        data: result?.data || result,
+        error: null
+      };
+    },
+    updateClass: (id, input) => {
+      const targetClass = repositories.classes.findById(id);
+      if (!targetClass) {
+        const error = new Error("Kelas tidak ditemukan.");
+        return { success: false, data: null, error };
+      }
+      const name = String(input?.name || "").trim();
+      if (!name) {
+        const error = new Error("Nama kelas tidak boleh kosong.");
+        return { success: false, data: null, error };
+      }
+      const rawGrade = String(input.grade ?? input.gradeLevel ?? "").trim();
+      const gradeNum = parseInt(rawGrade, 10);
+      if (isNaN(gradeNum) || gradeNum < 1 || gradeNum > 6) {
+        const error = new Error("Tingkat kelas harus berada pada rentang 1–6.");
+        return { success: false, data: null, error };
+      }
+      const payload = {
+        ...input,
+        name,
+        grade: String(gradeNum),
+        gradeLevel: String(gradeNum),
+        homeroomTeacher: input.homeroomTeacher !== undefined ? String(input.homeroomTeacher).trim() : (targetClass.homeroomTeacher || ""),
+        academicYear: input.academicYear !== undefined ? String(input.academicYear).trim() : (targetClass.academicYear || "")
+      };
+      const result = repositories.classes.update(id, payload);
+      const isSuccess = Boolean(result && (result.success !== false));
+      if (!isSuccess) {
+        return {
+          success: false,
+          data: null,
+          error: result?.error || new Error("Gagal memperbarui data kelas.")
+        };
+      }
+      refreshState();
+      return {
+        success: true,
+        data: result?.data || result,
+        error: null
+      };
+    },
+    archiveClass: (id) => {
+      const targetClass = repositories.classes.findById(id);
+      if (!targetClass) {
+        return { success: false, data: null, error: new Error("Kelas tidak ditemukan.") };
+      }
+      const result = repositories.classes.archiveClass(id);
+      const isSuccess = Boolean(result && (result.success !== false));
+      if (!isSuccess) {
+        return {
+          success: false,
+          data: null,
+          error: result?.error || new Error("Gagal mengarsipkan kelas.")
+        };
+      }
+      refreshState();
+      return {
+        success: true,
+        data: result.data,
+        error: null
+      };
+    },
+    restoreClass: (id) => {
+      const targetClass = repositories.classes.findById(id);
+      if (!targetClass) {
+        return { success: false, data: null, error: new Error("Kelas tidak ditemukan.") };
+      }
+      const result = repositories.classes.restoreClass(id);
+      const isSuccess = Boolean(result && (result.success !== false));
+      if (!isSuccess) {
+        return {
+          success: false,
+          data: null,
+          error: result?.error || new Error("Gagal memulihkan kelas.")
+        };
+      }
+      refreshState();
+      return {
+        success: true,
+        data: result.data,
+        error: null
+      };
+    },
+    deleteClass: (id, skipConfirm = false) => {
+      const targetClass = repositories.classes.findById(id);
+      if (!targetClass) {
+        return { success: false, cancelled: false, data: null, error: new Error("Kelas tidak ditemukan.") };
+      }
+      const classStudents = repositories.students.findByClass(id);
+      if (!skipConfirm) {
+        const msg = `Hapus kelas "${targetClass.name}" permanen?\n\n` +
+          `Terdapat ${classStudents.length} siswa di kelas ini.\n\n` +
+          `PERINGATAN: Tindakan ini permanen dan tidak dapat dibatalkan. Seluruh data siswa, sesi, absensi, asesmen, riwayat pertumbuhan, observasi, dan laporan eksklusif milik kelas ini akan dihapus. Lanjutkan?`;
+        if (!window.confirm(msg)) {
+          return { success: false, cancelled: true, data: null, error: null };
+        }
+      }
+      const result = repositories.classes.deleteCascade(id);
+      const isSuccess = Boolean(result && (result.success !== false));
+      if (!isSuccess) {
+        return {
+          success: false,
+          cancelled: false,
+          data: null,
+          error: result?.error || new Error("Gagal menghapus kelas.")
+        };
+      }
+      refreshState();
+      return {
+        success: true,
+        cancelled: false,
+        data: result.data || targetClass,
+        error: null
+      };
+    },
+    createTag: (input) => {
+      repositories.tags.create(input);
+      refreshState();
+    },
+    updateTag: (id, input) => {
+      repositories.tags.update(id, input);
+      refreshState();
+    },
+    deleteTag: (id) => {
+      if (window.confirm("Hapus tag ini?")) {
+        repositories.tags.delete(id);
+        refreshState();
+      }
+    },
+    createStudent: (input) => {
+      const state = repositories.students.loadState();
+      const student = createStudent({
+        ...input,
+        tagIds: input.tagId ? [input.tagId] : (Array.isArray(input.tagIds) ? input.tagIds : [])
+      });
+
+      const nextStudents = [...(state.students || []), student];
+      const nextNotes = [...(state.studentNotes || [])];
+      const nextGrowth = [...(state.growthRecords || [])];
+
+      if (input.noteText) {
+        const note = createStudentNote({
+          studentId: student.id,
+          text: input.noteText
+        });
+        nextNotes.push(note);
+        student.noteIds = [note.id];
+      }
+
+      if (input.heightCm || input.weightKg) {
+        const growth = createGrowthRecord({
+          studentId: student.id,
+          date: new Date().toISOString().slice(0, 10),
+          heightCm: input.heightCm || "",
+          weightKg: input.weightKg || "",
+          note: "Pengukuran awal siswa"
+        });
+        nextGrowth.push(growth);
+      }
+
+      const saveResult = repositories.students.saveState({
+        ...state,
+        students: nextStudents,
+        studentNotes: nextNotes,
+        growthRecords: nextGrowth
+      });
+
+      if (saveResult && saveResult.success === false) {
+        return {
+          success: false,
+          data: null,
+          error: saveResult.error || new Error("Gagal menyimpan data siswa ke Local Storage.")
+        };
+      }
+
+      refreshState();
+      return {
+        success: true,
+        data: student,
+        error: null
+      };
+    },
+    batchCreateStudents: (studentsList = []) => {
+      if (!Array.isArray(studentsList) || studentsList.length === 0) {
+        return {
+          success: true,
+          created: [],
+          error: null
+        };
+      }
+      const state = repositories.students.loadState();
+      const currentStudents = [...(state.students || [])];
+      const createdList = [];
+
+      for (const input of studentsList) {
+        if (!input || !input.name) continue;
+        const student = createStudent({
+          name: input.name,
+          studentNumber: input.studentNumber || "",
+          gender: input.gender || "",
+          birthDate: input.birthDate || "",
+          classId: input.classId || ""
+        });
+
+        currentStudents.push(student);
+        createdList.push(student);
+      }
+
+      const saveResult = repositories.students.saveState({
+        ...state,
+        students: currentStudents
+      });
+
+      if (saveResult && saveResult.success === false) {
+        return {
+          success: false,
+          created: [],
+          error: saveResult.error || new Error("Gagal menyimpan batch siswa ke Local Storage.")
+        };
+      }
+
+      refreshState();
+      return {
+        success: true,
+        created: createdList,
+        error: null
+      };
+    },
+    updateStudent: (id, input) => {
+      const state = repositories.students.loadState();
+      const studentIndex = (state.students || []).findIndex((s) => s.id === id);
+      if (studentIndex === -1) {
+        return {
+          success: false,
+          data: null,
+          error: new Error("Siswa tidak ditemukan.")
+        };
+      }
+
+      const existing = state.students[studentIndex];
+      const updatedStudent = createStudent({
+        ...existing,
+        ...input,
+        id,
+        createdAt: existing.createdAt
+      });
+
+      const nextStudents = [...state.students];
+      nextStudents[studentIndex] = updatedStudent;
+
+      const saveResult = repositories.students.saveState({
+        ...state,
+        students: nextStudents
+      });
+
+      if (saveResult && saveResult.success === false) {
+        return {
+          success: false,
+          data: null,
+          error: saveResult.error || new Error("Gagal memperbarui data siswa ke Local Storage.")
+        };
+      }
+
+      refreshState();
+      return {
+        success: true,
+        data: updatedStudent,
+        error: null
+      };
+    },
+    deleteStudent: (id, skipConfirm = false) => {
+      const student = repositories.students.findById(id);
+      if (!student) {
+        return { success: false, cancelled: false, data: null, error: new Error("Siswa tidak ditemukan.") };
+      }
+
+      if (!skipConfirm) {
+        const studentName = student?.name ? `"${student.name}"` : "siswa ini";
+        const msg = `Hapus ${studentName}?\n\n` +
+          `Seluruh riwayat absensi, hasil tes penilaian fisik, grafik pertumbuhan, draf laporan, dan observasi siswa ini akan dihapus secara permanen. Lanjutkan?`;
+        if (typeof window !== "undefined" && typeof window.confirm === "function") {
+          if (!window.confirm(msg)) {
+            return { success: false, cancelled: true, data: null, error: null };
+          }
+        }
+      }
+
+      if (activeModalStudentId === id) {
+        activeModalStudentId = null;
+      }
+
+      const result = repositories.students.deleteCascade(id);
+      const isSuccess = Boolean(result && (result.success !== false));
+      if (!isSuccess) {
+        return {
+          success: false,
+          cancelled: false,
+          data: null,
+          error: result?.error || new Error("Gagal menghapus siswa.")
+        };
+      }
+      refreshState();
+      return {
+        success: true,
+        cancelled: false,
+        data: result.data || student,
+        error: null
+      };
+    },
+
+    // ATTENDANCE ACTIONS
+    setAttendanceStatus: (studentId, status) => {
+      const sessionContext = getSessionContext();
+      const session = sessionContext.session;
+      if (!session || sessionManager.isReadOnly(session)) return;
+
+      const existing = repositories.attendanceRecords.findBySessionAndStudent(session.id, studentId);
+      const payload = {
+        sessionId: session.id,
+        studentId,
+        status,
+        recordedAt: new Date().toISOString()
+      };
+
+      if (existing) {
+        repositories.attendanceRecords.update(existing.id, payload);
+      } else {
+        repositories.attendanceRecords.create(payload);
+      }
+
+      refreshState();
+    },
+
+    markAllPresent: (sessionId) => {
+      const session = repositories.sessions.findById(sessionId) || getSessionContext().session;
+      if (!session || sessionManager.isReadOnly(session)) return;
+
+      const classStudents = repositories.students.findByClass(session.classId);
+      const now = new Date().toISOString();
+
+      classStudents.forEach((student) => {
+        const existing = repositories.attendanceRecords.findBySessionAndStudent(session.id, student.id);
+        if (existing) {
+          repositories.attendanceRecords.update(existing.id, {
+            ...existing,
+            status: "present",
+            recordedAt: now
+          });
+        } else {
+          repositories.attendanceRecords.create({
+            sessionId: session.id,
+            studentId: student.id,
+            status: "present",
+            recordedAt: now
+          });
+        }
+      });
+
+      refreshState();
+    },
+
+    // ACTIVITY & TIMER ACTIONS
+    loadDefaultActivities: (sessionId) => {
+      const session = repositories.sessions.findById(sessionId);
+      if (!session || sessionManager.isReadOnly(session)) return;
+      loadDefaultActivitiesForSession(sessionId);
+      refreshState();
+    },
+    createSessionActivity: (input) => {
+      if (input.sessionId) {
+        const session = repositories.sessions.findById(input.sessionId);
+        if (session && sessionManager.isReadOnly(session)) return;
+      }
+      repositories.sessionActivities.create(input);
+      refreshState();
+    },
+    updateSessionActivity: (id, input) => {
+      const activity = repositories.sessionActivities.findById(id);
+      if (activity && activity.sessionId) {
+        const session = repositories.sessions.findById(activity.sessionId);
+        if (session && sessionManager.isReadOnly(session)) return;
+      }
+      // Ensure sessionId is not modified for archived or existing sessions
+      const protectedInput = { ...input };
+      delete protectedInput.sessionId;
+      repositories.sessionActivities.update(id, protectedInput);
+      refreshState();
+    },
+    deleteSessionActivity: (id) => {
+      const activity = repositories.sessionActivities.findById(id);
+      if (activity && activity.sessionId) {
+        const session = repositories.sessions.findById(activity.sessionId);
+        if (session && sessionManager.isReadOnly(session)) return;
+      }
+      repositories.sessionActivities.delete(id);
+      refreshState();
+    },
+
+    // ASSESSMENT ACTIONS
+    createAssessmentDefinition: (input) => {
+      const res = repositories.assessmentDefinitions.create(input);
+      refreshState();
+      return Array.isArray(res) ? res.at(-1) : res;
+    },
+    updateAssessmentDefinition: (id, input) => {
+      repositories.assessmentDefinitions.update(id, input);
+      refreshState();
+    },
+    deleteAssessmentDefinition: (id) => {
+      if (window.confirm("Hapus definisi tes/penilaian ini?")) {
+        repositories.assessmentDefinitions.delete(id);
+        refreshState();
+      }
+    },
+    createAssessmentSession: (input) => {
+      if (input.sessionId) {
+        const session = repositories.sessions.findById(input.sessionId);
+        if (!session || sessionManager.isReadOnly(session)) return;
+      }
+      
+      let rubricSnapshot = input && input.rubricSnapshot && input.rubricSnapshot.levels && input.rubricSnapshot.levels.length > 0
+        ? input.rubricSnapshot
+        : { scale: 0, levels: [] };
+
+      if ((!rubricSnapshot.levels || rubricSnapshot.levels.length === 0) && input && input.definitionId) {
+        const definition = repositories.assessmentDefinitions.findById(input.definitionId) || (appState.assessmentDefinitions || []).find((d) => d.id === input.definitionId);
+        if (definition && definition.method === "rubric") {
+          rubricSnapshot = {
+            scale: Number(definition.rubricScale) || 5,
+            levels: Array.isArray(definition.rubricLevels)
+              ? definition.rubricLevels.map((level) => ({
+                  level: level.level,
+                  label: level.label,
+                  desc: level.desc
+                }))
+              : []
+          };
+        }
+      }
+
+      const res = repositories.assessmentSessions.create({
+        ...input,
+        rubricSnapshot
+      });
+      refreshState();
+      return Array.isArray(res) ? res.at(-1) : res;
+    },
+    batchImportAssessmentPackage: ({ newDefinitions = [], newSessions = [] }) => {
+      const curDefs = appState.assessmentDefinitions || [];
+      const curSess = appState.assessmentSessions || [];
+      appState = saveState({
+        ...appState,
+        assessmentDefinitions: [...curDefs, ...newDefinitions],
+        assessmentSessions: [...curSess, ...newSessions]
+      });
+      refreshState();
+    },
+    saveAssessmentResult: (input) => {
+      // 1. Resolve parent teaching session and validate input consistency
+      let parentSessionId = input.sessionId;
+      
+      if (input.assessmentSessionId) {
+        const assessment = repositories.assessmentSessions.findById(input.assessmentSessionId);
+        if (!assessment) {
+          console.warn("Gagal: Assessment session tidak ditemukan.");
+          return;
+        }
+        if (assessment.sessionId) {
+          if (parentSessionId && parentSessionId !== assessment.sessionId) {
+            // Conflict between provided sessionId and parent of assessmentSessionId
+            console.warn("Konflik: sessionId input berbeda dengan sesi induk asesmen.");
+            return;
+          }
+          parentSessionId = assessment.sessionId;
+        }
+      }
+
+      // 2. Validate session status if linked to a teaching session
+      if (parentSessionId) {
+        const session = repositories.sessions.findById(parentSessionId);
+        if (!session) {
+          // Linked to non-existent session
+          console.warn("Gagal: Sesi induk tidak ditemukan.");
+          return;
+        }
+        if (sessionManager.isReadOnly(session)) {
+          // Reject if session is completed or cancelled
+          return;
+        }
+      }
+
+      // 3. Find existing result and validate consistency
+      const allResults = repositories.assessmentResults.findAll();
+      let existing = null;
+
+      if (input.assessmentSessionId) {
+        existing = allResults.find(
+          (r) => r.studentId === input.studentId && r.assessmentSessionId === input.assessmentSessionId
+        );
+      } else if (input.definitionId && parentSessionId) {
+        existing = allResults.find(
+          (r) => r.studentId === input.studentId && r.sessionId === parentSessionId && r.definitionId === input.definitionId
+        );
+      } else if (parentSessionId) {
+        existing = allResults.find(
+          (r) => r.studentId === input.studentId && r.sessionId === parentSessionId
+        );
+      }
+
+      // If existing exists, re-verify status and consistency
+      if (existing) {
+        const existingParentSessionId = existing.sessionId;
+        const existingAssessment = existing.assessmentSessionId ? repositories.assessmentSessions.findById(existing.assessmentSessionId) : null;
+        const existingAssessmentParentId = existingAssessment ? existingAssessment.sessionId : null;
+
+        // Ensure both refs (if exist) point to same parent session
+        if (existingParentSessionId && existingAssessmentParentId && existingParentSessionId !== existingAssessmentParentId) {
+          console.warn("Gagal: Inkonsistensi sesi induk pada hasil existing.");
+          return;
+        }
+        
+        const finalParentId = existingParentSessionId || existingAssessmentParentId;
+        
+        // Cegah pembaruan nilai dari sesi induk yang berbeda
+        if (finalParentId && parentSessionId && finalParentId !== parentSessionId) {
+          console.warn("Gagal: Sesi induk input berbeda dari hasil existing.");
+          return;
+        }
+
+        if (finalParentId) {
+          const session = repositories.sessions.findById(finalParentId);
+          if (!session || sessionManager.isReadOnly(session)) {
+            console.warn("Gagal: Sesi induk hasil existing tidak valid atau sudah diarsipkan.");
+            return;
+          }
+        }
+        
+        // Ensure not updating an assessment linked to a teaching session if assessmentSessionId was provided, 
+        // but assessment session itself missing
+        if (existing.assessmentSessionId && !existingAssessment) {
+          console.warn("Gagal: Assessment session tidak ditemukan.");
+          return;
+        }
+      }
+
+      // 4. Perform update/create with protection
+      if (existing) {
+        // Protect existing relational fields from being altered via input
+        const protectedUpdate = {
+          ...input,
+          id: existing.id,
+          studentId: existing.studentId,
+          // Maintain original session references
+          sessionId: existing.sessionId,
+          assessmentSessionId: existing.assessmentSessionId
+        };
+        repositories.assessmentResults.update(existing.id, protectedUpdate);
+      } else {
+        repositories.assessmentResults.create({
+          ...input,
+          sessionId: parentSessionId // Ensure correct binding
+        });
+      }
+      refreshState();
+    },
+
+    // GROWTH RECORDS & MEASUREMENTS
+    createGrowthRecord: (input) => {
+      if (Array.isArray(input)) {
+        input.forEach((item) => repositories.growthRecords.create(item));
+      } else {
+        repositories.growthRecords.create(input);
+      }
+      refreshState();
+    },
+    deleteGrowthRecord: (id) => {
+      repositories.growthRecords.delete(id);
+      refreshState();
+    },
+
+    // OBSERVATIONS
+    createObservation: (input) => {
+      const result = repositories.observations.create(input);
+      refreshState();
+      return result;
+    },
+
+    // STUDENT REPORTS PERSISTENCE
+    saveStudentReport: (report) => {
+      if (!report || !report.studentId || !report.classId) {
+        return { success: false, report: null, error: new Error("studentId dan classId wajib diisi.") };
+      }
+      const existing = Array.isArray(appState.studentReports) ? [...appState.studentReports] : [];
+      const resolvedAcademicYearId =
+        report.academicYearId || appState.activeAcademicYearId || null;
+      const resolvedSemesterId =
+        report.semesterId || appState.activeSemesterId || null;
+
+      const idx = existing.findIndex(
+        (r) =>
+          r.studentId === report.studentId &&
+          r.classId === report.classId &&
+          (r.academicYearId || null) === resolvedAcademicYearId &&
+          (r.semesterId || null) === resolvedSemesterId
+      );
+      const now = new Date().toISOString();
+      const record = {
+        id: report.id || (idx >= 0 ? existing[idx].id : `report-${report.studentId}-${Date.now()}`),
+        studentId: report.studentId,
+        classId: report.classId,
+        reportContext: report.reportContext,
+        draft: report.draft,
+        academicYearId: resolvedAcademicYearId,
+        semesterId: resolvedSemesterId,
+        generatedAt: report.generatedAt || (idx >= 0 ? existing[idx].generatedAt : now),
+        updatedAt: now
+      };
+      if (idx >= 0) {
+        existing[idx] = record;
+      } else {
+        existing.push(record);
+      }
+      const savedResult = saveState({
+        ...appState,
+        studentReports: existing
+      });
+      appState = savedResult;
+      refreshState();
+
+      const isSuccess = Boolean(savedResult?.success !== false && !savedResult?.error);
+      return {
+        success: isSuccess,
+        report: isSuccess ? record : null,
+        error: isSuccess ? null : (savedResult?.error || new Error("Gagal menyimpan laporan"))
+      };
+    },
+
+    // TEACHING SESSION LIFECYCLE
+    createSession: (input) => {
+      const activeSession = sessionManager.getActiveSession();
+      if (activeSession && (activeSession.status === "active" || activeSession.status === "paused")) {
+        const proceed = window.confirm("Terdapat sesi aktif yang akan dijeda. Lanjutkan?");
+        if (!proceed) {
+          return;
+        }
+      }
+
+      const created = sessionManager.createSession(input, { startImmediately: true });
+      const newSession = Array.isArray(created) ? created.at(-1) : created;
+      if (newSession && newSession.status === "active") {
+        explicitSessionId = newSession.id;
+        loadDefaultActivitiesForSession(newSession.id);
+        refreshState();
+      }
+    },
+    startSession: (id) => {
+      sessionManager.startSession(id);
+      refreshState();
+    },
+    pauseSession: (id) => {
+      sessionManager.pauseSession(id);
+      refreshState();
+    },
+    resumeSession: (id) => {
+      sessionManager.resumeSession(id);
+      refreshState();
+    },
+    updateSessionNotes: (id, notes) => {
+      const session = repositories.sessions.findById(id);
+      if (session && sessionManager.isReadOnly(session)) return;
+      repositories.sessions.update(id, { notes });
+      refreshState();
+    },
+    finishSession: (id) => {
+      const session = repositories.sessions.findById(id);
+      if (!session || session.status !== "active") {
+        throw new Error("Sesi tidak aktif. Muat ulang tampilan sesi lalu coba kembali.");
+      }
+      const completed = sessionManager.finishSession(id);
+      explicitSessionId = id;
+      refreshState();
+      return completed;
+    },
+    cancelSession: (id) => {
+      if (window.confirm("Batalkan sesi ini?")) {
+        sessionManager.cancelSession(id);
+        refreshState();
+      }
+    },
+    setSettingsActiveTab: (tabId) => {
+      const allowed = ["school-teacher", "academic", "tags", "assessments", "ai", "backup"];
+      settingsActiveTab = allowed.includes(tabId) ? tabId : "school-teacher";
+      renderApp();
+    },
+    requestAppRender: () => {
+      renderApp();
+    },
+    openClassReports: (classId) => {
+      if (classId) {
+        uiState.classes.selectedClassId = classId;
+        uiState.classes.mode = "detail";
+        uiState.classes.activeTab = "reports";
+      }
+      setScreen(SCREENS.classes);
+    }
+  };
+}
+
+function loadDefaultActivitiesForSession(sessionId) {
+  const existing = repositories.sessionActivities.findBySession(sessionId);
+  if (existing.length > 0) return;
+
+  const defaults = [
+    {
+      sessionId,
+      name: "Pemanasan Dinamis & Peregangan",
+      type: "pemanasan",
+      durationMinutes: 10,
+      notes: "Jogging keliling lapangan 2 putaran + peregangan kepala ke kaki",
+      status: "pending"
+    },
+    {
+      sessionId,
+      name: "Materi & Demonstrasi Teknik",
+      type: "materi",
+      durationMinutes: 15,
+      notes: "Penjelasan aba-aba, posisi tubuh, dan peragaan guru",
+      status: "pending"
+    },
+    {
+      sessionId,
+      name: "Praktik & Drill Berpasangan / Kelompok",
+      type: "latihan",
+      durationMinutes: 20,
+      notes: "Pengulangan gerakan mandiri dengan koreksi langsung",
+      status: "pending"
+    },
+    {
+      sessionId,
+      name: "Aplikasi / Permainan Lapangan",
+      type: "permainan",
+      durationMinutes: 20,
+      notes: "Game sederhana yang mempraktikkan keterampilan materi",
+      status: "pending"
+    },
+    {
+      sessionId,
+      name: "Pendinginan, Evaluasi & Doa",
+      type: "pendinginan",
+      durationMinutes: 10,
+      notes: "Pelepasan otot, evaluasi bersama, dan rekap kehadiran",
+      status: "pending"
+    }
+  ];
+
+  defaults.forEach((d) => repositories.sessionActivities.create(d));
+}
+
+function exportData() {
+  const filename = generateBackupFilename();
+  const jsonContent = exportStateAsJson();
+  const blob = new Blob([jsonContent], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+  recordManualExport({ filename, state: appState });
+  showToast(`✓ Cadangan diekspor: ${filename}`, 2500);
+  return { filename, content: jsonContent };
+}
+
+async function importData(fileOrText) {
+  const getTextPromise = typeof fileOrText === "string"
+    ? Promise.resolve(fileOrText)
+    : (fileOrText && typeof fileOrText.text === "function" ? fileOrText.text() : Promise.reject(new Error("File atau data tidak valid")));
+
+  try {
+    const text = await getTextPromise;
+    const check = inspectBackupJson(text);
+    if (!check.valid) {
+      window.alert(`Data cadangan tidak valid:\n${check.error}`);
+      showToast(`Impor gagal: ${check.error}`, 3500);
+      return { success: false, error: new Error(check.error) };
+    }
+
+    const s = check.summary;
+    const summaryLines = [
+      "=== RINGKASAN DATA CADANGAN ===",
+      `• Kelas: ${s.classes}`,
+      `• Siswa: ${s.students}`,
+      `• Perencanaan Asesmen: ${s.assessmentDefinitions}`,
+      `• Hasil Penilaian: ${s.assessmentResults}`,
+      `• Catatan Pertumbuhan: ${s.growthRecords}`,
+      `• Laporan Siswa: ${s.studentReports}`,
+      ""
+    ];
+
+    if (check.warnings && check.warnings.length > 0) {
+      summaryLines.push(
+        `Catatan: Terdapat ${check.warnings.length} peringatan referensi data (data tetap dipertahankan).`,
+        ""
+      );
+    }
+
+    summaryLines.push(
+      "⚠️ PERINGATAN PENTING:",
+      "Memulihkan cadangan ini akan MENGGANTI SELURUH DATA yang tersimpan di perangkat lokal saat ini.",
+      "Data lokal saat ini akan ditimpa dengan isi cadangan ini.",
+      "",
+      "Apakah Anda yakin ingin melanjutkan proses pemulihan data?"
+    );
+
+    const confirmMessage = summaryLines.join("\n");
+    const userConfirmed = typeof window !== "undefined" && typeof window.confirm === "function"
+      ? window.confirm(confirmMessage)
+      : true;
+
+    if (!userConfirmed) {
+      showToast("Pemulihan data dibatalkan oleh pengguna.", 2500);
+      return { success: false, cancelled: true };
+    }
+
+    const result = importStateFromJson(text);
+    if (!result || !result.success) {
+      const errMsg = result?.error?.message || "Data cadangan tidak berhasil disimpan ke perangkat.";
+      window.alert(
+        "Pemulihan data gagal.\n\n" +
+        errMsg + "\n\n" +
+        "Data sebelumnya tetap dipertahankan secara utuh."
+      );
+      showToast("Pemulihan data gagal. Data lokal tetap aman.", 3500);
+      return { success: false, error: result?.error || new Error(errMsg) };
+    }
+
+    appState = result.state || loadState();
+    refreshState();
+    window.alert("Data cadangan berhasil dipulihkan.");
+    showToast("✓ Data cadangan berhasil dipulihkan.", 3000);
+    return { success: true, state: appState };
+  } catch (error) {
+    window.alert(
+      "Pemulihan data gagal.\n\n" +
+      (error.message || "Data cadangan tidak dapat diproses.") + "\n\n" +
+      "Data sebelumnya tetap dipertahankan secara utuh."
+    );
+    showToast("Pemulihan data gagal.", 3500);
+    console.warn("Import data gagal.", error);
+    return { success: false, error };
+  }
+}
+
+Object.assign(actions, {
+  navigate: setScreen,
+  exportData,
+  importData
+}, createCrudActions());
+
+function renderApp() {
+  const sessionContext = getSessionContext();
+
+  const appActions = {
+    navigate: setScreen,
+    exportData,
+    importData,
+    ...sessionContext,
+    ...createCrudActions()
+  };
+
+  actions = appActions;
+  if (typeof window !== "undefined") {
+    window.actions = appActions;
+  }
+  if (typeof globalThis !== "undefined") {
+    globalThis.actions = appActions;
+  }
+
+  if (!appRoot) {
+    return;
+  }
+
+  appRoot.replaceChildren();
+
+  const header = document.createElement("header");
+  header.className = "app-header";
+
+  const title = document.createElement("span");
+  title.className = "app-name";
+  title.textContent = "PJOK Assistant";
+
+  const status = document.createElement("span");
+  status.className = "offline-status";
+  status.textContent = (typeof navigator !== "undefined" && navigator.onLine) ? "Siap" : "Offline";
+
+  header.append(title, status);
+
+  const sessionNotice = sessionContext.resumeAvailable && appState.currentScreen !== SCREENS.session
+    ? createResumeBanner(sessionContext.session)
+    : null;
+
+  const globalAiBanner = createGlobalAiBanner(uiState?.classes?.batchState, appActions);
+
+  appRoot.append(header);
+  if (sessionNotice) {
+    appRoot.append(sessionNotice);
+  }
+  if (globalAiBanner) {
+    appRoot.append(globalAiBanner);
+  }
+  appRoot.append(
+    renderScreen(
+      {
+        ...appState,
+        session: sessionContext.session,
+        sessionContext,
+        settingsActiveTab,
+        uiState
+      },
+      appActions
+    ),
+    createNavigation(appState.currentScreen, setScreen)
+  );
+
+  // Render modal on top if active
+  if (activeModalStudentId) {
+    try {
+      appRoot.append(
+        renderStudentDetailModal(
+          activeModalStudentId,
+          {
+            ...appState,
+            growthRecords: repositories.growthRecords.findAll(),
+            attendanceRecords: repositories.attendanceRecords.findAll(),
+            assessmentResults: repositories.assessmentResults.findAll(),
+            assessmentDefinitions: repositories.assessmentDefinitions.findAll(),
+            assessmentSessions: repositories.assessmentSessions.findAll(),
+            observations: repositories.observations.findAll(),
+            sessions: repositories.sessions.findAll(),
+            classes: repositories.classes.findAll(),
+            students: repositories.students.findAll(),
+            tags: repositories.tags.findAll(),
+            studentNotes: repositories.notes.findAll(),
+            actions: appActions
+          },
+          () => {
+            activeModalStudentId = null;
+            renderApp();
+          }
+        )
+      );
+    } catch (modalErr) {
+      console.error("[RUNTIME ERROR] Failed to render student detail modal:", modalErr);
+    }
+  }
+}
+
+function createResumeBanner(session) {
+  const banner = document.createElement("section");
+  banner.className = "resume-banner";
+
+  const text = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = "Lanjutkan sesi mengajar aktif?";
+  const subtitle = document.createElement("span");
+  subtitle.textContent = session ? `Sesi ${session.sessionNumber || ""} (${session.topic || "PJOK"}) masih ${session.status}.` : "";
+  text.append(title, subtitle);
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text-button";
+  button.textContent = "Lanjutkan Sesi";
+  button.addEventListener("click", () => setScreen(SCREENS.session));
+
+  banner.append(text, button);
+  return banner;
+}
+
+function createGlobalAiBanner(batchState, actions) {
+  if (!batchState) return null;
+  if (!batchState.isBatchGenerating && !batchState.statusSummary) return null;
+
+  const banner = document.createElement("section");
+  banner.className = "global-ai-banner";
+
+  const isRunning = Boolean(batchState.isBatchGenerating);
+
+  // Top Row (Title / Status & Action Button)
+  const topRow = document.createElement("div");
+  topRow.className = "global-ai-banner-header";
+
+  const titleGroup = document.createElement("div");
+  titleGroup.className = "global-ai-banner-title";
+
+  const classSpan = document.createElement("span");
+  classSpan.className = "font-normal opacity-80";
+  classSpan.textContent = `• ${batchState.className || "Kelas"}`;
+
+  if (isRunning) {
+    titleGroup.append(document.createTextNode("✨ AI sedang membuat laporan "), classSpan);
+  } else {
+    titleGroup.append(document.createTextNode("✓ Laporan AI selesai "), classSpan);
+  }
+
+  const actionsGroup = document.createElement("div");
+  actionsGroup.className = "global-ai-banner-actions";
+
+  const actionBtn = document.createElement("button");
+  actionBtn.type = "button";
+  actionBtn.className = "global-ai-banner-btn";
+  actionBtn.textContent = isRunning ? "Buka Proses" : "Lihat Hasil";
+  actionBtn.addEventListener("click", () => {
+    if (actions?.openClassReports && batchState.classId) {
+      actions.openClassReports(batchState.classId);
+    }
+  });
+  actionsGroup.append(actionBtn);
+
+  if (!isRunning) {
+    const dismissBtn = document.createElement("button");
+    dismissBtn.type = "button";
+    dismissBtn.className = "global-ai-banner-dismiss";
+    dismissBtn.textContent = "✕";
+    dismissBtn.title = "Tutup Notifikasi";
+    dismissBtn.addEventListener("click", () => {
+      batchState.statusSummary = null;
+      if (actions?.requestAppRender) {
+        actions.requestAppRender();
+      }
+    });
+    actionsGroup.append(dismissBtn);
+  }
+
+  topRow.append(titleGroup, actionsGroup);
+  banner.append(topRow);
+
+  // Middle/Bottom Meta Line
+  const completedCount = (batchState.successCount || 0) + (batchState.failedCount || 0) + (batchState.skippedCount || 0);
+  const totalStudents = batchState.totalStudents || 0;
+
+  const metaRow = document.createElement("div");
+  metaRow.className = "global-ai-banner-meta";
+
+  if (isRunning) {
+    const stageLabel = getDiagnosticStageLabel(batchState.diagnostic?.stage);
+    const activeStudentSpan = document.createElement("span");
+    activeStudentSpan.textContent = `Sedang diproses: ${batchState.currentStudentName || "-"} (${stageLabel}) • ${ (batchState.successCount || 0) + (batchState.failedCount || 0) + (batchState.skippedCount || 0) } / ${totalStudents} selesai`;
+    
+    metaRow.append(activeStudentSpan);
+  } else {
+    const statsSpan = document.createElement("span");
+    statsSpan.textContent = `${batchState.successCount || 0} berhasil • ${batchState.failedCount || 0} gagal • ${batchState.skippedCount || 0} dilewati`;
+    metaRow.append(statsSpan);
+  }
+
+  banner.append(metaRow);
+
+  // Progress bar if running
+  if (isRunning && totalStudents > 0) {
+    const progressBg = document.createElement("div");
+    progressBg.className = "global-ai-banner-progress-bg";
+    const progressFill = document.createElement("div");
+    progressFill.className = "global-ai-banner-progress-fill";
+    const pct = Math.min(100, Math.round((completedCount / totalStudents) * 100));
+    progressFill.style.width = `${pct}%`;
+    progressBg.append(progressFill);
+    banner.append(progressBg);
+  }
+
+  return banner;
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) {
+    return;
+  }
+
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch((error) => {
+      console.warn("Service worker gagal didaftarkan.", error);
+    });
+  });
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", renderApp);
+  window.addEventListener("offline", renderApp);
+
+  appState = saveState(appState);
+  renderApp();
+  registerServiceWorker();
+}

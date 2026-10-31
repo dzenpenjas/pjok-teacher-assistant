@@ -1,0 +1,87 @@
+export const APP_SCHEMA_VERSION = 8;
+
+export const SCREENS = {
+  dashboard: "dashboard",
+  classes: "classes",
+  session: "session",
+  students: "students",
+  settings: "settings",
+  masterData: "classes"
+};
+
+export const COLLECTIONS = {
+  schools: "schools",
+  academicYears: "academicYears",
+  semesters: "semesters",
+  teachers: "teachers",
+  classes: "classes",
+  students: "students",
+  studentNotes: "studentNotes",
+  studentTags: "studentTags",
+  sessions: "sessions",
+  schedules: "schedules",
+  attendanceRecords: "attendanceRecords",
+  sessionActivities: "sessionActivities",
+  assessmentDefinitions: "assessmentDefinitions",
+  assessmentSessions: "assessmentSessions",
+  assessmentResults: "assessmentResults",
+  growthRecords: "growthRecords",
+  studentObservations: "studentObservations",
+  studentReports: "studentReports"
+};
+
+export const DEFAULT_APP_STATE = {
+  schemaVersion: APP_SCHEMA_VERSION,
+  currentScreen: SCREENS.dashboard,
+  activeSessionId: null,
+  activeAcademicYearId: null,
+  activeSemesterId: null,
+  schools: [],
+  academicYears: [],
+  semesters: [],
+  teachers: [],
+  classes: [],
+  students: [],
+  studentNotes: [],
+  studentTags: [],
+  sessions: [],
+  schedules: [],
+  attendanceRecords: [],
+  sessionActivities: [],
+  assessmentDefinitions: [],
+  assessmentSessions: [],
+  assessmentResults: [],
+  growthRecords: [],
+  studentObservations: [],
+  studentReports: [],
+  session: null,
+  updatedAt: null
+};
+
+export function createInitialState() {
+  return {
+    ...DEFAULT_APP_STATE,
+    activeAcademicYearId: null,
+    activeSemesterId: null,
+    schools: [],
+    academicYears: [],
+    semesters: [],
+    teachers: [],
+    classes: [],
+    students: [],
+    studentNotes: [],
+    studentTags: [],
+    sessions: [],
+    schedules: [],
+    attendanceRecords: [],
+    sessionActivities: [],
+    assessmentDefinitions: [],
+    assessmentSessions: [],
+    assessmentResults: [],
+    growthRecords: [],
+    studentObservations: [],
+    studentReports: [],
+    session: null,
+    updatedAt: new Date().toISOString()
+  };
+}

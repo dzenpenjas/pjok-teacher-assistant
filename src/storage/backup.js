@@ -45,14 +45,36 @@ export function _resetBackupFilenameCounterForTesting() {
   lastExportCollisionCounter = 0;
 }
 
-// --- 2. BACKUP EXPORT ---
+// --- 2. BACKUP EXPORT (Pure generation, does NOT mark remote destination backup as done) ---
 export function exportStateAsJson() {
   const state = loadState();
-  markStateAsBackedUp(state);
   return JSON.stringify(state, null, 2);
 }
 
-// --- 3. BACKUP INSPECTION & VALIDATION ---
+// --- 3. BACKUP INSPECTION & VERSION-SPECIFIC VALIDATION ---
+
+// Required collections for current schema version (v8)
+export const REQUIRED_COLLECTIONS_V8 = [
+  "schools",
+  "academicYears",
+  "semesters",
+  "teachers",
+  "classes",
+  "students",
+  "studentNotes",
+  "studentTags",
+  "sessions",
+  "schedules",
+  "attendanceRecords",
+  "sessionActivities",
+  "assessmentDefinitions",
+  "assessmentSessions",
+  "assessmentResults",
+  "growthRecords",
+  "studentObservations",
+  "studentReports"
+];
+
 export function inspectBackupJson(jsonText) {
   if (!jsonText || typeof jsonText !== "string" || !jsonText.trim()) {
     return { valid: false, error: "Format file tidak valid atau data kosong." };
@@ -70,8 +92,9 @@ export function inspectBackupJson(jsonText) {
   }
 
   // Schema version compatibility check
+  let versionNum = 1;
   if (parsedState.schemaVersion !== undefined && parsedState.schemaVersion !== null) {
-    const versionNum = Number(parsedState.schemaVersion);
+    versionNum = Number(parsedState.schemaVersion);
     if (!Number.isFinite(versionNum) || versionNum < 1) {
       return { valid: false, error: "Versi skema cadangan (schemaVersion) tidak valid." };
     }
@@ -83,22 +106,34 @@ export function inspectBackupJson(jsonText) {
     }
   }
 
-  // Check recognizable PJOK keys
-  const recognizableKeys = [
-    "classes",
-    "students",
-    "schools",
-    "teachers",
-    "sessions",
-    "schemaVersion",
-    "academicYears",
-    "assessmentDefinitions",
-    "growthRecords",
-    "studentReports"
-  ];
-  const hasRecognizableKey = recognizableKeys.some((k) => k in parsedState);
-  if (!hasRecognizableKey) {
-    return { valid: false, error: "File JSON tidak dikenali sebagai data cadangan PJOK Teacher Assistant." };
+  // Strict structural completeness check for current schema version backups
+  const isCurrentVersion = versionNum === APP_SCHEMA_VERSION;
+  if (isCurrentVersion) {
+    const missingCollections = REQUIRED_COLLECTIONS_V8.filter((col) => !(col in parsedState));
+    if (missingCollections.length > 0) {
+      return {
+        valid: false,
+        error: `Data cadangan versi ${APP_SCHEMA_VERSION} tidak lengkap secara struktural: koleksi wajib berikut tidak ditemukan: ${missingCollections.join(", ")}.`
+      };
+    }
+  } else {
+    // For legacy backups (version < APP_SCHEMA_VERSION): verify at least recognizable core PJOK keys exist
+    const recognizableKeys = [
+      "classes",
+      "students",
+      "schools",
+      "teachers",
+      "sessions",
+      "schemaVersion",
+      "academicYears",
+      "assessmentDefinitions",
+      "growthRecords",
+      "studentReports"
+    ];
+    const hasRecognizableKey = recognizableKeys.some((k) => k in parsedState);
+    if (!hasRecognizableKey) {
+      return { valid: false, error: "File JSON tidak dikenali sebagai data cadangan PJOK Teacher Assistant." };
+    }
   }
 
   // Structural & type validation of collection arrays
@@ -223,15 +258,60 @@ export function importStateFromJson(jsonText) {
     };
   }
 
-  const result = replaceState(check.data);
-  if (result.success && result.state) {
-    markStateAsBackedUp(result.state);
-  }
-  return result;
+  // Restore state. Note: safety snapshot is preserved inside replaceState!
+  return replaceState(check.data);
 }
 
-// --- 5. AUTO-BACKUP READINESS: SUBSTANTIAL DATA CHANGE DETECTION ---
-let lastBackedUpSignature = null;
+// --- 5. AUTO-BACKUP READINESS: PERSISTENT METADATA & SUBSTANTIAL CHANGE DETECTION ---
+
+const BACKUP_METADATA_KEY = "pjokTeacherAssistant.backupMetadata";
+
+export function getBackupMetadataKey() {
+  return BACKUP_METADATA_KEY;
+}
+
+/**
+ * Loads persistent backup metadata from localStorage.
+ */
+export function loadBackupMetadata() {
+  try {
+    const raw = typeof window !== "undefined" && window.localStorage
+      ? window.localStorage.getItem(BACKUP_METADATA_KEY)
+      : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        return {
+          lastConfirmedBackup: parsed.lastConfirmedBackup || null,
+          lastManualExport: parsed.lastManualExport || null,
+          pendingBackup: parsed.pendingBackup || null
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("Gagal membaca metadata backup:", err);
+  }
+  return {
+    lastConfirmedBackup: null,
+    lastManualExport: null,
+    pendingBackup: null
+  };
+}
+
+/**
+ * Saves persistent backup metadata to localStorage.
+ */
+export function saveBackupMetadata(metadata) {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem(BACKUP_METADATA_KEY, JSON.stringify(metadata));
+    }
+    return true;
+  } catch (err) {
+    console.error("Gagal menyimpan metadata backup:", err);
+    return false;
+  }
+}
 
 /**
  * Extracts only substantial entities, ignoring transient UI states,
@@ -273,35 +353,115 @@ export function hasSubstantialDataChanged(prevState, nextState) {
 }
 
 /**
- * Marks the given state as backed up by recording its substantial signature.
+ * Records manual JSON export event without falsely claiming remote destination backup success.
  */
-export function markStateAsBackedUp(state) {
-  lastBackedUpSignature = getSubstantialDataSignature(state);
-  return lastBackedUpSignature;
+export function recordManualExport({ filename, signature, state } = {}) {
+  const meta = loadBackupMetadata();
+  const sig = signature || (state ? getSubstantialDataSignature(state) : null);
+  meta.lastManualExport = {
+    filename: filename || null,
+    signature: sig,
+    timestamp: new Date().toISOString()
+  };
+  saveBackupMetadata(meta);
+  return meta.lastManualExport;
 }
 
 /**
- * Checks whether the current state requires a backup compared to the last backed up state.
- * Returns false if no substantial change occurred, preventing redundant backups.
+ * Registers an in-flight backup attempt to destination. Does NOT mark as confirmed success.
+ */
+export function recordBackupInProgress({ destination = "google_drive", signature, state } = {}) {
+  const meta = loadBackupMetadata();
+  const sig = signature || (state ? getSubstantialDataSignature(state) : null);
+  meta.pendingBackup = {
+    destination,
+    signature: sig,
+    startedAt: new Date().toISOString(),
+    status: "in_progress"
+  };
+  saveBackupMetadata(meta);
+  return meta.pendingBackup;
+}
+
+/**
+ * Records confirmed successful backup to target destination.
+ * ONLY call this when destination has explicitly confirmed the backup is stored.
+ */
+export function recordSuccessfulBackup({ destination = "google_drive", signature, state, metadata = {} } = {}) {
+  const meta = loadBackupMetadata();
+  const sig = signature || (state ? getSubstantialDataSignature(state) : null);
+  if (!sig) {
+    throw new Error("Signature data substansial diperlukan untuk mencatat backup berhasil.");
+  }
+
+  meta.lastConfirmedBackup = {
+    destination,
+    signature: sig,
+    timestamp: new Date().toISOString(),
+    status: "success",
+    ...metadata
+  };
+  meta.pendingBackup = null; // Clear pending state
+  saveBackupMetadata(meta);
+  return meta.lastConfirmedBackup;
+}
+
+/**
+ * Records a failed backup attempt to destination.
+ */
+export function recordBackupFailed({ destination = "google_drive", error } = {}) {
+  const meta = loadBackupMetadata();
+  meta.pendingBackup = {
+    destination,
+    failedAt: new Date().toISOString(),
+    status: "failed",
+    error: error?.message || String(error)
+  };
+  saveBackupMetadata(meta);
+  return meta.pendingBackup;
+}
+
+/**
+ * Checks whether the current state requires a backup compared to the last confirmed successful backup.
+ * Returns true if no confirmed destination backup exists, or if substantial data has changed since.
  */
 export function isBackupNeeded(state) {
+  const meta = loadBackupMetadata();
   const currentSignature = getSubstantialDataSignature(state);
-  if (!lastBackedUpSignature) {
+  if (!meta.lastConfirmedBackup || !meta.lastConfirmedBackup.signature) {
     return true;
   }
-  return currentSignature !== lastBackedUpSignature;
+  return currentSignature !== meta.lastConfirmedBackup.signature;
 }
 
 /**
- * Retrieves the signature of the last backed up state.
+ * Retrieves the last confirmed destination backup info.
  */
-export function getLastBackedUpSignature() {
-  return lastBackedUpSignature;
+export function getLastConfirmedBackup() {
+  return loadBackupMetadata().lastConfirmedBackup;
 }
 
 /**
- * Reset helper for testing.
+ * Retrieves the last manual export info.
  */
-export function _resetBackupDetectionForTesting() {
-  lastBackedUpSignature = null;
+export function getLastManualExport() {
+  return loadBackupMetadata().lastManualExport;
+}
+
+/**
+ * Retrieves pending backup info.
+ */
+export function getPendingBackup() {
+  return loadBackupMetadata().pendingBackup;
+}
+
+/**
+ * Testing reset helper.
+ */
+export function _resetBackupMetadataForTesting() {
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      window.localStorage.removeItem(BACKUP_METADATA_KEY);
+    } catch (_) {}
+  }
 }

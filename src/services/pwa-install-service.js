@@ -320,3 +320,10 @@ export function _resetPwaInstallServiceForTesting() {
   isPrompting = false;
   listeners.clear();
 }
+
+export function isNativeAndroid() {
+  if (typeof window === 'undefined') return false;
+  // Based on Capacitor platform detection
+  return /android/i.test(navigator.userAgent) && window.Capacitor !== undefined;
+}
+

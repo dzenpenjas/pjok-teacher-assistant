@@ -10,7 +10,8 @@ import {
   getPwaInstallState,
   promptPwaInstall,
   subscribePwaInstallState,
-  getPwaDiagnostics
+  getPwaDiagnostics,
+  isNativeAndroid
 } from "../services/pwa-install-service.js";
 
 function createElement(tagName, className, textContent) {
@@ -763,6 +764,7 @@ export function renderSettingsScreen(state, actions, options = {}) {
 
   // --- SECTION: INSTAL APLIKASI PJOK (PWA) ---
   function renderInstallPwaSection(target) {
+    if (isNativeAndroid()) return;
     const card = createElement("section", "settings-card pwa-install-card");
 
     const header = createElement("div", "settings-card-header");

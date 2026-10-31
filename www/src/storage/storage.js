@@ -1,0 +1,531 @@
+import { APP_SCHEMA_VERSION, COLLECTIONS, createInitialState } from "../data/schema.js";
+import { createSeedData } from "../data/seed.js";
+
+const STORAGE_KEY = "pjokTeacherAssistant.state";
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function migrateState(rawState) {
+  const state = { ...rawState };
+  const currentVersion = Number(state.schemaVersion) || 1;
+
+  if (currentVersion < 4) {
+    const seed = createSeedData();
+
+    state.sessionActivities = Array.isArray(state.sessionActivities) ? state.sessionActivities : [];
+    state.assessmentDefinitions = Array.isArray(state.assessmentDefinitions) ? state.assessmentDefinitions : [];
+    state.assessmentSessions = Array.isArray(state.assessmentSessions) ? state.assessmentSessions : [];
+    state.assessmentResults = Array.isArray(state.assessmentResults) ? state.assessmentResults : [];
+    state.growthRecords = Array.isArray(state.growthRecords) ? state.growthRecords : [];
+    state.studentObservations = Array.isArray(state.studentObservations) ? state.studentObservations : [];
+
+    if (state.assessmentDefinitions.length === 0 && Array.isArray(seed.assessmentDefinitions)) {
+      state.assessmentDefinitions = [...seed.assessmentDefinitions];
+    }
+
+    if (Array.isArray(state.students) && state.growthRecords.length === 0) {
+      const initialGrowth = [];
+      state.students.forEach((student) => {
+        if (student.heightCm || student.weightKg) {
+          initialGrowth.push({
+            id: `growth-migrated-${student.id}`,
+            studentId: student.id,
+            date: student.createdAt ? student.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
+            heightCm: String(student.heightCm || ""),
+            weightKg: String(student.weightKg || ""),
+            bmi: null,
+            bmiCategory: "-",
+            note: "Data awal profil siswa",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        }
+      });
+      if (initialGrowth.length > 0) {
+        state.growthRecords = initialGrowth;
+      }
+    }
+
+    state.schemaVersion = 4;
+  }
+
+  if (currentVersion < 5) {
+    state.schedules = Array.isArray(state.schedules) ? state.schedules : [];
+    if (!state.activeAcademicYearId && Array.isArray(state.academicYears)) {
+      const activeYear = state.academicYears.find((y) => y.isActive);
+      state.activeAcademicYearId = activeYear ? activeYear.id : (state.academicYears[0]?.id || null);
+    }
+    if (!state.activeSemesterId && Array.isArray(state.semesters)) {
+      const activeSem = state.semesters.find((s) => s.isActive);
+      state.activeSemesterId = activeSem ? activeSem.id : (state.semesters[0]?.id || null);
+    }
+    state.schemaVersion = 5;
+  }
+
+  if (currentVersion < 6) {
+    if (Array.isArray(state.assessmentDefinitions)) {
+      state.assessmentDefinitions = state.assessmentDefinitions.map((def) => ({
+        ...def,
+        assessmentType: def.assessmentType || "unspecified"
+      }));
+    }
+
+    if (Array.isArray(state.assessmentResults)) {
+      const assessmentSessions = Array.isArray(state.assessmentSessions) ? state.assessmentSessions : [];
+      const sessionDefMap = new Map();
+      assessmentSessions.forEach((sess) => {
+        if (sess && sess.id && sess.definitionId) {
+          sessionDefMap.set(sess.id, sess.definitionId);
+        }
+      });
+
+      state.assessmentResults = state.assessmentResults.map((res) => {
+        if (res.definitionId) {
+          return res;
+        }
+        let recoveredDefId = "";
+        if (res.assessmentSessionId && sessionDefMap.has(res.assessmentSessionId)) {
+          recoveredDefId = sessionDefMap.get(res.assessmentSessionId);
+        }
+        return {
+          ...res,
+          definitionId: recoveredDefId
+        };
+      });
+    }
+
+    state.schemaVersion = 6;
+  }
+
+  if (currentVersion < 7) {
+    if (Array.isArray(state.assessmentDefinitions)) {
+      state.assessmentDefinitions = state.assessmentDefinitions.map((def) => {
+        if (Array.isArray(def.items) && def.items.length > 0) {
+          return def;
+        }
+
+        const items = Array.isArray(def.questions)
+          ? def.questions.map((question, index) => ({
+              id: `${def.id}-item-${index + 1}`,
+              prompt: question,
+              rubricScale: Number(def.rubricScale) || 5,
+              rubricLevels: Array.isArray(def.rubricLevels)
+                ? def.rubricLevels.map((level) => ({
+                    level: Number(level.level),
+                    label: level.label || "",
+                    desc: level.desc || ""
+                  }))
+                : []
+            }))
+          : [];
+
+        return {
+          ...def,
+          items
+        };
+      });
+    }
+
+    const defMap = new Map();
+    if (Array.isArray(state.assessmentDefinitions)) {
+      state.assessmentDefinitions.forEach((def) => {
+        if (def && def.id) {
+          defMap.set(def.id, def);
+        }
+      });
+    }
+
+    if (Array.isArray(state.assessmentSessions)) {
+      state.assessmentSessions = state.assessmentSessions.map((session) => {
+        if (Array.isArray(session.itemsSnapshot) && session.itemsSnapshot.length > 0) {
+          return session;
+        }
+
+        if (Array.isArray(session.questions) && session.questions.length > 0) {
+          return {
+            ...session,
+            itemsSnapshot: session.questions.map((question, index) => ({
+              id: `${session.id}-item-${index + 1}`,
+              prompt: question,
+              rubricScale: Number(session.rubricSnapshot?.scale) || 5,
+              rubricLevels: Array.isArray(session.rubricSnapshot?.levels)
+                ? session.rubricSnapshot.levels.map((level) => ({
+                    level: Number(level.level),
+                    label: level.label || "",
+                    desc: level.desc || ""
+                  }))
+                : []
+            }))
+          };
+        }
+
+        const parentDef = session.definitionId ? defMap.get(session.definitionId) : null;
+        if (parentDef && Array.isArray(parentDef.items) && parentDef.items.length > 0) {
+          return {
+            ...session,
+            itemsSnapshot: parentDef.items.map((item) => ({
+              id: item.id || "",
+              prompt: item.prompt || "",
+              rubricScale: Number(item.rubricScale) || 5,
+              rubricLevels: Array.isArray(item.rubricLevels)
+                ? item.rubricLevels.map((level) => ({
+                    level: Number(level.level),
+                    label: level.label || "",
+                    desc: level.desc || ""
+                  }))
+                : []
+            }))
+          };
+        }
+
+        return {
+          ...session,
+          itemsSnapshot: []
+        };
+      });
+    }
+
+    if (Array.isArray(state.assessmentResults)) {
+      state.assessmentResults = state.assessmentResults.map((res) => {
+        const numericScore =
+          res.numericScore !== undefined &&
+          res.numericScore !== null &&
+          !Number.isNaN(Number(res.numericScore))
+            ? Number(res.numericScore)
+            : null;
+
+        return {
+          ...res,
+          itemResults: Array.isArray(res.itemResults) ? res.itemResults : [],
+          averageRubricScore:
+            res.averageRubricScore !== undefined &&
+            res.averageRubricScore !== null &&
+            !Number.isNaN(Number(res.averageRubricScore))
+              ? Number(res.averageRubricScore)
+              : null,
+          numericScore
+        };
+      });
+    }
+
+    state.schemaVersion = 7;
+  }
+
+  if (currentVersion < 8) {
+    state.studentReports = Array.isArray(state.studentReports) ? state.studentReports : [];
+    state.schemaVersion = 8;
+  }
+
+  return state;
+}
+
+export function normalizeState(state) {
+  if (!isPlainObject(state)) {
+    return createInitialState();
+  }
+
+  const migrated = migrateState(state);
+
+  const nextState = {
+    ...createInitialState(),
+    ...migrated,
+    schemaVersion: APP_SCHEMA_VERSION,
+    updatedAt: migrated.updatedAt || new Date().toISOString()
+  };
+
+  Object.values(COLLECTIONS).forEach((collectionName) => {
+    nextState[collectionName] = Array.isArray(migrated[collectionName])
+      ? migrated[collectionName]
+      : [];
+  });
+
+  // Invariant 1: Singleton School - at most 1 school
+  if (nextState.schools.length > 1) {
+    nextState.schools = [nextState.schools[0]];
+  }
+
+  // Invariant 2: Singleton Teacher - at most 1 teacher
+  if (nextState.teachers.length > 1) {
+    nextState.teachers = [nextState.teachers[0]];
+  }
+
+  // Invariant 3: Single Active Session - at most 1 active session
+  const activeSessions = (nextState.sessions || []).filter((s) => s.status === "active");
+  if (activeSessions.length > 1) {
+    const keepActiveId = activeSessions[activeSessions.length - 1].id;
+    nextState.sessions = nextState.sessions.map((s) => {
+      if (s.status === "active" && s.id !== keepActiveId) {
+        return { ...s, status: "paused" };
+      }
+      return s;
+    });
+  }
+
+  // Map legacy master-data screen to classes
+  if (nextState.currentScreen === "master-data") {
+    nextState.currentScreen = "classes";
+  }
+
+  return nextState;
+}
+
+export function loadState() {
+  try {
+    const rawState = window.localStorage.getItem(STORAGE_KEY);
+    return normalizeState(rawState ? JSON.parse(rawState) : null);
+  } catch (error) {
+    console.warn("Gagal membaca data lokal. State baru digunakan.", error);
+    return createInitialState();
+  }
+}
+
+export function saveState(state) {
+  const nextState = normalizeState({
+    ...state,
+    updatedAt: new Date().toISOString()
+  });
+
+  let success = true;
+  let saveError = null;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+  } catch (error) {
+    success = false;
+    saveError = error;
+    if (error.name === "QuotaExceededError" || error.code === 22) {
+      console.error("Local Storage kuota hampir penuh saat menyimpan data.", error);
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert("Peringatan: Penyimpanan lokal browser hampir penuh. Silakan ekspor cadangan data di menu Pengaturan.");
+      }
+    } else {
+      console.error("Gagal menyimpan data ke Local Storage:", error);
+    }
+  }
+
+  Object.assign(nextState, {
+    success,
+    error: saveError
+  });
+
+  return nextState;
+}
+
+const SAFETY_SNAPSHOT_KEY = "pjokTeacherAssistant.safetySnapshot";
+
+export function getSafetySnapshotKey() {
+  return SAFETY_SNAPSHOT_KEY;
+}
+
+export function createSafetySnapshot(existingRaw) {
+  try {
+    const raw = existingRaw !== undefined ? existingRaw : window.localStorage.getItem(STORAGE_KEY);
+    const snapshotValue = raw !== null ? raw : "__EMPTY__";
+    window.localStorage.setItem(SAFETY_SNAPSHOT_KEY, snapshotValue);
+    return { success: true, snapshot: snapshotValue };
+  } catch (error) {
+    console.error("Gagal menyimpan snapshot pengaman:", error);
+    return { success: false, error };
+  }
+}
+
+export function restoreSafetySnapshot() {
+  try {
+    const snapshotRaw = window.localStorage.getItem(SAFETY_SNAPSHOT_KEY);
+    if (snapshotRaw === null) {
+      return { success: false, error: new Error("Snapshot pengaman tidak ditemukan.") };
+    }
+    if (snapshotRaw === "__EMPTY__") {
+      window.localStorage.removeItem(STORAGE_KEY);
+      return { success: true, state: createInitialState() };
+    }
+    window.localStorage.setItem(STORAGE_KEY, snapshotRaw);
+    return { success: true, state: JSON.parse(snapshotRaw) };
+  } catch (error) {
+    console.error("Gagal memulihkan snapshot pengaman:", error);
+    return { success: false, error };
+  }
+}
+
+export function getSafetySnapshot() {
+  try {
+    const raw = window.localStorage.getItem(SAFETY_SNAPSHOT_KEY);
+    if (!raw || raw === "__EMPTY__") return null;
+    return raw;
+  } catch (_) {
+    return null;
+  }
+}
+
+export function hasSafetySnapshot() {
+  try {
+    const raw = window.localStorage.getItem(SAFETY_SNAPSHOT_KEY);
+    return Boolean(raw && raw !== "__EMPTY__");
+  } catch (_) {
+    return false;
+  }
+}
+
+export function clearSafetySnapshot() {
+  try {
+    window.localStorage.removeItem(SAFETY_SNAPSHOT_KEY);
+  } catch (_) {}
+}
+
+export function verifyPersistedIntegrity(candidate, readBack) {
+  if (!candidate || !readBack) {
+    return { valid: false, error: "Data kandidat atau data tersimpan kosong." };
+  }
+
+  if (candidate.schemaVersion !== readBack.schemaVersion) {
+    return {
+      valid: false,
+      error: `Versi skema tidak sesuai: kandidat ${candidate.schemaVersion}, tersimpan ${readBack.schemaVersion}`
+    };
+  }
+
+  // Check scalar scoping identifiers
+  if (candidate.activeAcademicYearId !== readBack.activeAcademicYearId) {
+    return {
+      valid: false,
+      error: `activeAcademicYearId tidak sesuai: kandidat ${candidate.activeAcademicYearId}, tersimpan ${readBack.activeAcademicYearId}`
+    };
+  }
+  if (candidate.activeSemesterId !== readBack.activeSemesterId) {
+    return {
+      valid: false,
+      error: `activeSemesterId tidak sesuai: kandidat ${candidate.activeSemesterId}, tersimpan ${readBack.activeSemesterId}`
+    };
+  }
+
+  const collectionsToCheck = Object.values(COLLECTIONS);
+  for (const col of collectionsToCheck) {
+    const candidateList = Array.isArray(candidate[col]) ? candidate[col] : [];
+    const readBackList = Array.isArray(readBack[col]) ? readBack[col] : [];
+
+    // Verify collection count
+    if (candidateList.length !== readBackList.length) {
+      return {
+        valid: false,
+        error: `Jumlah data pada koleksi ${col} tidak sesuai: kandidat ${candidateList.length}, tersimpan ${readBackList.length}`
+      };
+    }
+
+    // Build readBack lookup by entity ID or array index
+    const readBackMap = new Map();
+    readBackList.forEach((item, idx) => {
+      const key = item && item.id ? String(item.id) : `__idx_${idx}`;
+      readBackMap.set(key, item);
+    });
+
+    // Deep content verification of every record (verifies actual fields/photos/scores, not just counts or IDs)
+    for (let i = 0; i < candidateList.length; i++) {
+      const item = candidateList[i];
+      const key = item && item.id ? String(item.id) : `__idx_${i}`;
+      const readBackItem = readBackMap.get(key);
+
+      if (!readBackItem) {
+        return {
+          valid: false,
+          error: `Entitas ${key} pada koleksi ${col} tidak ditemukan dalam data tersimpan.`
+        };
+      }
+
+      if (JSON.stringify(item) !== JSON.stringify(readBackItem)) {
+        return {
+          valid: false,
+          error: `Integritas konten data pada koleksi ${col} (ID: ${key}) tidak cocok dengan data tersimpan.`
+        };
+      }
+    }
+  }
+
+  return { valid: true };
+}
+
+export function replaceState(state) {
+  let previousRaw = null;
+  try {
+    previousRaw = window.localStorage.getItem(STORAGE_KEY);
+  } catch (_) {}
+
+  // 1. Save safety snapshot of active data before replacement.
+  // If snapshot fails to save reliably, abort restore immediately to prevent data loss.
+  const snapshotRes = createSafetySnapshot(previousRaw);
+  if (!snapshotRes.success) {
+    return {
+      success: false,
+      state: null,
+      error: snapshotRes.error || new Error("Gagal menyimpan snapshot pengaman sebelum pemulihan.")
+    };
+  }
+
+  let nextState;
+  try {
+    nextState = normalizeState(state);
+  } catch (normError) {
+    restoreSafetySnapshot();
+    return {
+      success: false,
+      state: null,
+      error: normError
+    };
+  }
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+
+    // Read back after write
+    const rawReadBack = window.localStorage.getItem(STORAGE_KEY);
+    if (!rawReadBack) {
+      throw new Error("Penyimpanan lokal kosong setelah penulisan data.");
+    }
+
+    const parsedReadBack = JSON.parse(rawReadBack);
+    const normalizedReadBack = normalizeState(parsedReadBack);
+
+    // Deep content verification across all records
+    const isVerified = verifyPersistedIntegrity(nextState, normalizedReadBack);
+    if (!isVerified.valid) {
+      throw new Error(isVerified.error || "Verifikasi integritas data tersimpan gagal.");
+    }
+
+    // Retain safety snapshot as recovery reserve; do not delete it!
+
+    return {
+      success: true,
+      state: normalizedReadBack,
+      error: null
+    };
+  } catch (error) {
+    // Restore previous data from safety snapshot upon any failure
+    restoreSafetySnapshot();
+
+    if (previousRaw !== null) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, previousRaw);
+      } catch (rollbackError) {
+        console.error("Gagal mengembalikan state penyimpanan lokal sebelumnya:", rollbackError);
+      }
+    }
+
+    if (error.name === "QuotaExceededError" || error.code === 22) {
+      console.error("Local Storage kuota hampir penuh saat memulihkan data.", error);
+    } else {
+      console.error("Gagal memperbarui data ke Local Storage:", error);
+    }
+
+    return {
+      success: false,
+      state: null,
+      error
+    };
+  }
+}
+
+export function getStorageKey() {
+  return STORAGE_KEY;
+}
+

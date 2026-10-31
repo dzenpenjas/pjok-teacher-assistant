@@ -349,6 +349,25 @@ export function restoreSafetySnapshot() {
   }
 }
 
+export function getSafetySnapshot() {
+  try {
+    const raw = window.localStorage.getItem(SAFETY_SNAPSHOT_KEY);
+    if (!raw || raw === "__EMPTY__") return null;
+    return raw;
+  } catch (_) {
+    return null;
+  }
+}
+
+export function hasSafetySnapshot() {
+  try {
+    const raw = window.localStorage.getItem(SAFETY_SNAPSHOT_KEY);
+    return Boolean(raw && raw !== "__EMPTY__");
+  } catch (_) {
+    return false;
+  }
+}
+
 export function clearSafetySnapshot() {
   try {
     window.localStorage.removeItem(SAFETY_SNAPSHOT_KEY);
@@ -473,8 +492,7 @@ export function replaceState(state) {
       throw new Error(isVerified.error || "Verifikasi integritas data tersimpan gagal.");
     }
 
-    // Clean up temporary safety snapshot after verified success
-    clearSafetySnapshot();
+    // Retain safety snapshot as recovery reserve; do not delete it!
 
     return {
       success: true,
